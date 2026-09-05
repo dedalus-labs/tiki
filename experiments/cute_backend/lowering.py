@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from math import prod
 
-from graph import Graph, Node, Value
+from graph import Graph, Node, UnsupportedGraphError, Value
 
 
 class UnsupportedScheduleError(ValueError):
@@ -29,16 +29,91 @@ class Schedule:
 
 
 @dataclass(frozen=True)
+class RowSchedule:
+    arch: str = "sm_90"
+    threads_per_row: int = 128
+    rows_per_block: int = 1
+
+    def __post_init__(self) -> None:
+        if type(self.rows_per_block) is not int or self.rows_per_block not in (
+            1,
+            2,
+            4,
+            8,
+        ):
+            raise UnsupportedScheduleError("rows_per_block must be 1, 2, 4, or 8")
+        Schedule(arch=self.arch, threads=self.threads_per_row)
+        if self.threads > 256:
+            raise UnsupportedScheduleError("row schedule exceeds 256 threads per block")
+
+    @property
+    def threads(self) -> int:
+        return self.threads_per_row * self.rows_per_block
+
+
+@dataclass(frozen=True)
+class Swizzle:
+    bits: int = 5
+    base: int = 0
+    shift: int = 5
+
+    def __post_init__(self) -> None:
+        if any(type(value) is not int for value in (self.bits, self.base, self.shift)):
+            raise UnsupportedScheduleError("swizzle parameters must be integers")
+        if not (
+            0 <= self.bits <= 5 and 0 <= self.base <= 5 - self.bits and self.shift == 5
+        ):
+            raise UnsupportedScheduleError(
+                "32x32 transpose requires 0 <= bits + base <= 5 and shift=5"
+            )
+
+    def offset(self, index: int) -> int:
+        mask = ((1 << self.bits) - 1) << self.base
+        return index ^ ((index >> self.shift) & mask)
+
+
+@dataclass(frozen=True)
+class TransposeSchedule:
+    arch: str = "sm_90"
+    threads: int = 128
+    swizzle: Swizzle = Swizzle()
+
+    def __post_init__(self) -> None:
+        Schedule(arch=self.arch, threads=self.threads)
+
+
+@dataclass(frozen=True)
 class Lowered:
     graph: Graph
-    schedule: Schedule
+    schedule: Schedule | RowSchedule | TransposeSchedule
     mlir: str
 
     @property
     def grid(self) -> tuple[int, int, int]:
+        if isinstance(self.schedule, RowSchedule):
+            rows = self.graph.shape[0]
+            blocks = (
+                rows + self.schedule.rows_per_block - 1
+            ) // self.schedule.rows_per_block
+            return (blocks * self.schedule.threads, 1, 1)
+        if isinstance(self.schedule, TransposeSchedule):
+            rows, cols = self.graph.shape
+            blocks = ((rows + 31) // 32) * ((cols + 31) // 32)
+            return (blocks * self.schedule.threads, 1, 1)
         tile = self.schedule.threads * self.schedule.elements_per_thread
         blocks = (prod(self.graph.shape) + tile - 1) // tile
         return (blocks * self.schedule.threads, 1, 1)
+
+    @property
+    def shared_memory_bytes(self) -> int:
+        if isinstance(self.schedule, RowSchedule):
+            if not any(node.operation == "ReduceSum" for node in self.graph.nodes):
+                return 0
+            warps = self.schedule.threads_per_row // 32
+            return 4 * self.schedule.rows_per_block * warps if warps > 1 else 0
+        if isinstance(self.schedule, TransposeSchedule):
+            return 4096
+        return 0
 
 
 def memref(value: Value) -> str:
@@ -53,6 +128,8 @@ def expression(node: Node, names: dict[str, str]) -> str:
         return f"arith.mulf {args[0]}, {args[0]} : f32"
     if node.operation == "Negative":
         return f"arith.negf {args[0]} : f32"
+    if node.operation == "Rsqrt":
+        return f"math.rsqrt {args[0]} : f32"
     opcode = {"Add": "addf", "Subtract": "subf", "Multiply": "mulf"}[node.operation]
     return f"arith.{opcode} {args[0]}, {args[1]} : f32"
 
@@ -87,6 +164,18 @@ def element(graph: Graph, index: int) -> list[str]:
 
 
 def lower(graph: Graph, schedule: Schedule) -> Lowered:
+    if any(value.shape not in ((), graph.shape) for value in graph.inputs):
+        raise UnsupportedGraphError(
+            "elementwise inputs must have the output shape or be scalars"
+        )
+    for node in graph.nodes:
+        if node.operation in ("ReduceSum", "Transpose") or node.output.shape not in (
+            (),
+            graph.shape,
+        ):
+            raise UnsupportedGraphError(
+                f"unsupported elementwise node: {node.operation}"
+            )
     if prod(graph.shape) == 0:
         return Lowered(graph, schedule, "module {}\n")
     values = (*graph.inputs, Value(graph.output, graph.shape))
