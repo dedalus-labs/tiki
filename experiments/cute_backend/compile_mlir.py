@@ -9,15 +9,17 @@ from pathlib import Path
 import cutlass.compiler as cutlass_compiler
 
 
-def cute_pipeline(cubin_prefix: Path) -> str:
+def cute_pipeline(cubin_prefix: Path, *, keep_ptx: bool = False) -> str:
     path = str(cubin_prefix)
     if "'" in path:
         raise ValueError("cubin output path cannot contain a single quote")
+    ptx = f"dump-ptx-path='{path}' " if keep_ptx else ""
     return (
         "cute-to-nvvm{ "
         "check-inline-asm=false "
         "cubin-format=bin "
         f"dump-cubin-path='{path}' "
+        f"{ptx}"
         "enable-cuda-dialect=true "
         "cuda-dialect-external-module=true "
         "}"
