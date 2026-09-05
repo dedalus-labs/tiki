@@ -12,6 +12,22 @@ def rms_norm(x, weight):
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_subwarp_rows_keep_reductions_inside_their_thread_groups(self):
+        for threads, rows in ((8, 16), (16, 8)):
+            compiled = tk.compile(
+                schedule=tk.RowSchedule(threads_per_row=threads, rows_per_block=rows)
+            )(rms_norm)
+            lowered = compiled.lower(mx.zeros((5, 31)), mx.ones((31,)))
+            self.assertEqual(lowered.shared_memory_bytes, 0)
+            self.assertEqual(
+                lowered.mlir.count("nvvm.shfl.sync"), threads.bit_length() - 1
+            )
+
+    def test_row_schedule_rejects_transpose_even_for_single_column(self):
+        compiled = tk.compile(schedule=tk.RowSchedule())(lambda x: (x * x).T)
+        with self.assertRaises(tk.UnsupportedGraphError):
+            compiled.lower(mx.ones((1, 1)))
+
     def test_single_column_rows_survive_reduction_simplification(self):
         compiled = tk.compile(schedule=tk.RowSchedule())(rms_norm)
         lowered = compiled.lower(mx.zeros((5, 1)), mx.ones((1,)))
@@ -51,6 +67,7 @@ class ScheduleTests(unittest.TestCase):
         for create in (
             lambda: tk.RowSchedule(threads_per_row=48),
             lambda: tk.RowSchedule(threads_per_row=256, rows_per_block=8),
+            lambda: tk.RowSchedule(threads_per_row=8, rows_per_block=1),
             lambda: tk.Swizzle(bits=5, base=1),
         ):
             with self.assertRaises(tk.UnsupportedScheduleError):
@@ -59,8 +76,24 @@ class ScheduleTests(unittest.TestCase):
 
 @unittest.skipUnless(mx.cuda.is_available(), "requires MLX CUDA")
 class CooperativeExecutionTests(unittest.TestCase):
+    def test_row_schedule_preserves_offset_and_padded_input_views(self):
+        compiled = tk.compile(
+            schedule=tk.RowSchedule(threads_per_row=16, rows_per_block=8)
+        )(rms_norm)
+        weight = mx.arange(34, dtype=mx.float32)[1:]
+        inputs = (
+            mx.arange(166, dtype=mx.float32)[1:].reshape(5, 33),
+            mx.arange(200, dtype=mx.float32).reshape(5, 40)[:, :33],
+        )
+        for x in inputs:
+            self.assertTrue(
+                mx.allclose(
+                    compiled(x, weight), rms_norm(x, weight), atol=2e-6, rtol=2e-5
+                )
+            )
+
     def test_rmsnorm_matches_reference_across_thread_schedules(self):
-        for threads, rows in ((32, 4), (64, 2), (128, 1), (256, 1)):
+        for threads, rows in ((8, 16), (16, 8), (32, 4), (64, 2), (128, 1), (256, 1)):
             compiled = tk.compile(
                 schedule=tk.RowSchedule(threads_per_row=threads, rows_per_block=rows)
             )(rms_norm)
