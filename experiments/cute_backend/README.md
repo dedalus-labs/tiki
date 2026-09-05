@@ -2,6 +2,8 @@
 
 Current hardware results and diagnostic limitations are in
 [COOPERATIVE_PROOF.md](COOPERATIVE_PROOF.md).
+The [exemplar audit](EXEMPLAR_AUDIT.md) adds measured NVCC comparisons and
+subwarp scheduling for narrow rows.
 
 ## Native MLX graph compilation
 
@@ -80,12 +82,15 @@ can be scalars, column weights, row scalars, or full matrices. Reduction kind,
 axis, and reciprocal-square-root semantics are validated from the exported
 primitive parameters; this is not a match on the Python function's name.
 
-`threads_per_row` selects 32, 64, 128, or 256 threads. `rows_per_block` selects
-1, 2, 4, or 8 rows, subject to 256 total threads per block. Thread `t` owns
+`threads_per_row` selects 8, 16, 32, 64, 128, or 256 threads. `rows_per_block`
+selects a power of two from 1 to 32; their product must be 32, 64, 128, or 256.
+This keeps every block's warps complete. Thread `t` owns
 local row `t // threads_per_row` and columns starting at
 `t % threads_per_row`, advancing by `threads_per_row`.
 
-Each thread sums its elements, then uses warp shuffles to combine 32 partials.
+Each thread sums its elements, then uses warp shuffles to combine up to 32
+partials. Eight- and sixteen-thread groups reduce only their own lanes,
+allowing multiple rows to share a warp.
 If the row spans several warps, each warp's leader writes one value to shared
 memory. All block threads reach the barrier, including threads assigned to an
 unused row in the last block. Each warp then combines the shared partials.
