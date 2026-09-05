@@ -43,9 +43,10 @@ def scalar_code(
     return lines, result
 
 
-def warp_sum(value: str, prefix: str) -> tuple[list[str], str]:
+def warp_sum(value: str, prefix: str, threads: int = 32) -> tuple[list[str], str]:
     lines = []
-    for offset in (16, 8, 4, 2, 1):
+    for shift in range(threads.bit_length() - 2, -1, -1):
+        offset = 1 << shift
         lines.append(f"%{prefix}offset{offset} = arith.constant {offset} : i32")
         lines.append(
             f"%{prefix}shuffle{offset} = nvvm.shfl.sync bfly %mask, {value}, %{prefix}offset{offset}, %clamp : f32 -> f32"
@@ -69,11 +70,11 @@ def validate_row(graph: Graph) -> Node | None:
     ):
         raise UnsupportedGraphError("unsupported row broadcast shape")
     reductions = [node for node in graph.nodes if node.operation == "ReduceSum"]
+    if any(node.operation == "Transpose" for node in graph.nodes):
+        raise UnsupportedGraphError("row schedule does not support transpose")
     if not reductions and cols == 1:
         return None
-    if len(reductions) != 1 or any(
-        node.operation == "Transpose" for node in graph.nodes
-    ):
+    if len(reductions) != 1:
         raise UnsupportedGraphError("row schedule requires exactly one sum reduction")
     reduction = reductions[0]
     shapes = {value.name: value.shape for value in values}
@@ -119,7 +120,7 @@ def reduction_loop(graph: Graph, reduction: Node) -> list[str]:
 
 def block_sum(schedule: RowSchedule, value: str) -> tuple[list[str], str]:
     warps = schedule.threads_per_row // 32
-    if warps == 1:
+    if warps <= 1:
         return [], value
     shared = f'!cute.memref<f32, smem, align<4>, "({schedule.rows_per_block},{warps}):({warps},1)">'
     lines = [
@@ -208,7 +209,9 @@ def cooperative_body(
 ) -> list[str]:
     if reduction is None:
         return output_loop(graph, {})
-    warp_lines, partial = warp_sum("%partial", "warp")
+    warp_lines, partial = warp_sum(
+        "%partial", "warp", min(32, schedule.threads_per_row)
+    )
     block_lines, total = block_sum(schedule, partial)
     return [
         *reduction_loop(graph, reduction),
