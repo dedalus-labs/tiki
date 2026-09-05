@@ -23,9 +23,9 @@ history remain the foundation; see [UPSTREAM.md](UPSTREAM.md).
 
 The repository contains an MLX checkout plus an isolated compiler experiment.
 MLX still imports as `mlx`. An experimental `tiki.py` module now provides
-`tk.compile` for float32 elementwise graphs; it is not an installed framework
-package. **The examples under “The API we are working toward” remain design
-targets beyond this subset.**
+`tk.compile` for float32 elementwise graphs, row reductions, and tiled
+transposes; it is not an installed framework package. **The examples under
+“The API we are working toward” remain design targets beyond this subset.**
 
 On a GH200, with CuTe DSL 4.7.1 and its Multi-Level Intermediate Representation
 (MLIR), we have:
@@ -44,6 +44,13 @@ now captures actual MLX primitives through its export callback, emits CuTe MLIR
 directly, and executes it on the GH200. Its graph and schedule can also be
 inspected on a Mac. No kernel performance or compilation latency advantage has
 been measured yet.
+
+The [cooperative scheduling experiment](experiments/cute_backend/COOPERATIVE_PROOF.md)
+adds explicit threads-per-row and rows-per-block controls for float32 RMSNorm,
+plus a CuTe shared-memory swizzle for transpose. Its PTX retains the requested
+shuffles, barriers, and XOR address calculations. The report includes the
+width-one graph simplification fix, layout visualizations, and the limits of
+the sanitizer results.
 
 ## The architecture we want
 
@@ -264,7 +271,7 @@ These are completion gates. Gates 0 and 1 have been demonstrated in this repo.
 | --- | --- | --- |
 | **0. Compiler connection — demonstrated** | CuTe MLIR to device binary to MLX CUDA launch. | Recorded GH200 compiler artifacts and exact vector-add results. This does not include an MLX graph emitter. |
 | **1. First native graph region — demonstrated** | `tk.compile` captures an MLX elementwise graph and emits a chosen schedule as CuTe MLIR. | Ten GH200 tests cover arithmetic, scalar broadcasting, empty and partial tiles, input packing, specialization reuse, and unsupported cases. The compiler path consumes direct MLIR; see the native graph experiment. |
-| **2. Kernel library on MLX** | Port the smallest `Tensor`/`Load`/`Gemm`/`Warp` subset; implement the normalization target and expose custom-op differentiation. | Numerical and gradient checks, explicit memory/stream ownership, safe shared-buffer reuse, concurrent compilation without shared mutable staging state, and no PyTorch runtime dependency. |
+| **2. Kernel library on MLX — in progress** | Float32 RMSNorm and swizzled transpose are demonstrated. Port the smallest `Tensor`/`Load`/`Gemm`/`Warp` subset and expose custom-op differentiation. | Numerical and gradient checks, explicit memory/stream ownership, safe shared-buffer reuse, concurrent compilation without shared mutable staging state, and no PyTorch runtime dependency. |
 | **3. FlashAttention that trains** | Implement tiled online-softmax forward and the compact backward target. Start with one fixed non-causal specialization, then expand. | Output and dQ/dK/dV comparisons against independent references; finite-difference checks on small cases; float16/bfloat16, causal and partial tiles; peak-memory evidence that no full score matrix is stored. Validate Ampere mechanics on Ampere and Hopper schedules on Hopper. |
 | **4. Fast compilation and inspectable tuning** | Cache compiled artifacts, expose every lowering stage, and tune legal schedule candidates. | Cold compile, persistent-cache hit, warm launch, and tuning costs measured separately; cache identity covers source/MLIR, compiler version/options, target, shapes/strides, dtype, constants, layout, schedule, and binary calling convention. Invalid candidates fail before benchmarking. |
 | **5. Useful model workloads** | Cached language-model decoding, low-rank adaptation (LoRA) fine-tuning, and a complete single-GPU transformer training step. | Matched checkpoints, precision, sequence lengths, optimizer settings and numerical checks against MLX and PyTorch; latency, tokens/second, peak memory, and compilation costs saved with samples. Apple Metal correctness and performance remain release gates. |
