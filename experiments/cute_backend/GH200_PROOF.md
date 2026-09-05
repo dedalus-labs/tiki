@@ -39,6 +39,30 @@ compiler as an artifact backend without generating Python source or using
 CuTe's host executor. It does not yet prove a scheduler, layout system,
 autotuner, graph partitioner, or a performance advantage.
 
+## Native graph follow-up
+
+The first `tk.compile` slice was validated on the same GH200 on 2026-09-04.
+It traces `x * y + 2.0 - y` with MLX's native export callback and emits CuTe
+MLIR directly. The arithmetic emitter does not call a CuTe-decorated reference
+function. It compiles the emitted text with `CuteCompiler` and executes through
+MLX's existing CUDA primitive. No MLX C++ changes were needed.
+
+The demo used 513 float32 elements, a scalar multiplier, 128 threads per block,
+and four elements per thread. The launch had two blocks, with a guard for every
+element. Maximum error was `0.0`.
+
+All ten tests in `test_compile.py` passed on the GH200. They cover native graph
+capture, schedule mapping, unsupported operations/dtypes/broadcasts,
+data-dependent Python rejection, shape specialization, float arithmetic,
+scalar outputs, noncontiguous input packing, empty and partial tiles, and
+current input values on cached execution. On the Mac, seven capture tests
+passed and three CUDA execution tests were skipped. The Mac also emitted the
+demo graph, schedule, and MLIR without importing CuTe.
+
+This adds a fixed elementwise schedule to the original proof. It does not yet
+establish autotuning, reductions, shared-memory schedules, differentiation, or
+the compile-time/performance budgets in the root README.
+
 The MLX source is MIT licensed. The `nvidia-cutlass-dsl` compiler package is
 distributed under NVIDIA's CuTe DSL EULA, which remains a dependency constraint
 for an internal backend.
