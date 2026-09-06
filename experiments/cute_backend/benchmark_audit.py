@@ -9,9 +9,10 @@ from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
-import tiki as tk
 from cuda.bindings import driver as cuda
 from cutlass import testing
+
+import tiki as tk
 from demo_cooperative import rms_norm
 
 
