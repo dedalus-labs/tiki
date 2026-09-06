@@ -42,8 +42,9 @@ That original proof used a reference CuTe-decorated function. The
 [native graph experiment](experiments/cute_backend/README.md#native-mlx-graph-compilation)
 now captures actual MLX primitives through its export callback, emits CuTe MLIR
 directly, and executes it on the GH200. Its graph and schedule can also be
-inspected on a Mac. No kernel performance or compilation latency advantage has
-been measured yet.
+inspected on a Mac. The [exemplar audit](experiments/cute_backend/EXEMPLAR_AUDIT.md)
+now includes device-performance comparisons against matched CUDA C++ kernels.
+Full-model and compilation-latency advantages remain unproven.
 
 The [cooperative scheduling experiment](experiments/cute_backend/COOPERATIVE_PROOF.md)
 adds explicit threads-per-row and rows-per-block controls for float32 RMSNorm,

@@ -40,11 +40,24 @@ class RowSchedule:
             2,
             4,
             8,
+            16,
+            32,
         ):
-            raise UnsupportedScheduleError("rows_per_block must be 1, 2, 4, or 8")
-        Schedule(arch=self.arch, threads=self.threads_per_row)
-        if self.threads > 256:
-            raise UnsupportedScheduleError("row schedule exceeds 256 threads per block")
+            raise UnsupportedScheduleError(
+                "rows_per_block must be a power of two from 1 to 32"
+            )
+        if type(self.threads_per_row) is not int or self.threads_per_row not in (
+            8,
+            16,
+            32,
+            64,
+            128,
+            256,
+        ):
+            raise UnsupportedScheduleError(
+                "threads_per_row must be 8, 16, 32, 64, 128, or 256"
+            )
+        Schedule(arch=self.arch, threads=self.threads)
 
     @property
     def threads(self) -> int:
