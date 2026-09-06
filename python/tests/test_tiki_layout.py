@@ -89,6 +89,17 @@ class TestComposedLayout(mlx_tests.MLXTestCase):
         with self.assertRaises(tk.LayoutError):
             tk.ComposedLayout(tk.Swizzle(1, 0, 1), -1, tk.Layout((), ()))()
 
+    # Invariant (CUTLASS): a swizzle whose bit fields overlap is rejected,
+    # because it is not a permutation. PyCuTe and zop's bootstrap both accept it.
+    # Witness: Swizzle(1, 0, 0) maps 0 and 1 to 0; Swizzle(1, 0, 1) is fine.
+    def test_overlapping_swizzle_is_rejected(self):
+        with self.assertRaises(tk.LayoutError):
+            tk.ComposedLayout(tk.Swizzle(1, 0, 0), 0, tk.Layout(2, 1))
+        with self.assertRaises(tk.LayoutError):
+            tk.check_swizzle(tk.Swizzle(2, 0, 1))
+        self.assertEqual(tk.check_swizzle(tk.Swizzle(1, 0, 1)).shift, 1)
+        self.assertEqual({tk.Swizzle(1, 0, 0)(index) for index in range(2)}, {0})
+
     # Invariant (zop): parent(fixed, free) == engine_delta + residual(free) at
     # every coordinate, for affine, swizzled, and nested-swizzled layouts. An
     # affine slice moves the fixed contribution outside; a composed slice keeps

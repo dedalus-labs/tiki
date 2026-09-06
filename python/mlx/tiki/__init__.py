@@ -9,7 +9,7 @@ here under zop's vocabulary. ``composed`` adds zop's ``outer o {offset} o inner`
 form and its slicing invariant, which CuTe expresses differently.
 """
 
-from mlx.tiki.composed import ComposedLayout, slice_and_offset
+from mlx.tiki.composed import ComposedLayout, check_swizzle, slice_and_offset
 from mlx.tiki.engine import ArrayEngine
 from mlx.tiki.layout import (
     F2,
@@ -70,6 +70,7 @@ __all__ = [
     "Tensor",
     "TransformAccessor",
     "basis",
+    "check_swizzle",
     "blocked_product",
     "coalesce",
     "compatible",
