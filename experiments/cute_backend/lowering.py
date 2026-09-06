@@ -118,6 +118,10 @@ class Lowered:
         return (blocks * self.schedule.threads, 1, 1)
 
     @property
+    def output_shapes(self) -> tuple[Shape, ...]:
+        return tuple(value.shape for value in self.graph.outputs)
+
+    @property
     def shared_memory_bytes(self) -> int:
         if isinstance(self.schedule, RowSchedule):
             if not any(node.operation == "ReduceSum" for node in self.graph.nodes):
@@ -205,10 +209,10 @@ def element(graph: Graph, index: int) -> list[str]:
             continue
         names[node.output.name] = f"%value{i}"
         lines.append(f"%value{i} = {result}")
-    output = Value(graph.output, graph.shape)
-    lines.append(
-        f'cute.memref.store(%arg{len(graph.inputs)}, %coord, {names[graph.output]}) : ({memref(output)}, !cute.coord<"?">, f32) -> ()'
-    )
+    for j, output in enumerate(graph.outputs):
+        lines.append(
+            f'cute.memref.store(%arg{len(graph.inputs) + j}, %coord, {names[output.name]}) : ({memref(output)}, !cute.coord<"?">, f32) -> ()'
+        )
     return lines
 
 
@@ -217,6 +221,8 @@ def lower(graph: Graph, schedule: Schedule) -> Lowered:
         raise UnsupportedGraphError(
             "elementwise inputs must have the output shape or be scalars"
         )
+    if any(value.shape != graph.shape for value in graph.outputs):
+        raise UnsupportedGraphError("elementwise outputs must share one shape")
     for node in graph.nodes:
         if node.operation in ("ReduceSum", "Transpose") or node.output.shape not in (
             (),
@@ -227,7 +233,7 @@ def lower(graph: Graph, schedule: Schedule) -> Lowered:
             )
     if prod(graph.shape) == 0:
         return Lowered(graph, schedule, "module {}\n")
-    values = (*graph.inputs, Value(graph.output, graph.shape))
+    values = (*graph.inputs, *graph.outputs)
     parameters = ", ".join(
         f"%arg{i}: {memref(value)}" for i, value in enumerate(values)
     )
