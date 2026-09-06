@@ -1,0 +1,12 @@
+[package]
+name = "tiki-cutile-graph-lifetime-repro"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+serde_json = "1"
+cutile = { git = "https://github.com/NVlabs/cutile-rs.git", rev = "7f606336e3e8dffa0e1ca3920844082afebb6810" }
