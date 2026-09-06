@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from math import prod
 
-from graph import Graph, Node, UnsupportedGraphError, Value
+from graph import Graph, Node, Shape, UnsupportedGraphError, Value
 
 
 class UnsupportedScheduleError(ValueError):
@@ -130,7 +130,34 @@ class Lowered:
 
 
 def memref(value: Value) -> str:
-    return f'!cute.memref<f32, gmem, align<4>, "({prod(value.shape)}):(1)">'
+    """Dense values keep the flat form; a strided view addresses through its own layout."""
+    if value.is_dense:
+        return f'!cute.memref<f32, gmem, align<4>, "({prod(value.shape)}):(1)">'
+    shape = ",".join(str(extent) for extent in value.shape)
+    strides = ",".join(str(stride) for stride in value.strides)
+    return f'!cute.memref<f32, gmem, align<4>, "({shape}):({strides})">'
+
+
+def logical_coordinate(shape: Shape, index: int) -> list[str]:
+    """Split the flat right-major output index into one index per axis."""
+    lines = [f"%rem0 = arith.addi %index{index}, %zero : i32"]
+    axes = len(shape)
+    for k in range(axes - 1, -1, -1):
+        lines.append(f"%extent{k} = arith.constant {shape[k]} : i32")
+        if k > 0:
+            lines.append(f"%i{k} = arith.remsi %rem{axes - 1 - k}, %extent{k} : i32")
+            lines.append(
+                f"%rem{axes - k} = arith.divsi %rem{axes - 1 - k}, %extent{k} : i32"
+            )
+        else:
+            lines.append(f"%i0 = arith.addi %rem{axes - 1}, %zero : i32")
+    args = ", ".join(f"%i{k}" for k in range(axes))
+    types = ", ".join("i32" for _ in shape)
+    marks = ",".join("?" for _ in shape)
+    lines.append(
+        f'%logical = cute.make_coord({args}) : ({types}) -> !cute.coord<"({marks})">'
+    )
+    return lines
 
 
 def expression(node: Node, names: dict[str, str]) -> str:
@@ -151,12 +178,21 @@ def element(graph: Graph, index: int) -> list[str]:
     lines = [f'%coord = cute.make_coord(%index{index}) : (i32) -> !cute.coord<"?">']
     lines.append("%zero = arith.constant 0 : i32")
     lines.append('%scalar = cute.make_coord(%zero) : (i32) -> !cute.coord<"?">')
+    strided = any(not value.is_dense for value in graph.inputs)
+    if strided:
+        lines.extend(logical_coordinate(graph.shape, index))
+    marks = ",".join("?" for _ in graph.shape)
     names = {}
     for i, value in enumerate(graph.inputs):
-        coord = "%scalar" if value.shape == () else "%coord"
+        if value.shape == ():
+            coord, coord_type = "%scalar", '!cute.coord<"?">'
+        elif value.is_dense:
+            coord, coord_type = "%coord", '!cute.coord<"?">'
+        else:
+            coord, coord_type = "%logical", f'!cute.coord<"({marks})">'
         names[value.name] = f"%input{i}"
         lines.append(
-            f'%input{i} = cute.memref.load(%arg{i}, {coord}) : ({memref(value)}, !cute.coord<"?">) -> f32'
+            f"%input{i} = cute.memref.load(%arg{i}, {coord}) : ({memref(value)}, {coord_type}) -> f32"
         )
     for i, (name, value) in enumerate(graph.constants):
         bits = struct.unpack("<I", struct.pack("<f", value))[0]
