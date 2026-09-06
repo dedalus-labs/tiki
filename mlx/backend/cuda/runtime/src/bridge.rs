@@ -3,7 +3,8 @@
 //! The CXX bridge: opaque allocations and the operations MLX's C++ needs.
 //! Streams cross as integers; C++ casts them from `cudaStream_t`.
 
-use crate::allocator::{self, Allocation};
+use crate::allocation::Allocation;
+use crate::allocator;
 use crate::cudart::Stream;
 
 #[cxx::bridge(namespace = "mlx::core::cu::rt")]

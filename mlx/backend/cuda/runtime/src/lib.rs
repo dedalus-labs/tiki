@@ -6,11 +6,13 @@
 //! storage to unified memory is one stream-ordered operation, so the device
 //! source can never be released before the copy that reads it.
 
+mod allocation;
 mod allocator;
 mod bridge;
 mod cache;
 mod cudart;
 mod pool;
 
-pub use allocator::{init, runtime, AllocError, Allocation, Allocator};
+pub use allocation::Allocation;
+pub use allocator::{init, runtime, AllocError, Allocator};
 pub use cudart::CudaError;
