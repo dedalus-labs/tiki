@@ -22,6 +22,8 @@ repos:
     -   id: isort
         args:
             - --profile=black
+            - --src=experiments/cute_backend
+            - --src=experiments/associative_scan
 - repo: https://github.com/cheshirekow/cmake-format-precommit
   rev: v0.6.13
   hooks:
