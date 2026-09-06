@@ -46,12 +46,11 @@ void Fence::update(Stream s, const array& a, bool cross_device) {
   auto& f = cast<FenceImpl>();
   if (cross_device) {
     // Move to managed memory if there is a device switch
-    auto& cbuf =
-        *static_cast<cu::CudaBuffer*>(const_cast<array&>(a).buffer().ptr());
-    if (cbuf.device != -1) {
+    auto& buffer = const_cast<array&>(a).buffer();
+    if (cu::storage_device(buffer) != -1) {
       auto& encoder = cu::get_command_encoder(s);
       encoder.commit();
-      cu::allocator().move_to_unified_memory(cbuf, encoder.stream());
+      cu::migrate_on(buffer, encoder.stream());
     }
   }
   f.count++;

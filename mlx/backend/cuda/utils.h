@@ -26,9 +26,7 @@ inline uint32_t max_occupancy_block_dim(T kernel) {
 template <typename T>
 inline T* gpu_ptr(array& arr) {
   return reinterpret_cast<T*>(
-      static_cast<char*>(
-          static_cast<cu::CudaBuffer*>(arr.buffer().ptr())->data) +
-      arr.offset());
+      static_cast<char*>(cu::storage_ptr(arr.buffer())) + arr.offset());
 }
 
 // For const array, keep constness in pointer unless it is untyped.
