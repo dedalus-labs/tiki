@@ -9,11 +9,10 @@ from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
+import tiki as tk
 from cuda.bindings import driver as cuda
 from cutlass import testing
 from demo_cooperative import rms_norm
-
-import tiki as tk
 
 
 def checked(result):
