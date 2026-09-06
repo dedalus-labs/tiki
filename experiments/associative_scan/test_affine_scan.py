@@ -4,6 +4,7 @@ import unittest
 
 import mlx.core as mx
 import numpy as np
+
 from scan import associative_scan
 
 HAS_CUDA = mx.cuda.is_available()
