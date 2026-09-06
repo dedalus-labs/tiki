@@ -8,6 +8,9 @@ behavior to be checked against the September 5, 2026 evaluation.
 Each Rust fixture is an independent Cargo workspace. These procedures exercise
 the evaluated dependencies directly and do not require an MLX build.
 
+For the allocator sanitizer checks and the MLX host-export benchmark, see
+[CUDA allocator validation](../VALIDATION-2026-09-06.md).
+
 ## Preparation
 
 Run the commands from this directory. Use an external directory for compiler
