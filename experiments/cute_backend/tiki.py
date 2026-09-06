@@ -8,6 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import mlx.core as mx
+
 from graph import (
     ArrayFunction,
     Profile,
@@ -71,8 +72,9 @@ class CudaBinary:
 
 @lru_cache(maxsize=32)
 def binary(lowered: Lowered) -> CudaBinary:
-    from compile_mlir import cute_pipeline
     from cutlass import compiler
+
+    from compile_mlir import cute_pipeline
 
     artifact = compiler.PreCompiledMlirArtifact.from_textual_form(lowered.mlir.encode())
     backend = compiler.CuteCompiler()
