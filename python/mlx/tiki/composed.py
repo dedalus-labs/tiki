@@ -23,11 +23,28 @@ from mlx.tiki.layout import LayoutError
 Coordinate = Any
 
 
+def check_swizzle(swizzle: Swizzle) -> Swizzle:
+    """CUTLASS requires the two bit fields not to overlap: ``abs(shift) >= bits``.
+
+    PyCuTe checks only negative shifts and zop's bootstrap checks only the
+    highest bit, so both accept ``Swizzle(1, 0, 0)``, which maps 0 and 1 to
+    the same index. Tiki rejects it.
+    """
+    if swizzle.bits and abs(swizzle.shift) < swizzle.bits:
+        raise LayoutError(
+            f"swizzle fields overlap: bits={swizzle.bits} shift={swizzle.shift}; CUTLASS requires abs(shift) >= bits"
+        )
+    return swizzle
+
+
 @dataclass(frozen=True)
 class ComposedLayout(LayoutBase):
     outer: Swizzle
     offset: int
     inner: "Layout | ComposedLayout"
+
+    def __post_init__(self) -> None:
+        check_swizzle(self.outer)
 
     def __call__(self, *coordinate: Coordinate) -> int:
         index = self.offset + self.inner(*coordinate)
