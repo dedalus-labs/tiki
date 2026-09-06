@@ -6,10 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import mlx
 from setuptools import Extension
 from setuptools.command.build_ext import build_ext
-
-import mlx
 
 _MLX_PATH = str(mlx.__path__[0])
 
