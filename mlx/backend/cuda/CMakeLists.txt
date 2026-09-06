@@ -75,8 +75,8 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
-# Storage ownership lives in the Rust crate under runtime/. Cargo builds it
-# and generates the CXX header that allocator.cpp includes.
+# Storage ownership lives in the Rust crate under runtime/. Cargo builds it and
+# generates the CXX header that allocator.cpp includes.
 find_program(CARGO cargo REQUIRED)
 set(MLX_CUDA_RUNTIME_DIR ${CMAKE_CURRENT_SOURCE_DIR}/runtime)
 set(MLX_CARGO_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo)
