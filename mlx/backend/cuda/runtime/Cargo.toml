@@ -1,0 +1,16 @@
+[package]
+name = "tiki-cuda-runtime"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+publish = false
+description = "Rust-owned CUDA storage for Tiki's MLX backend"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+cxx = "=1.0.200"
+
+[build-dependencies]
+cxx-build = "=1.0.200"
