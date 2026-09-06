@@ -23,6 +23,7 @@ class ExportEvent(TypedDict, total=False):
     name: str
     constants: list[tuple[str, mx.array]]
     keywords: list[tuple[str, str]]
+    arguments: list[bool | int | list[int] | tuple[int, ...]]
 
 
 @dataclass(frozen=True)
@@ -64,25 +65,30 @@ def capture(function: ArrayFunction, shapes: tuple[Shape, ...]) -> Graph:
     if len(outputs) != 1:
         raise UnsupportedGraphError("exactly one array output is required")
     output = descriptor(outputs[0])
-    if any(value.shape not in ((), output.shape) for value in inputs):
-        raise UnsupportedGraphError("inputs must have the output shape or be scalars")
     constants = []
     for name, value in headers["constants"]["constants"]:
         if value.ndim != 0 or value.dtype != mx.float32:
             raise UnsupportedGraphError("captured constants must be float32 scalars")
         constants.append((name, float(value.item())))
-    nodes = tuple(
-        parse_node(event, output.shape)
-        for event in events
-        if event["type"] == "primitive"
-    )
+    nodes = tuple(parse_node(event) for event in events if event["type"] == "primitive")
     if prod(output.shape) >= 2**31 - 1024:
         raise UnsupportedGraphError("element count exceeds signed 32-bit indexing")
     return Graph(inputs, tuple(constants), nodes, output.name, output.shape)
 
 
-def parse_node(event: ExportEvent, shape: Shape) -> Node:
+def parse_node(event: ExportEvent) -> Node:
     operation = event["name"]
+    if operation == "Reduce":
+        axes = [len(event["inputs"][0][1]) - 1]
+        if event["arguments"] != [2, axes]:
+            raise UnsupportedGraphError("only sum over the last axis is supported")
+        operation = "ReduceSum"
+    if operation == "Sqrt":
+        if event["arguments"] != [True]:
+            raise UnsupportedGraphError("only reciprocal square root is supported")
+        operation = "Rsqrt"
+    if operation == "Transpose" and event["arguments"] != [[1, 0]]:
+        raise UnsupportedGraphError("only a two-dimensional transpose is supported")
     arity = {
         "Add": 2,
         "Subtract": 2,
@@ -90,6 +96,9 @@ def parse_node(event: ExportEvent, shape: Shape) -> Node:
         "Negative": 1,
         "Square": 1,
         "Broadcast": 1,
+        "ReduceSum": 1,
+        "Rsqrt": 1,
+        "Transpose": 1,
     }
     if operation not in arity:
         raise UnsupportedGraphError(f"unsupported MLX primitive: {operation}")
@@ -97,6 +106,4 @@ def parse_node(event: ExportEvent, shape: Shape) -> Node:
     outputs = tuple(descriptor(raw) for raw in event["outputs"])
     if len(inputs) != arity[operation] or len(outputs) != 1:
         raise UnsupportedGraphError(f"unsupported arity for {operation}")
-    if any(value.shape not in ((), shape) for value in (*inputs, *outputs)):
-        raise UnsupportedGraphError(f"unsupported shape in {operation}")
     return Node(operation, tuple(value.name for value in inputs), outputs[0])
