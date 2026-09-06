@@ -11,7 +11,6 @@ use std::collections::{BTreeMap, VecDeque};
 pub struct SizeClassCache<A> {
     page: usize,
     classes: BTreeMap<usize, VecDeque<(u64, A)>>,
-    order: BTreeMap<u64, usize>,
     seq: u64,
     bytes: usize,
 }
@@ -21,7 +20,6 @@ impl<A> SizeClassCache<A> {
         Self {
             page,
             classes: BTreeMap::new(),
-            order: BTreeMap::new(),
             seq: 0,
             bytes: 0,
         }
@@ -37,8 +35,7 @@ impl<A> SizeClassCache<A> {
         if class >= limit {
             return None;
         }
-        let (seq, a) = self.pop_front(class);
-        self.order.remove(&seq);
+        let (_, a) = self.pop_front(class);
         self.bytes -= class;
         Some(a)
     }
@@ -49,7 +46,6 @@ impl<A> SizeClassCache<A> {
             .entry(size)
             .or_default()
             .push_back((self.seq, a));
-        self.order.insert(self.seq, size);
         self.bytes += size;
     }
 
@@ -61,11 +57,10 @@ impl<A> SizeClassCache<A> {
         let mut released = 0;
         let mut count = 0;
         while released < min_bytes {
-            let Some((seq, class)) = self.order.pop_first() else {
+            let Some(class) = self.oldest_class() else {
                 break;
             };
-            let (front, a) = self.pop_front(class);
-            debug_assert_eq!(front, seq);
+            let (_, a) = self.pop_front(class);
             released += class;
             count += 1;
             free(a);
@@ -82,9 +77,17 @@ impl<A> SizeClassCache<A> {
                 free(a);
             }
         }
-        self.order.clear();
         self.bytes = 0;
         count
+    }
+
+    /// Class whose oldest entry is the oldest overall. Eviction only runs under
+    /// memory pressure, so a scan beats a second index maintained on every reuse.
+    fn oldest_class(&self) -> Option<usize> {
+        self.classes
+            .iter()
+            .min_by_key(|(_, queue)| queue.front().map(|entry| entry.0))
+            .map(|(class, _)| *class)
     }
 
     fn pop_front(&mut self, class: usize) -> (u64, A) {

@@ -5,8 +5,10 @@
 
 use std::ffi::c_void;
 use std::fmt;
+use std::sync::atomic::Ordering;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
+use crate::allocation::{Allocation, Cached, Kind, EMPTY};
 use crate::cache::SizeClassCache;
 use crate::cudart::{self, CudaError, MemPool, Stream};
 use crate::pool::FreeList;
@@ -28,7 +30,9 @@ impl fmt::Display for AllocError {
         match self {
             Self::Cuda(e) => e.fmt(f),
             Self::InvalidDevice(d) => write!(f, "[malloc] Invalid CUDA device {d}."),
-            Self::OutOfMemory { bytes } => write!(f, "[malloc] Unable to allocate {bytes} bytes."),
+            Self::OutOfMemory { bytes } => {
+                write!(f, "[malloc] Unable to allocate {bytes} bytes.")
+            }
         }
     }
 }
@@ -38,80 +42,6 @@ impl std::error::Error for AllocError {}
 impl From<CudaError> for AllocError {
     fn from(e: CudaError) -> Self {
         Self::Cuda(e)
-    }
-}
-
-/// Where an allocation's bytes live. Unified memory is managed or pinned host
-/// memory that both the host and every device can address.
-#[derive(Clone, Copy, Debug)]
-enum Storage {
-    Empty,
-    Block { ptr: *mut c_void, index: u32 },
-    Unified { ptr: *mut c_void },
-    Device { ptr: *mut c_void, device: i32 },
-}
-
-impl Storage {
-    fn ptr(self) -> *mut c_void {
-        match self {
-            Self::Empty => std::ptr::null_mut(),
-            Self::Block { ptr, .. } | Self::Unified { ptr } | Self::Device { ptr, .. } => ptr,
-        }
-    }
-}
-
-/// One owned allocation. C++ holds it as an opaque pointer for the lifetime of
-/// the MLX buffer and returns it through `Allocator::release`.
-pub struct Allocation {
-    size: usize,
-    storage: Mutex<Storage>,
-}
-
-// SAFETY: the struct holds cudart addresses, never host references, and cudart
-// is thread-safe. Concurrent host access to the bytes is ordered by MLX.
-unsafe impl Send for Allocation {}
-unsafe impl Sync for Allocation {}
-
-impl Allocation {
-    fn new(size: usize, storage: Storage) -> Self {
-        Self {
-            size,
-            storage: Mutex::new(storage),
-        }
-    }
-
-    fn storage(&self) -> MutexGuard<'_, Storage> {
-        self.storage.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    /// Rounded size in bytes.
-    pub fn size(&self) -> usize {
-        self.size
-    }
-
-    /// CUDA device holding the bytes, or -1 for unified memory.
-    pub fn device(&self) -> i32 {
-        match *self.storage() {
-            Storage::Device { device, .. } => device,
-            _ => -1,
-        }
-    }
-
-    /// Address usable by kernels, as an integer for the C++ bridge.
-    pub fn data_ptr(&self) -> usize {
-        self.storage().ptr() as usize
-    }
-
-    /// Address usable by the host. Device storage moves to unified memory first
-    /// and the call returns after that copy completes.
-    pub fn host_ptr(&self) -> Result<usize, CudaError> {
-        runtime().migrate(self, None)?;
-        Ok(self.data_ptr())
-    }
-
-    /// Move device storage to unified memory on `stream` without waiting.
-    pub fn migrate_on(&self, stream: usize) -> Result<(), CudaError> {
-        runtime().migrate(self, Some(stream as Stream))
     }
 }
 
@@ -128,7 +58,7 @@ struct State {
     max_pool_size: usize,
     active: usize,
     peak: usize,
-    cache: SizeClassCache<Storage>,
+    cache: SizeClassCache<Cached>,
     small: FreeList,
 }
 
@@ -222,7 +152,7 @@ impl Allocator {
         stream: Stream,
     ) -> Result<Allocation, AllocError> {
         if size == 0 {
-            return Ok(Allocation::new(0, Storage::Empty));
+            return Ok(Allocation::new(0, EMPTY));
         }
         let size = round_size(size);
         let device = if size <= SMALL_BLOCK_SIZE || stream.is_null() {
@@ -231,35 +161,12 @@ impl Allocator {
             device
         };
         let mut state = self.state();
-        let storage = match state.cache.reuse(size) {
-            Some(storage) => storage,
+        let cached = match state.cache.reuse(size) {
+            Some(cached) => cached,
             None => {
-                let pressure =
-                    (state.active + state.cache.bytes() + size) as i64 - state.memory_limit as i64;
-                if pressure > 0 {
-                    self.release_cached(&mut state, pressure as usize)?;
-                }
-                let block = (size <= SMALL_BLOCK_SIZE)
-                    .then(|| state.small.take())
-                    .flatten();
-                let storage = match block {
-                    // SAFETY: `index` is below SMALL_POOL_BLOCKS, so the offset is inside the slab.
-                    Some(index) => Storage::Block {
-                        ptr: unsafe { self.small_base.add(index as usize * SMALL_BLOCK_SIZE) }
-                            .cast(),
-                        index,
-                    },
-                    None => {
-                        drop(state);
-                        let storage = self.allocate_fresh(size, device, stream)?;
-                        state = self.state();
-                        storage
-                    }
-                };
-                if state.cache.bytes() > 0 {
-                    self.release_for_pool_pressure(&mut state)?;
-                }
-                storage
+                let (guard, cached) = self.allocate_uncached(state, size, device, stream)?;
+                state = guard;
+                cached
             }
         };
         state.active += size;
@@ -269,8 +176,8 @@ impl Allocator {
             self.release_cached(&mut state, excess)?;
         }
         drop(state);
-        let allocation = Allocation::new(size, storage);
-        if let Storage::Device { device: held, .. } = storage {
+        let allocation = Allocation::new(size, cached);
+        if let Kind::Device { device: held } = cached.kind {
             if held != device {
                 self.migrate(&allocation, (!stream.is_null()).then_some(stream))?;
             }
@@ -278,14 +185,51 @@ impl Allocator {
         Ok(allocation)
     }
 
+    /// Cache miss: relieve memory pressure, then take a small-pool block or
+    /// fresh CUDA memory. The lock is released around the CUDA call.
+    fn allocate_uncached<'a>(
+        &'a self,
+        mut state: MutexGuard<'a, State>,
+        size: usize,
+        device: i32,
+        stream: Stream,
+    ) -> Result<(MutexGuard<'a, State>, Cached), AllocError> {
+        let pressure =
+            (state.active + state.cache.bytes() + size) as i64 - state.memory_limit as i64;
+        if pressure > 0 {
+            self.release_cached(&mut state, pressure as usize)?;
+        }
+        let block = (size <= SMALL_BLOCK_SIZE)
+            .then(|| state.small.take())
+            .flatten();
+        let cached = match block {
+            // SAFETY: `index` is below SMALL_POOL_BLOCKS, so the offset is inside the slab.
+            Some(index) => Cached {
+                kind: Kind::Block { index },
+                ptr: unsafe { self.small_base.add(index as usize * SMALL_BLOCK_SIZE) }.cast(),
+            },
+            None => {
+                drop(state);
+                let cached = self.allocate_fresh(size, device, stream)?;
+                state = self.state();
+                cached
+            }
+        };
+        if state.cache.bytes() > 0 {
+            self.release_for_pool_pressure(&mut state)?;
+        }
+        Ok((state, cached))
+    }
+
     fn allocate_fresh(
         &self,
         size: usize,
         device: i32,
         stream: Stream,
-    ) -> Result<Storage, AllocError> {
+    ) -> Result<Cached, AllocError> {
         if device == -1 {
-            return Ok(Storage::Unified {
+            return Ok(Cached {
+                kind: Kind::Unified,
                 ptr: unified_malloc(self.managed, size)?,
             });
         }
@@ -298,42 +242,48 @@ impl Allocator {
         if ptr.is_null() {
             return Err(AllocError::OutOfMemory { bytes: size });
         }
-        Ok(Storage::Device { ptr, device })
+        Ok(Cached {
+            kind: Kind::Device { device },
+            ptr,
+        })
     }
 
     /// Return an allocation. Storage is cached while the cache is below its
     /// limit and retired otherwise.
     pub fn release(&self, allocation: Allocation) -> Result<(), CudaError> {
-        let storage = allocation
-            .storage
-            .into_inner()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Storage::Empty = storage {
+        let cached = Cached {
+            kind: allocation
+                .kind
+                .into_inner()
+                .unwrap_or_else(|e| e.into_inner()),
+            ptr: allocation.ptr.into_inner() as *mut c_void,
+        };
+        if cached.kind == Kind::Empty {
             return Ok(());
         }
         let mut state = self.state();
         state.active -= allocation.size;
         if state.cache.bytes() < state.max_pool_size {
-            state.cache.recycle(allocation.size, storage);
+            state.cache.recycle(allocation.size, cached);
             return Ok(());
         }
         let State { small, .. } = &mut *state;
-        self.retire(small, storage)
+        self.retire(small, cached)
     }
 
-    fn retire(&self, small: &mut FreeList, storage: Storage) -> Result<(), CudaError> {
-        match storage {
-            Storage::Empty => Ok(()),
-            Storage::Block { index, .. } => {
+    fn retire(&self, small: &mut FreeList, cached: Cached) -> Result<(), CudaError> {
+        match cached.kind {
+            Kind::Empty => Ok(()),
+            Kind::Block { index } => {
                 small.give(index);
                 Ok(())
             }
-            Storage::Unified { ptr } => unified_free(self.managed, ptr),
-            Storage::Device { ptr, device } => {
+            Kind::Unified => unified_free(self.managed, cached.ptr),
+            Kind::Device { device } => {
                 let info = &self.devices[device as usize];
                 match info.pool {
-                    Some(_) => cudart::free_async(ptr, info.stream),
-                    None => cudart::free(ptr),
+                    Some(_) => cudart::free_async(cached.ptr, info.stream),
+                    None => cudart::free(cached.ptr),
                 }
             }
         }
@@ -342,8 +292,8 @@ impl Allocator {
     fn release_cached(&self, state: &mut State, min_bytes: usize) -> Result<usize, CudaError> {
         let State { cache, small, .. } = &mut *state;
         let mut first_error = None;
-        let count = cache.release(min_bytes, &mut |storage| {
-            if let Err(e) = self.retire(small, storage) {
+        let count = cache.release(min_bytes, &mut |cached| {
+            if let Err(e) = self.retire(small, cached) {
                 first_error.get_or_insert(e);
             }
         });
@@ -365,11 +315,16 @@ impl Allocator {
     /// Move device storage to unified memory. The copy and the release of the
     /// device source are enqueued on one stream, so the source outlives the
     /// copy. Without a caller stream the call returns after the copy completes.
-    fn migrate(&self, allocation: &Allocation, stream: Option<Stream>) -> Result<(), CudaError> {
-        let mut storage = allocation.storage();
-        let Storage::Device { ptr, device } = *storage else {
+    pub(crate) fn migrate(
+        &self,
+        allocation: &Allocation,
+        stream: Option<Stream>,
+    ) -> Result<(), CudaError> {
+        let mut kind = allocation.kind();
+        let Kind::Device { device } = *kind else {
             return Ok(());
         };
+        let ptr = allocation.data_ptr() as *mut c_void;
         let info = &self.devices[device as usize];
         let blocking = stream.is_none() || info.pool.is_none();
         let stream = stream.unwrap_or(info.stream);
@@ -391,7 +346,8 @@ impl Allocator {
             Some(_) => cudart::free_async(ptr, stream)?,
             None => cudart::free(ptr)?,
         }
-        *storage = Storage::Unified { ptr: dst };
+        allocation.ptr.store(dst as usize, Ordering::Release);
+        *kind = Kind::Unified;
         Ok(())
     }
 
