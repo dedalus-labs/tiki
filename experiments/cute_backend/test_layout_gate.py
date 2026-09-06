@@ -8,6 +8,7 @@ import unittest
 
 import mlx.core as mx
 import numpy as np
+
 import tiki as tk
 from graph import Value, dense_strides
 
