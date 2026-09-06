@@ -8,8 +8,9 @@ from pathlib import Path
 
 import cutlass
 import matplotlib
-import tiki as tk
 from cutlass import cute
+
+import tiki as tk
 
 matplotlib.use("Agg")
 
