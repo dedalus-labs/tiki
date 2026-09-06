@@ -313,6 +313,11 @@ something we can build and measure.
 
 ## Start here
 
+The [Rust CUDA backend architecture](experiments/rust_backend/README.md) defines
+resource ownership, asynchronous execution, and C++ interoperability. Its
+architecture decision record includes the September 5, 2026 evaluation and
+version-pinned reproductions supporting the selected design.
+
 Read the [compiler experiment](experiments/cute_backend/README.md), then inspect
 `mlx/backend/cuda/compiled.cpp` for the existing MLX graph compilation route and
 `mlx/backend/cuda/custom_kernel.cpp` for precompiled kernel execution.
