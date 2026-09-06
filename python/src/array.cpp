@@ -347,6 +347,29 @@ void init_array(nb::module_& m) {
             The array's :class:`Dtype`.
           )pbdoc")
       .def_prop_ro(
+          "strides",
+          [](mx::array& a) {
+            a.eval();
+            return nb::cast(a.strides());
+          },
+          nb::sig("def strides(self) -> tuple[int, ...]"),
+          R"pbdoc(
+          The element strides of the evaluated array, one per dimension.
+
+          A lazy view is evaluated first, because its strides are only known
+          once it has storage.
+        )pbdoc")
+      .def_prop_ro(
+          "offset",
+          [](mx::array& a) {
+            a.eval();
+            return a.offset() / static_cast<int64_t>(a.itemsize());
+          },
+          R"pbdoc(
+          The element offset of the evaluated array into its storage, in the
+          units :func:`as_strided` takes.
+        )pbdoc")
+      .def_prop_ro(
           "real",
           [](const mx::array& a) { return mx::real(a); },
           R"pbdoc(
