@@ -140,28 +140,33 @@ class Compiled:
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
         lowered = self.lower(*inputs)
+        shapes = lowered.output_shapes
         if prod(lowered.graph.shape) == 0:
-            return mx.zeros(lowered.graph.shape, dtype=mx.float32, stream=mx.gpu)
-        return mx.fast.precompiled_cuda_kernel(
-            name="tiki_fused",
-            compiled_source=binary(lowered).cubin,
-            inputs=list(inputs),
-            output_shapes=[lowered.graph.shape],
-            output_dtypes=[mx.float32],
-            scalars=[],
-            grid=lowered.grid,
-            threadgroup=(self.schedule.threads, 1, 1),
-            shared_memory=lowered.shared_memory_bytes,
-            ensure_row_contiguous=packs_views(self.schedule),
-            stream=mx.gpu,
-        )[0]
+            outputs = [
+                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for shape in shapes
+            ]
+        else:
+            outputs = mx.fast.precompiled_cuda_kernel(
+                name="tiki_fused",
+                compiled_source=binary(lowered).cubin,
+                inputs=list(inputs),
+                output_shapes=list(shapes),
+                output_dtypes=[mx.float32] * len(shapes),
+                scalars=[],
+                grid=lowered.grid,
+                threadgroup=(self.schedule.threads, 1, 1),
+                shared_memory=lowered.shared_memory_bytes,
+                ensure_row_contiguous=packs_views(self.schedule),
+                stream=mx.gpu,
+            )
+        return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
     def _cotangent_kernel(self, i: int, n: int) -> "Compiled":
         """The compiled VJP region for input ``i``; traced once per compiled function."""
         if i not in self._cotangent_kernels:
 
             def input_cotangent(*args: mx.array) -> mx.array:
-                return mx.vjp(self.function, args[:n], (args[n],))[1][i]
+                return mx.vjp(self.function, list(args[:n]), list(args[n:]))[1][i]
 
             self._cotangent_kernels[i] = Compiled(input_cotangent, self.schedule)
         return self._cotangent_kernels[i]
@@ -169,28 +174,28 @@ class Compiled:
     def _vjp(
         self,
         primals: mx.array | tuple[mx.array, ...],
-        cotangent: mx.array,
-        output: mx.array,
+        cotangents: mx.array | tuple[mx.array, ...],
+        outputs: mx.array | tuple[mx.array, ...],
     ) -> tuple[mx.array, ...]:
-        """MLX passes one cotangent array for a single-output function."""
-        primals = _arrays(primals)
+        """MLX passes bare arrays for a single-output function, tuples otherwise."""
+        primals, cotangents = _arrays(primals), _arrays(cotangents)
         n = len(primals)
         return tuple(
-            self._cotangent_kernel(i, n).launch(*primals, cotangent) for i in range(n)
+            self._cotangent_kernel(i, n).launch(*primals, *cotangents) for i in range(n)
         )
 
     def _jvp(
         self,
         primals: mx.array | tuple[mx.array, ...],
         tangents: mx.array | tuple[mx.array, ...],
-    ) -> mx.array:
-        """MLX passes (primals, tangents) and expects the output tangent."""
+    ) -> mx.array | tuple[mx.array, ...]:
+        """MLX passes (primals, tangents) and expects the output tangents."""
         primals, tangents = _arrays(primals), _arrays(tangents)
         n = len(primals)
         if self._tangent_kernel is None:
 
-            def output_tangent(*args: mx.array) -> mx.array:
-                return mx.jvp(self.function, args[:n], args[n:])[1][0]
+            def output_tangent(*args: mx.array) -> tuple[mx.array, ...]:
+                return tuple(mx.jvp(self.function, list(args[:n]), list(args[n:]))[1])
 
             self._tangent_kernel = Compiled(output_tangent, self.schedule)
         return self._tangent_kernel.launch(*primals, *tangents)

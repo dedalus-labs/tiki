@@ -68,8 +68,18 @@ class Graph:
     inputs: tuple[Value, ...]
     constants: tuple[tuple[str, float], ...]
     nodes: tuple[Node, ...]
-    output: str
-    shape: Shape
+    outputs: tuple[Value, ...]
+
+    @property
+    def output(self) -> str:
+        """The single output's name; schedules that fuse one output ask for it."""
+        if len(self.outputs) != 1:
+            raise UnsupportedGraphError("this schedule requires exactly one output")
+        return self.outputs[0].name
+
+    @property
+    def shape(self) -> Shape:
+        return self.outputs[0].shape
 
 
 def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
@@ -97,19 +107,18 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     inputs = tuple(
         descriptor(raw, strides) for raw, (_, strides) in zip(raw_inputs, profiles)
     )
-    outputs = headers["outputs"]["outputs"]
-    if len(outputs) != 1:
-        raise UnsupportedGraphError("exactly one array output is required")
-    output = descriptor(outputs[0])
+    outputs = tuple(descriptor(raw) for raw in headers["outputs"]["outputs"])
+    if not outputs:
+        raise UnsupportedGraphError("at least one array output is required")
     constants = []
     for name, value in headers["constants"]["constants"]:
         if value.ndim != 0 or value.dtype != mx.float32:
             raise UnsupportedGraphError("captured constants must be float32 scalars")
         constants.append((name, float(value.item())))
     nodes = tuple(parse_node(event) for event in events if event["type"] == "primitive")
-    if prod(output.shape) >= 2**31 - 1024:
+    if any(prod(output.shape) >= 2**31 - 1024 for output in outputs):
         raise UnsupportedGraphError("element count exceeds signed 32-bit indexing")
-    return Graph(inputs, tuple(constants), nodes, output.name, output.shape)
+    return Graph(inputs, tuple(constants), nodes, outputs)
 
 
 def parse_node(event: ExportEvent) -> Node:

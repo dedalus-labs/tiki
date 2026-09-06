@@ -136,6 +136,51 @@ This is address accounting, not a claim of 32x speedup. This scalar-word layout
 does not establish compatibility with Hopper's asynchronous tensor-copy or
 matrix-instruction descriptors; those have additional layout constraints.
 
+## Associative scan
+
+```python
+from associative_scan import ScanSchedule, associative_scan
+
+
+def affine(left, right):
+    return (right[0] * left[0], right[0] * left[1] + right[1])
+
+
+carry, hidden = associative_scan(affine, (decay, drive), axis=1)
+```
+
+`associative_scan(fn, elems, reverse=False, axis=0, schedule=ScanSchedule())`
+has the interface of `jax.lax.associative_scan`: `fn` combines two pytrees of
+float32 leaves of one shape and must be associative. The combine is captured
+once on scalar placeholders through the same graph capture as `tk.compile`, so
+any elementwise combine over any number of leaves lowers; a non-elementwise
+combine is rejected at capture.
+
+The scan axis is split into tiles of `threads * elements_per_thread`
+positions. The tile kernel folds each thread's contiguous chunk in registers,
+scans the chunk totals across the warp with shuffles, scans the warp totals
+through shared memory, and writes the tile-local scan and one aggregate per
+tile. The aggregates are scanned recursively with the same op and folded back
+by the apply kernel, so any length is a composition of the same two kernels.
+No level needs an identity element: a lane, warp, or tile with no left
+neighbor keeps its own value, loads past the row are clamped to its last
+position, and stores are predicated.
+
+Every array is addressed through a two-mode CuTe layout `((1, batch...), n)`
+built from its live strides, so any axis of a transposed or sliced view is
+consumed in place. `reverse` is a negatively strided view in and out; the
+kernels have no reverse path.
+
+Derivatives are registered on `mx.custom_function`. With `J_y(t)` and `J_x(t)`
+the Jacobians of the combine at step `t` (compiled from `mx.jvp` of the combine
+as one elementwise kernel), the cotangent follows the reverse affine recurrence
+`gy_t = g_t + J_y(t+1)^T gy_{t+1}` and the tangent the forward one
+`dy_t = J_y(t) dy_{t-1} + J_x(t) dx_t`; both are associative scans over
+`(matrix, vector)` leaves and reuse the kernels above. The tests check forward,
+VJP, and JVP against the generic tree in `experiments/associative_scan` under
+MLX autodiff, at lengths across every level of the hierarchy, and train a
+linear recurrence with `value_and_grad`.
+
 ## Inspect the emitted program
 
 ```sh
