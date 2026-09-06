@@ -22,8 +22,10 @@ history remain the foundation; see [UPSTREAM.md](UPSTREAM.md).
 ## What works today
 
 The repository contains an MLX checkout plus an isolated compiler experiment.
-It still imports as `mlx`. There is no new `tiki` framework package here yet.
-**The examples under “The API we are working toward” are design targets.**
+MLX still imports as `mlx`. An experimental `tiki.py` module now provides
+`tk.compile` for float32 elementwise graphs; it is not an installed framework
+package. **The examples under “The API we are working toward” remain design
+targets beyond this subset.**
 
 On a GH200, with CuTe DSL 4.7.1 and its Multi-Level Intermediate Representation
 (MLIR), we have:
@@ -36,10 +38,12 @@ On a GH200, with CuTe DSL 4.7.1 and its Multi-Level Intermediate Representation
 
 The [experiment](experiments/cute_backend/README.md) and
 [GH200 evidence](experiments/cute_backend/GH200_PROOF.md) are reproducible.
-The input MLIR still comes from a reference CuTe-decorated function. We have
-established the compiler and runtime connection; generating this input from an
-MLX graph is the next milestone. No kernel performance or compilation latency
-advantage has been measured yet.
+That original proof used a reference CuTe-decorated function. The
+[native graph experiment](experiments/cute_backend/README.md#native-mlx-graph-compilation)
+now captures actual MLX primitives through its export callback, emits CuTe MLIR
+directly, and executes it on the GH200. Its graph and schedule can also be
+inspected on a Mac. No kernel performance or compilation latency advantage has
+been measured yet.
 
 ## The architecture we want
 
@@ -254,12 +258,12 @@ and differentiation requirements still have to be declared and validated.
 
 ## Milestones
 
-These are completion gates. Only the first has been demonstrated in this repo.
+These are completion gates. Gates 0 and 1 have been demonstrated in this repo.
 
 | Gate | Deliverable | Evidence required to mark it complete |
 | --- | --- | --- |
 | **0. Compiler connection — demonstrated** | CuTe MLIR to device binary to MLX CUDA launch. | Recorded GH200 compiler artifacts and exact vector-add results. This does not include an MLX graph emitter. |
-| **1. First native graph region** | Lower a deliberately small MLX elementwise region directly into CuTe MLIR. | Correct execution for contiguous float32 inputs, scalar broadcasting, empty and partial tiles; typed rejection of unsupported cases; inspection proving this region uses CuTe artifacts rather than MLX's CUDA C++ runtime compiler. |
+| **1. First native graph region — demonstrated** | `tk.compile` captures an MLX elementwise graph and emits a chosen schedule as CuTe MLIR. | Ten GH200 tests cover arithmetic, scalar broadcasting, empty and partial tiles, input packing, specialization reuse, and unsupported cases. The compiler path consumes direct MLIR; see the native graph experiment. |
 | **2. Kernel library on MLX** | Port the smallest `Tensor`/`Load`/`Gemm`/`Warp` subset; implement the normalization target and expose custom-op differentiation. | Numerical and gradient checks, explicit memory/stream ownership, safe shared-buffer reuse, concurrent compilation without shared mutable staging state, and no PyTorch runtime dependency. |
 | **3. FlashAttention that trains** | Implement tiled online-softmax forward and the compact backward target. Start with one fixed non-causal specialization, then expand. | Output and dQ/dK/dV comparisons against independent references; finite-difference checks on small cases; float16/bfloat16, causal and partial tiles; peak-memory evidence that no full score matrix is stored. Validate Ampere mechanics on Ampere and Hopper schedules on Hopper. |
 | **4. Fast compilation and inspectable tuning** | Cache compiled artifacts, expose every lowering stage, and tune legal schedule candidates. | Cold compile, persistent-cache hit, warm launch, and tuning costs measured separately; cache identity covers source/MLIR, compiler version/options, target, shapes/strides, dtype, constants, layout, schedule, and binary calling convention. Invalid candidates fail before benchmarking. |
