@@ -2,14 +2,14 @@
 
 The interface is ``jax.lax.associative_scan``: ``fn`` combines two pytrees of
 leaves and must be associative; element ``t`` of the result is ``fn`` folded
-over elements ``0..t``, or ``t..n-1`` with ``reverse``. Forward evaluation is
+over elements ``0..t``, or ``t..length-1`` with ``reverse``. Forward evaluation is
 the tile kernel, a recursive scan of the tile aggregates, and the apply
 kernel, all specialized on the live layout of every leaf.
 
 The derivatives use the sequential reading of the scan, ``y_t = fn(y_{t-1},
 x_t)``, which equals the tree because ``fn`` is associative. With ``J_y(t)``
-and ``J_x(t)`` the Jacobians of ``fn`` at step ``t`` (``k x k`` per position
-for ``k`` leaves), the cotangent obeys the reverse affine recurrence
+and ``J_x(t)`` the Jacobians of ``fn`` at step ``t`` (``size x size`` per position
+for ``size`` leaves), the cotangent obeys the reverse affine recurrence
 ``gy_t = g_t + J_y(t+1)^T gy_{t+1}`` and the tangent the forward one
 ``dy_t = J_y(t) dy_{t-1} + J_x(t) dx_t``. Both are associative scans over
 ``(matrix, vector)`` pairs, so each derivative is the same kernel family with
@@ -57,41 +57,61 @@ def basis(array: mx.array, value: float) -> mx.array:
     return mx.broadcast_to(mx.array(value, dtype=mx.float32), array.shape)
 
 
-def affine_combine(leaves: int) -> FlatCombine:
-    """``(A_l, b_l) o (A_r, b_r) = (A_r A_l, A_r b_l + b_r)`` over ``k*k + k`` leaves."""
-    k = leaves
+def affine_combine(size: int) -> FlatCombine:
+    """``(A_l, b_l) o (A_r, b_r) = (A_r A_l, A_r b_l + b_r)`` over ``size*size + size`` leaves."""
 
     def combine(*args: mx.array) -> tuple[mx.array, ...]:
-        a_left, b_left = args[: k * k], args[k * k : k * k + k]
-        a_right, b_right = args[k * k + k : 2 * k * k + k], args[2 * k * k + k :]
+        a_left, b_left = args[: size * size], args[size * size : size * size + size]
+        a_right, b_right = (
+            args[size * size + size : 2 * size * size + size],
+            args[2 * size * size + size :],
+        )
         matrix = [
-            reduce(add, (a_right[i * k + m] * a_left[m * k + j] for m in range(k)))
-            for i in range(k)
-            for j in range(k)
+            reduce(
+                add,
+                (
+                    a_right[row * size + inner] * a_left[inner * size + column]
+                    for inner in range(size)
+                ),
+            )
+            for row in range(size)
+            for column in range(size)
         ]
         vector = [
-            reduce(add, (a_right[i * k + m] * b_left[m] for m in range(k))) + b_right[i]
-            for i in range(k)
+            reduce(
+                add,
+                (a_right[row * size + inner] * b_left[inner] for inner in range(size)),
+            )
+            + b_right[row]
+            for row in range(size)
         ]
         return (*matrix, *vector)
 
     return combine
 
 
-def matvec(leaves: int, transpose: bool) -> Callable[..., tuple[mx.array, ...]]:
-    """``M v`` (or ``M^T v``) over ``k*k`` matrix leaves and ``k`` vector leaves."""
-    k = leaves
+def matvec(size: int, transpose: bool) -> Callable[..., tuple[mx.array, ...]]:
+    """``M v`` (or ``M^T v``) over ``size*size`` matrix leaves and ``size`` vector leaves."""
 
     def function(*args: mx.array) -> tuple[mx.array, ...]:
-        matrix, vector = args[: k * k], args[k * k :]
+        matrix, vector = args[: size * size], args[size * size :]
         if transpose:
             return tuple(
-                reduce(add, (matrix[i * k + j] * vector[i] for i in range(k)))
-                for j in range(k)
+                reduce(
+                    add,
+                    (matrix[row * size + column] * vector[row] for row in range(size)),
+                )
+                for column in range(size)
             )
         return tuple(
-            reduce(add, (matrix[i * k + j] * vector[j] for j in range(k)))
-            for i in range(k)
+            reduce(
+                add,
+                (
+                    matrix[row * size + column] * vector[column]
+                    for column in range(size)
+                ),
+            )
+            for row in range(size)
         )
 
     return function
@@ -206,28 +226,31 @@ class ScanOp:
 
     @property
     def affine(self) -> "ScanOp":
-        """The derivative recurrences as a scan over ``(k x k matrix, k vector)`` pairs."""
+        """The derivative recurrences as a scan over ``(size x size matrix, size vector)`` pairs."""
         if self._affine is None:
-            k = self.leaves
+            size = self.leaves
             self._affine = ScanOp(
-                affine_combine(k), k * k + k, self.axis, self.schedule
+                affine_combine(size), size * size + size, self.axis, self.schedule
             )
         return self._affine
 
     def jacobian(self, *args: mx.array) -> tuple[mx.array, ...]:
-        """``J_y`` then ``J_x`` entries, row-major ``(output i, input j)``, per position."""
-        k = self.leaves
+        """``J_y`` then ``J_x`` entries, row-major ``(output row, input column)``, per position."""
+        size = self.leaves
         primals = list(args)
         columns = []
-        for j in range(2 * k):
+        for column in range(2 * size):
             tangents = [
-                basis(primal, float(i == j)) for i, primal in enumerate(primals)
+                basis(primal, float(row == column))
+                for row, primal in enumerate(primals)
             ]
             columns.append(
                 mx.jvp(lambda *a: list(self.combine(*a)), primals, tangents)[1]
             )
-        left = [columns[j][i] for i in range(k) for j in range(k)]
-        right = [columns[k + j][i] for i in range(k) for j in range(k)]
+        left = [columns[column][row] for row in range(size) for column in range(size)]
+        right = [
+            columns[size + column][row] for row in range(size) for column in range(size)
+        ]
         return (*left, *right)
 
     def _vjp(
@@ -237,44 +260,48 @@ class ScanOp:
         outputs: mx.array | Leaves,
     ) -> Leaves:
         x, g, y = _arrays(primals), _arrays(cotangents), _arrays(outputs)
-        k, axis = self.leaves, self.axis
-        n = x[0].shape[axis]
-        head = [view(leaf, axis, 0, n - 1) for leaf in y]
-        tail = [view(leaf, axis, 1, n) for leaf in x]
+        size, axis = self.leaves, self.axis
+        length = x[0].shape[axis]
+        head = [view(leaf, axis, 0, length - 1) for leaf in y]
+        tail = [view(leaf, axis, 1, length) for leaf in x]
         jacobians = _arrays(self._jacobian(*head, *tail))
-        left, right = jacobians[: k * k], jacobians[k * k :]
+        left, right = jacobians[: size * size], jacobians[size * size :]
         pad = mx.zeros_like(view(x[0], axis, 0, 1))
         matrices = [
-            mx.concatenate([left[j * k + i], pad], axis=axis)
-            for i in range(k)
-            for j in range(k)
+            mx.concatenate([left[column * size + row], pad], axis=axis)
+            for row in range(size)
+            for column in range(size)
         ]
-        gy = self.affine.reverse(*matrices, *g)[k * k :]
+        gy = self.affine.reverse(*matrices, *g)[size * size :]
         gx_tail = _arrays(
-            self._matvec_transposed(*right, *(view(leaf, axis, 1, n) for leaf in gy))
+            self._matvec_transposed(
+                *right, *(view(leaf, axis, 1, length) for leaf in gy)
+            )
         )
         return tuple(
-            mx.concatenate([view(gy[j], axis, 0, 1), gx_tail[j]], axis=axis)
-            for j in range(k)
+            mx.concatenate([view(gy[column], axis, 0, 1), gx_tail[column]], axis=axis)
+            for column in range(size)
         )
 
     def _jvp(self, primals: mx.array | Leaves, tangents: mx.array | Leaves) -> Leaves:
         x, dx = _arrays(primals), _arrays(tangents)
-        k, axis = self.leaves, self.axis
-        n = x[0].shape[axis]
+        size, axis = self.leaves, self.axis
+        length = x[0].shape[axis]
         y = self.forward(*x)
-        head = [view(leaf, axis, 0, n - 1) for leaf in y]
-        tail = [view(leaf, axis, 1, n) for leaf in x]
+        head = [view(leaf, axis, 0, length - 1) for leaf in y]
+        tail = [view(leaf, axis, 1, length) for leaf in x]
         jacobians = _arrays(self._jacobian(*head, *tail))
-        left, right = jacobians[: k * k], jacobians[k * k :]
+        left, right = jacobians[: size * size], jacobians[size * size :]
         pad = mx.zeros_like(view(x[0], axis, 0, 1))
         matrices = [mx.concatenate([pad, entry], axis=axis) for entry in left]
-        driven = _arrays(self._matvec(*right, *(view(leaf, axis, 1, n) for leaf in dx)))
+        driven = _arrays(
+            self._matvec(*right, *(view(leaf, axis, 1, length) for leaf in dx))
+        )
         vectors = [
-            mx.concatenate([view(dx[i], axis, 0, 1), driven[i]], axis=axis)
-            for i in range(k)
+            mx.concatenate([view(dx[row], axis, 0, 1), driven[row]], axis=axis)
+            for row in range(size)
         ]
-        return self.affine(*matrices, *vectors)[k * k :]
+        return self.affine(*matrices, *vectors)[size * size :]
 
 
 @lru_cache(maxsize=32)
@@ -284,17 +311,17 @@ def operation(
     axis: int,
     schedule: ScanSchedule,
 ) -> ScanOp:
-    k = len(paths)
+    size = len(paths)
 
     def combine(*args: mx.array) -> tuple[mx.array, ...]:
-        left = tree_unflatten(list(zip(paths, args[:k])))
-        right = tree_unflatten(list(zip(paths, args[k:])))
+        left = tree_unflatten(list(zip(paths, args[:size])))
+        right = tree_unflatten(list(zip(paths, args[size:])))
         result = tree_flatten(fn(left, right))
         if tuple(path for path, _ in result) != paths:
             raise ScanContractError("fn must return the structure of elems")
         return tuple(leaf for _, leaf in result)
 
-    return ScanOp(combine, k, axis, schedule)
+    return ScanOp(combine, size, axis, schedule)
 
 
 def associative_scan(

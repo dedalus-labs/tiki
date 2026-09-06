@@ -118,9 +118,9 @@ class Combine:
         import struct
 
         lines = []
-        for i, (_, value) in enumerate(self.graph.constants):
+        for index, (_, value) in enumerate(self.graph.constants):
             bits = struct.unpack("<I", struct.pack("<f", value))[0]
-            lines.append(f"%k{i} = arith.constant 0x{bits:08X} : f32")
+            lines.append(f"%k{index} = arith.constant 0x{bits:08X} : f32")
         return lines
 
     def apply(self, left: list[str], right: list[str]) -> tuple[list[str], list[str]]:
@@ -128,16 +128,16 @@ class Combine:
             value.name: ssa for value, ssa in zip(self.graph.inputs, (*left, *right))
         }
         names.update(
-            (name, f"%k{i}") for i, (name, _) in enumerate(self.graph.constants)
+            (name, f"%k{leaf}") for leaf, (name, _) in enumerate(self.graph.constants)
         )
         self.applications += 1
         lines = []
-        for i, node in enumerate(self.graph.nodes):
+        for index, node in enumerate(self.graph.nodes):
             result = expression(node, names)
             if node.operation == "Broadcast":
                 names[node.output.name] = result
                 continue
-            names[node.output.name] = f"%c{self.applications}_{i}"
+            names[node.output.name] = f"%c{self.applications}_{index}"
             lines.append(f"{names[node.output.name]} = {result}")
         return lines, [names[output.name] for output in self.graph.outputs]
 
@@ -180,19 +180,19 @@ def warp_scan(combine: Combine, values: list[str]) -> tuple[list[str], list[str]
     for shift in (1, 2, 4, 8, 16):
         lines.append(f"%shift{shift} = arith.constant {shift} : i32")
         shifted = []
-        for i, value in enumerate(values):
-            shifted.append(f"%up{i}_{shift}")
+        for leaf, value in enumerate(values):
+            shifted.append(f"%up{leaf}_{shift}")
             lines.append(
-                f"{shifted[i]} = nvvm.shfl.sync up %mask, {value}, %shift{shift}, %clamp : f32 -> f32"
+                f"{shifted[leaf]} = nvvm.shfl.sync up %mask, {value}, %shift{shift}, %clamp : f32 -> f32"
             )
         lines.append(f"%has{shift} = arith.cmpi uge, %lane, %shift{shift} : i32")
         combined, results = combine.apply(shifted, values)
         lines.extend(combined)
-        for i, value in enumerate(values):
+        for leaf, value in enumerate(values):
             lines.append(
-                f"%warp{i}_{shift} = arith.select %has{shift}, {results[i]}, {value} : f32"
+                f"%warp{leaf}_{shift} = arith.select %has{shift}, {results[leaf]}, {value} : f32"
             )
-        values = [f"%warp{i}_{shift}" for i in range(len(values))]
+        values = [f"%warp{leaf}_{shift}" for leaf in range(len(values))]
     return lines, values
 
 
@@ -209,49 +209,50 @@ def block_prefix(
         "%lane_last = arith.constant 31 : i32",
     ]
     lines.append("%is_last = arith.cmpi eq, %lane, %lane_last : i32")
-    for i in range(leaves):
-        lines.append(f"%slot{i} = arith.constant {i} : i32")
+    for leaf in range(leaves):
+        lines.append(f"%slot{leaf} = arith.constant {leaf} : i32")
     lines.append("scf.if %is_last {")
-    for i in range(leaves):
+    for leaf in range(leaves):
         lines.append(
-            f"  %stage{i} = cute.make_coord(%warp, %slot{i}) : (i32, i32) -> {COORD}"
+            f"  %stage{leaf} = cute.make_coord(%warp, %slot{leaf}) : (i32, i32) -> {COORD}"
         )
-        lines.append("  " + store("%shared", kind, f"%stage{i}", totals[i]))
+        lines.append("  " + store("%shared", kind, f"%stage{leaf}", totals[leaf]))
     lines.extend(["}", "nvvm.barrier"])
-    for i in range(leaves):
+    for leaf in range(leaves):
         lines.append(
-            f"%first_coord{i} = cute.make_coord(%zero, %slot{i}) : (i32, i32) -> {COORD}"
+            f"%first_coord{leaf} = cute.make_coord(%zero, %slot{leaf}) : (i32, i32) -> {COORD}"
         )
-        lines.append(load("%shared", kind, f"%first_coord{i}", f"%first{i}"))
-    iterated = ", ".join(f"%fold{i} = %first{i}" for i in range(leaves))
+        lines.append(load("%shared", kind, f"%first_coord{leaf}", f"%first{leaf}"))
+    iterated = ", ".join(f"%fold{leaf} = %first{leaf}" for leaf in range(leaves))
     types = ", ".join("f32" for _ in range(leaves))
     lines.append(
         f"%carry:{leaves} = scf.for %j = %one to %warp step %one iter_args({iterated}) -> ({types}) : i32 {{"
     )
-    for i in range(leaves):
+    for leaf in range(leaves):
         lines.append(
-            f"  %next_coord{i} = cute.make_coord(%j, %slot{i}) : (i32, i32) -> {COORD}"
+            f"  %next_coord{leaf} = cute.make_coord(%j, %slot{leaf}) : (i32, i32) -> {COORD}"
         )
-        lines.append("  " + load("%shared", kind, f"%next_coord{i}", f"%next{i}"))
+        lines.append("  " + load("%shared", kind, f"%next_coord{leaf}", f"%next{leaf}"))
     folded, results = combine.apply(
-        [f"%fold{i}" for i in range(leaves)], [f"%next{i}" for i in range(leaves)]
+        [f"%fold{leaf}" for leaf in range(leaves)],
+        [f"%next{leaf}" for leaf in range(leaves)],
     )
     lines.extend("  " + line for line in folded)
     lines.append(f"  scf.yield {', '.join(results)} : {types}")
     lines.append("}")
     lines.append("%has_warp = arith.cmpi uge, %warp, %one : i32")
-    carry = [f"%carry#{i}" for i in range(leaves)]
+    carry = [f"%carry#{leaf}" for leaf in range(leaves)]
     both, results = combine.apply(carry, exclusive)
     lines.extend(both)
     prefix = []
-    for i in range(leaves):
+    for leaf in range(leaves):
         lines.append(
-            f"%in_warp{i} = arith.select %has_lane, {results[i]}, {carry[i]} : f32"
+            f"%in_warp{leaf} = arith.select %has_lane, {results[leaf]}, {carry[leaf]} : f32"
         )
         lines.append(
-            f"%prefix{i} = arith.select %has_warp, %in_warp{i}, {exclusive[i]} : f32"
+            f"%prefix{leaf} = arith.select %has_warp, %in_warp{leaf}, {exclusive[leaf]} : f32"
         )
-        prefix.append(f"%prefix{i}")
+        prefix.append(f"%prefix{leaf}")
     lines.append("%has_prefix = arith.ori %has_warp, %has_lane : i1")
     return lines, prefix, "%has_prefix"
 
@@ -266,17 +267,17 @@ def lower_tile_scan(
     combine = Combine(combine_graph)
     leaves = combine.leaves
     shape = profiles[0][0]
-    n = shape[axis]
-    rows = prod(shape) // n
-    tiles = (n + schedule.tile - 1) // schedule.tile
+    length = shape[axis]
+    rows = prod(shape) // length
+    tiles = (length + schedule.tile - 1) // schedule.tile
     inputs = [gmem(axis_layout(shape, strides, axis)) for _, strides in profiles]
     local = gmem(axis_layout(shape, dense_strides(shape), axis))
     aggregate = gmem(f"({rows},{tiles}):({tiles},1)")
     kinds = [*inputs, *[local] * leaves, *[aggregate] * leaves]
-    params = [f"%arg{i}: {kind}" for i, kind in enumerate(kinds)]
+    params = [f"%arg{index}: {kind}" for index, kind in enumerate(kinds)]
     body = [
         *prologue(shape, axis, tiles, schedule),
-        f"%last = arith.constant {n - 1} : i32",
+        f"%last = arith.constant {length - 1} : i32",
         "%warp_size = arith.constant 32 : i32",
         "%lane = arith.remui %thread, %warp_size : i32",
         "%warp = arith.divui %thread, %warp_size : i32",
@@ -285,18 +286,21 @@ def lower_tile_scan(
         *combine.constants(),
     ]
     chunks: list[list[str]] = []
-    for e in range(schedule.elements_per_thread):
-        body.append(f"%offset{e} = arith.constant {e} : i32")
-        body.append(f"%position{e} = arith.addi %chunk_base, %offset{e} : i32")
-        body.append(f"%clamped{e} = arith.minsi %position{e}, %last : i32")
+    for element in range(schedule.elements_per_thread):
+        body.append(f"%offset{element} = arith.constant {element} : i32")
         body.append(
-            f"%coord{e} = cute.make_coord(%row, %clamped{e}) : (i32, i32) -> {COORD}"
+            f"%position{element} = arith.addi %chunk_base, %offset{element} : i32"
         )
-        loaded = [f"%load{i}_{e}" for i in range(leaves)]
+        body.append(f"%clamped{element} = arith.minsi %position{element}, %last : i32")
+        body.append(
+            f"%coord{element} = cute.make_coord(%row, %clamped{element}) : (i32, i32) -> {COORD}"
+        )
+        loaded = [f"%load{leaf}_{element}" for leaf in range(leaves)]
         body.extend(
-            load(f"%arg{i}", inputs[i], f"%coord{e}", loaded[i]) for i in range(leaves)
+            load(f"%arg{leaf}", inputs[leaf], f"%coord{element}", loaded[leaf])
+            for leaf in range(leaves)
         )
-        if e == 0:
+        if element == 0:
             chunks.append(loaded)
             continue
         lines, results = combine.apply(chunks[-1], loaded)
@@ -304,10 +308,10 @@ def lower_tile_scan(
         chunks.append(results)
     lines, totals = warp_scan(combine, chunks[-1])
     body.extend(lines)
-    exclusive = [f"%exclusive{i}" for i in range(leaves)]
+    exclusive = [f"%exclusive{leaf}" for leaf in range(leaves)]
     body.extend(
-        f"{exclusive[i]} = nvvm.shfl.sync up %mask, {totals[i]}, %one, %clamp : f32 -> f32"
-        for i in range(leaves)
+        f"{exclusive[leaf]} = nvvm.shfl.sync up %mask, {totals[leaf]}, %one, %clamp : f32 -> f32"
+        for leaf in range(leaves)
     )
     body.append("%has_lane = arith.cmpi uge, %lane, %one : i32")
     if schedule.warps > 1:
@@ -316,22 +320,25 @@ def lower_tile_scan(
     else:
         prefix, has_prefix = exclusive, "%has_lane"
     final: list[str] = []
-    for e, chunk in enumerate(chunks):
+    for element, chunk in enumerate(chunks):
         lines, results = combine.apply(prefix, chunk)
         body.extend(lines)
-        final = [f"%out{i}_{e}" for i in range(leaves)]
+        final = [f"%out{leaf}_{element}" for leaf in range(leaves)]
         body.extend(
-            f"{final[i]} = arith.select {has_prefix}, {results[i]}, {chunk[i]} : f32"
-            for i in range(leaves)
+            f"{final[leaf]} = arith.select {has_prefix}, {results[leaf]}, {chunk[leaf]} : f32"
+            for leaf in range(leaves)
         )
-        body.append(f"%valid{e} = arith.cmpi ult, %position{e}, %length : i32")
-        body.append(f"scf.if %valid{e} {{")
         body.append(
-            f"  %out_coord{e} = cute.make_coord(%row, %position{e}) : (i32, i32) -> {COORD}"
+            f"%valid{element} = arith.cmpi ult, %position{element}, %length : i32"
+        )
+        body.append(f"scf.if %valid{element} {{")
+        body.append(
+            f"  %out_coord{element} = cute.make_coord(%row, %position{element}) : (i32, i32) -> {COORD}"
         )
         body.extend(
-            "  " + store(f"%arg{leaves + i}", local, f"%out_coord{e}", final[i])
-            for i in range(leaves)
+            "  "
+            + store(f"%arg{leaves + leaf}", local, f"%out_coord{element}", final[leaf])
+            for leaf in range(leaves)
         )
         body.append("}")
     body.append(f"%thread_last = arith.constant {schedule.threads - 1} : i32")
@@ -341,8 +348,9 @@ def lower_tile_scan(
         f"  %aggregate_coord = cute.make_coord(%row, %tile) : (i32, i32) -> {COORD}"
     )
     body.extend(
-        "  " + store(f"%arg{2 * leaves + i}", aggregate, "%aggregate_coord", final[i])
-        for i in range(leaves)
+        "  "
+        + store(f"%arg{2 * leaves + leaf}", aggregate, "%aggregate_coord", final[leaf])
+        for leaf in range(leaves)
     )
     body.append("}")
     return ScanLowered(
@@ -361,12 +369,12 @@ def lower_apply(
     """Fold the exclusive tile carry into every position of the tile-local scan."""
     combine = Combine(combine_graph)
     leaves = combine.leaves
-    n = shape[axis]
-    rows = prod(shape) // n
+    length = shape[axis]
+    rows = prod(shape) // length
     carry = gmem(f"({rows},{tiles}):({tiles},1)")
     dense = gmem(axis_layout(shape, dense_strides(shape), axis))
     kinds = [*[carry] * leaves, *[dense] * (2 * leaves)]
-    params = [f"%arg{i}: {kind}" for i, kind in enumerate(kinds)]
+    params = [f"%arg{index}: {kind}" for index, kind in enumerate(kinds)]
     body = [
         *prologue(shape, axis, tiles, schedule),
         *combine.constants(),
@@ -375,32 +383,42 @@ def lower_apply(
         "%previous_clamped = arith.maxsi %previous, %zero : i32",
         f"%carry_coord = cute.make_coord(%row, %previous_clamped) : (i32, i32) -> {COORD}",
     ]
-    carries = [f"%carry{i}" for i in range(leaves)]
+    carries = [f"%carry{leaf}" for leaf in range(leaves)]
     body.extend(
-        load(f"%arg{i}", carry, "%carry_coord", carries[i]) for i in range(leaves)
+        load(f"%arg{leaf}", carry, "%carry_coord", carries[leaf])
+        for leaf in range(leaves)
     )
-    for e in range(schedule.elements_per_thread):
-        body.append(f"%offset{e} = arith.constant {e} : i32")
-        body.append(f"%position{e} = arith.addi %chunk_base, %offset{e} : i32")
-        body.append(f"%valid{e} = arith.cmpi ult, %position{e}, %length : i32")
-        body.append(f"scf.if %valid{e} {{")
+    for element in range(schedule.elements_per_thread):
+        body.append(f"%offset{element} = arith.constant {element} : i32")
         body.append(
-            f"  %coord{e} = cute.make_coord(%row, %position{e}) : (i32, i32) -> {COORD}"
+            f"%position{element} = arith.addi %chunk_base, %offset{element} : i32"
         )
-        values = [f"%value{i}_{e}" for i in range(leaves)]
+        body.append(
+            f"%valid{element} = arith.cmpi ult, %position{element}, %length : i32"
+        )
+        body.append(f"scf.if %valid{element} {{")
+        body.append(
+            f"  %coord{element} = cute.make_coord(%row, %position{element}) : (i32, i32) -> {COORD}"
+        )
+        values = [f"%value{leaf}_{element}" for leaf in range(leaves)]
         body.extend(
-            "  " + load(f"%arg{leaves + i}", dense, f"%coord{e}", values[i])
-            for i in range(leaves)
+            "  " + load(f"%arg{leaves + leaf}", dense, f"%coord{element}", values[leaf])
+            for leaf in range(leaves)
         )
         lines, results = combine.apply(carries, values)
         body.extend("  " + line for line in lines)
-        for i in range(leaves):
+        for leaf in range(leaves):
             body.append(
-                f"  %result{i}_{e} = arith.select %has_prefix, {results[i]}, {values[i]} : f32"
+                f"  %result{leaf}_{element} = arith.select %has_prefix, {results[leaf]}, {values[leaf]} : f32"
             )
             body.append(
                 "  "
-                + store(f"%arg{2 * leaves + i}", dense, f"%coord{e}", f"%result{i}_{e}")
+                + store(
+                    f"%arg{2 * leaves + leaf}",
+                    dense,
+                    f"%coord{element}",
+                    f"%result{leaf}_{element}",
+                )
             )
         body.append("}")
     return ScanLowered(

@@ -105,18 +105,20 @@ class LoweringTest(unittest.TestCase):
 class ForwardTest(unittest.TestCase):
     def test_cumsum_every_length_and_schedule(self):
         for schedule in (SMALL, MEDIUM, LARGE):
-            for n in LENGTHS:
-                x = random((3, n), n)
+            for length in LENGTHS:
+                x = random((3, length), length)
                 result = associative_scan(mx.add, x, axis=1, schedule=schedule)
                 self.assertTrue(
-                    close(result, mx.cumsum(x, axis=1), 1e-3), (schedule, n)
+                    close(result, mx.cumsum(x, axis=1), 1e-3), (schedule, length)
                 )
 
     def test_reverse_matches_reverse_cumsum(self):
-        for n in (1, 2, 33, 513, 4097):
-            x = random((2, n), n)
+        for length in (1, 2, 33, 513, 4097):
+            x = random((2, length), length)
             result = associative_scan(mx.add, x, axis=1, reverse=True, schedule=MEDIUM)
-            self.assertTrue(close(result, mx.cumsum(x, axis=1, reverse=True), 1e-3), n)
+            self.assertTrue(
+                close(result, mx.cumsum(x, axis=1, reverse=True), 1e-3), length
+            )
 
     def test_any_axis_of_a_rank_three_array(self):
         x = random((6, 70, 5), 7)
@@ -125,12 +127,12 @@ class ForwardTest(unittest.TestCase):
             self.assertTrue(close(result, mx.cumsum(x, axis=axis), 1e-3), axis)
 
     def test_affine_matches_the_tree(self):
-        for n in (1, 2, 3, 64, 65, 1000, 4097):
-            a, b = random((4, n), n, 0.9), random((4, n), n + 1)
+        for length in (1, 2, 3, 64, 65, 1000, 4097):
+            a, b = random((4, length), length, 0.9), random((4, length), length + 1)
             result = associative_scan(affine, (a, b), axis=1, schedule=MEDIUM)
             expected = tree_scan(affine, (a, b), axis=1)
             for got, want in zip(result, expected):
-                self.assertTrue(close(got, want, 1e-3), n)
+                self.assertTrue(close(got, want, 1e-3), length)
 
     def test_pytree_leaves(self):
         x = random((5, 100), 3)
@@ -167,11 +169,15 @@ class DerivativeTest(unittest.TestCase):
         def tree(*leaves):
             return list(tree_scan(fn, leaves, axis=axis))
 
-        cotangents = [random(leaf.shape, 100 + i) for i, leaf in enumerate(elems)]
+        cotangents = [
+            random(leaf.shape, 100 + index) for index, leaf in enumerate(elems)
+        ]
         got = mx.vjp(compiled, list(elems), cotangents)[1]
         want = mx.vjp(tree, list(elems), cotangents)[1]
-        for g, w in zip(got, want):
-            self.assertTrue(close(g, w, tolerance), (fn.__name__, elems[0].shape))
+        for actual, expected in zip(got, want):
+            self.assertTrue(
+                close(actual, expected, tolerance), (fn.__name__, elems[0].shape)
+            )
 
     def check_jvp(self, fn, elems, axis, schedule, tolerance=1e-3):
         def compiled(*leaves):
@@ -180,25 +186,28 @@ class DerivativeTest(unittest.TestCase):
         def tree(*leaves):
             return list(tree_scan(fn, leaves, axis=axis))
 
-        tangents = [random(leaf.shape, 200 + i) for i, leaf in enumerate(elems)]
+        tangents = [random(leaf.shape, 200 + index) for index, leaf in enumerate(elems)]
         got = mx.jvp(compiled, list(elems), tangents)[1]
         want = mx.jvp(tree, list(elems), tangents)[1]
-        for g, w in zip(got, want):
-            self.assertTrue(close(g, w, tolerance), (fn.__name__, elems[0].shape))
+        for actual, expected in zip(got, want):
+            self.assertTrue(
+                close(actual, expected, tolerance), (fn.__name__, elems[0].shape)
+            )
 
     def test_cumsum_gradient_is_reverse_cumsum(self):
-        for n in (1, 2, 33, 513, 4097):
-            x = random((3, n), n)
+        for length in (1, 2, 33, 513, 4097):
+            x = random((3, length), length)
             grad = mx.grad(
                 lambda v: associative_scan(mx.add, v, axis=1, schedule=MEDIUM).sum()
             )(x)
             self.assertTrue(
-                close(grad, mx.cumsum(mx.ones_like(x), axis=1, reverse=True), 1e-3), n
+                close(grad, mx.cumsum(mx.ones_like(x), axis=1, reverse=True), 1e-3),
+                length,
             )
 
     def test_affine_vjp_and_jvp_match_the_tree(self):
-        for n in (1, 2, 3, 64, 65, 300, 4097):
-            a, b = random((3, n), n, 0.9), random((3, n), n + 1)
+        for length in (1, 2, 3, 64, 65, 300, 4097):
+            a, b = random((3, length), length, 0.9), random((3, length), length + 1)
             self.check_vjp(affine, (a, b), 1, MEDIUM)
             self.check_jvp(affine, (a, b), 1, MEDIUM)
 
@@ -216,7 +225,7 @@ class DerivativeTest(unittest.TestCase):
                 wr_r * vi_l + wi_r * vr_l + vi_r,
             )
 
-        x = tuple(random((2, 200), 10 + i, 0.6) for i in range(4))
+        x = tuple(random((2, 200), 10 + leaf, 0.6) for leaf in range(4))
         result = associative_scan(complex_affine, x, axis=1, schedule=SMALL)
         for got, want in zip(result, tree_scan(complex_affine, x, axis=1)):
             self.assertTrue(close(got, want, 1e-3))
@@ -237,8 +246,8 @@ class DerivativeTest(unittest.TestCase):
         cotangents = [random((2, 300), 3), random((2, 300), 4)]
         got = mx.vjp(compiled, [a, b], cotangents)[1]
         want = mx.vjp(tree, [a, b], cotangents)[1]
-        for g, w in zip(got, want):
-            self.assertTrue(close(g, w, 1e-3))
+        for actual, expected in zip(got, want):
+            self.assertTrue(close(actual, expected, 1e-3))
 
     def test_derivatives_through_strided_views(self):
         base = random((300, 3), 9, 0.9)
@@ -255,8 +264,8 @@ class DerivativeTest(unittest.TestCase):
         cotangents = [random((3, 300), 11), random((3, 300), 12)]
         got = mx.vjp(compiled, [base, other], cotangents)[1]
         want = mx.vjp(tree, [base, other], cotangents)[1]
-        for g, w in zip(got, want):
-            self.assertTrue(close(g, w, 1e-3))
+        for actual, expected in zip(got, want):
+            self.assertTrue(close(actual, expected, 1e-3))
 
     def test_training_a_linear_recurrence(self):
         """A diagonal linear SSM trained with value_and_grad; the first step's
