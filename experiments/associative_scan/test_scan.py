@@ -8,6 +8,7 @@ from typing import Any
 import mlx.core as mx
 import numpy as np
 from mlx.utils import tree_flatten, tree_unflatten
+
 from scan import associative_scan
 
 HAS_JAX = importlib.util.find_spec("jax") is not None
