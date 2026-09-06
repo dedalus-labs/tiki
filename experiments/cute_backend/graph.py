@@ -8,6 +8,16 @@ from typing import TypedDict
 import mlx.core as mx
 
 Shape = tuple[int, ...]
+
+Strides = tuple[int, ...]
+Profile = tuple[Shape, Strides]
+
+
+def dense_strides(shape: Shape) -> Strides:
+    """Right-major strides, the layout of every MLX output and of a fresh array."""
+    return tuple(prod(shape[axis + 1 :]) for axis in range(len(shape)))
+
+
 Descriptor = tuple[str, Shape, mx.Dtype]
 ArrayFunction = Callable[..., mx.array]
 
@@ -30,6 +40,20 @@ class ExportEvent(TypedDict, total=False):
 class Value:
     name: str
     shape: Shape
+    strides: Strides = ()
+
+    def __post_init__(self) -> None:
+        if self.strides == () and self.shape != ():
+            object.__setattr__(self, "strides", dense_strides(self.shape))
+
+    @property
+    def is_dense(self) -> bool:
+        """Right-major and contiguous; strides of extent-1 axes carry no information."""
+        dense = dense_strides(self.shape)
+        return all(
+            extent == 1 or stride == expected
+            for extent, stride, expected in zip(self.shape, self.strides, dense)
+        )
 
 
 @dataclass(frozen=True)
@@ -48,19 +72,31 @@ class Graph:
     shape: Shape
 
 
-def descriptor(raw: Descriptor) -> Value:
+def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
     name, shape, dtype = raw
     if dtype != mx.float32:
         raise UnsupportedGraphError(f"expected float32, got {dtype} at {name}")
-    return Value(name, tuple(shape))
+    return Value(name, tuple(shape), strides)
 
 
-def capture(function: ArrayFunction, shapes: tuple[Shape, ...]) -> Graph:
+def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
+    """Trace ``function`` on dense placeholders; record each input's strides.
+
+    Strides do not change the traced graph, only how the lowering addresses
+    each input, so tracing stays on dense placeholders.
+    """
     events: list[ExportEvent] = []
-    placeholders = [mx.zeros(shape, dtype=mx.float32) for shape in shapes]
+    placeholders = [mx.zeros(shape, dtype=mx.float32) for shape, _ in profiles]
     mx.export_function(events.append, function, *placeholders)
     headers = {event["type"]: event for event in events if event["type"] != "primitive"}
-    inputs = tuple(descriptor(raw) for raw in headers["inputs"]["inputs"])
+    raw_inputs = headers["inputs"]["inputs"]
+    if len(raw_inputs) != len(profiles):
+        raise UnsupportedGraphError(
+            f"traced {len(raw_inputs)} inputs for {len(profiles)} profiles"
+        )
+    inputs = tuple(
+        descriptor(raw, strides) for raw, (_, strides) in zip(raw_inputs, profiles)
+    )
     outputs = headers["outputs"]["outputs"]
     if len(outputs) != 1:
         raise UnsupportedGraphError("exactly one array output is required")
