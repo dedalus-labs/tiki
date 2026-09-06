@@ -10,6 +10,7 @@ from time import perf_counter
 
 import mlx.core as mx
 import numpy as np
+
 from affine_scan import affine_scan, backward
 from scan import associative_scan
 
