@@ -622,15 +622,17 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       cache.insert(s.id());
     }
 
-    for (auto input : a.inputs()) {
-      recurse(input);
-    }
-
-    // Stop grad
+    // Nothing upstream of a stop_gradient carries a tangent, so do not tape
+    // it. Taping it would call jvp on primitives that never need one, such as
+    // the forward of a custom_function with its own jvp rule.
     if (a.has_primitive()) {
       if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
         return;
       }
+    }
+
+    for (auto input : a.inputs()) {
+      recurse(input);
     }
 
     // Calculate gradient if any inputs require gradient
