@@ -6,6 +6,7 @@ import argparse
 import json
 
 import mlx.core as mx
+
 from probe import THREADS, compile_reference_cubin
 
 
