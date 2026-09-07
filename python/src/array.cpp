@@ -14,7 +14,6 @@
 #include <nanobind/typing.h>
 
 #include "mlx/backend/metal/metal.h"
-#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
@@ -349,9 +348,7 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def_prop_ro(
           "is_tracer",
-          [](const mx::array& a) {
-            return a.is_tracer() && !mx::detail::retain_graph();
-          },
+          &mx::array::is_placeholder,
           R"pbdoc(
             Whether the array is a placeholder that cannot be evaluated.
 
