@@ -7,6 +7,8 @@ from typing import TypedDict
 
 import mlx.core as mx
 
+from operations import Operation, UnsupportedGraphError
+
 Shape = tuple[int, ...]
 
 Strides = tuple[int, ...]
@@ -19,11 +21,8 @@ def dense_strides(shape: Shape) -> Strides:
 
 
 Descriptor = tuple[str, Shape, mx.Dtype]
-ArrayFunction = Callable[..., mx.array]
-
-
-class UnsupportedGraphError(ValueError):
-    """The exported graph is outside the elementwise compiler contract."""
+ArrayResult = mx.array | tuple[mx.array, ...]
+ArrayFunction = Callable[..., ArrayResult]
 
 
 class ExportEvent(TypedDict, total=False):
@@ -68,8 +67,32 @@ class Graph:
     inputs: tuple[Value, ...]
     constants: tuple[tuple[str, float], ...]
     nodes: tuple[Node, ...]
-    output: str
-    shape: Shape
+    outputs: tuple[Value, ...]
+
+    @property
+    def output(self) -> str:
+        """The single output's name; schedules that fuse one output ask for it."""
+        if len(self.outputs) != 1:
+            raise UnsupportedGraphError("this schedule requires exactly one output")
+        return self.outputs[0].name
+
+    @property
+    def shape(self) -> Shape:
+        return self.outputs[0].shape
+
+
+def replay(graph: Graph, inputs: tuple[mx.array, ...]) -> tuple[mx.array, ...]:
+    """Differentiate the captured program with its frozen constants and branches."""
+    values = {value.name: array for value, array in zip(graph.inputs, inputs)}
+    values.update(
+        {name: mx.array(value, dtype=mx.float32) for name, value in graph.constants}
+    )
+    for node in graph.nodes:
+        args = tuple(values[name] for name in node.inputs)
+        values[node.output.name] = Operation.require(node.operation).replay(
+            args, node.output.shape
+        )
+    return tuple(values[output.name] for output in graph.outputs)
 
 
 def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
@@ -97,19 +120,18 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     inputs = tuple(
         descriptor(raw, strides) for raw, (_, strides) in zip(raw_inputs, profiles)
     )
-    outputs = headers["outputs"]["outputs"]
-    if len(outputs) != 1:
-        raise UnsupportedGraphError("exactly one array output is required")
-    output = descriptor(outputs[0])
+    outputs = tuple(descriptor(raw) for raw in headers["outputs"]["outputs"])
+    if not outputs:
+        raise UnsupportedGraphError("at least one array output is required")
     constants = []
     for name, value in headers["constants"]["constants"]:
         if value.ndim != 0 or value.dtype != mx.float32:
             raise UnsupportedGraphError("captured constants must be float32 scalars")
         constants.append((name, float(value.item())))
     nodes = tuple(parse_node(event) for event in events if event["type"] == "primitive")
-    if prod(output.shape) >= 2**31 - 1024:
+    if any(prod(output.shape) >= 2**31 - 1024 for output in outputs):
         raise UnsupportedGraphError("element count exceeds signed 32-bit indexing")
-    return Graph(inputs, tuple(constants), nodes, output.name, output.shape)
+    return Graph(inputs, tuple(constants), nodes, outputs)
 
 
 def parse_node(event: ExportEvent) -> Node:
@@ -125,21 +147,9 @@ def parse_node(event: ExportEvent) -> Node:
         operation = "Rsqrt"
     if operation == "Transpose" and event["arguments"] != [[1, 0]]:
         raise UnsupportedGraphError("only a two-dimensional transpose is supported")
-    arity = {
-        "Add": 2,
-        "Subtract": 2,
-        "Multiply": 2,
-        "Negative": 1,
-        "Square": 1,
-        "Broadcast": 1,
-        "ReduceSum": 1,
-        "Rsqrt": 1,
-        "Transpose": 1,
-    }
-    if operation not in arity:
-        raise UnsupportedGraphError(f"unsupported MLX primitive: {operation}")
+    contract = Operation.require(operation)
     inputs = tuple(descriptor(raw) for raw in event["inputs"])
     outputs = tuple(descriptor(raw) for raw in event["outputs"])
-    if len(inputs) != arity[operation] or len(outputs) != 1:
+    if len(inputs) != contract.arity or len(outputs) != 1:
         raise UnsupportedGraphError(f"unsupported arity for {operation}")
     return Node(operation, tuple(value.name for value in inputs), outputs[0])
