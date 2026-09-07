@@ -7,10 +7,36 @@ import subprocess
 
 import tiki as tk
 
+# -- Repository documents ----------------------------------------------------
+# The compiler, scan, and runtime pages are the experiment directories' own
+# Markdown, copied here before Sphinx reads the tree so their relative links
+# resolve as pages. The copies are build products, ignored by git.
+
+import shutil
+from pathlib import Path
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+SECTIONS = {
+    "compile": "experiments/cute_backend",
+    "scan": "experiments/associative_scan",
+    "runtime": "experiments/rust_backend",
+}
+
+
+def markdown_only(folder: str, names: list[str]) -> list[str]:
+    keep = {name for name in names if name.endswith(".md") or (Path(folder) / name).is_dir()}
+    return [name for name in names if name not in keep or name in ("target", "crubit", "__pycache__")]
+
+
+for section, directory in SECTIONS.items():
+    target = Path(__file__).resolve().parent / "tiki" / section
+    shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(REPOSITORY / directory, target, ignore=markdown_only)
+
 # -- Project information -----------------------------------------------------
 
 project = "Tiki"
-copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc."
+copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc"
 author = "Dedalus Labs"
 version = ".".join(tk.__version__.split(".")[:3])
 release = version
@@ -53,7 +79,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 main_doc = "index"
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "attrs_block"]
 myst_heading_anchors = 3
-exclude_patterns = ["tiki/*/target", "tiki/runtime/repros/crubit"]
+
 myst_fence_as_directive = ["mermaid"]
 highlight_language = "python"
 pygments_style = "sphinx"
@@ -77,6 +103,9 @@ html_theme_options = {
     "github_url": "https://github.com/dedalus-labs/tiki",
     "use_edit_page_button": True,
     "show_toc_level": 2,
+    "show_nav_level": 1,
+    "navigation_depth": 1,
+    "collapse_navigation": False,
     "navigation_with_keys": False,
     "navbar_align": "left",
     "navbar_end": ["theme-switcher", "navbar-icon-links"],

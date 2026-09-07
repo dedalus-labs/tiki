@@ -4,16 +4,16 @@
 :caption: Tiki
 :maxdepth: 1
 
-../dev/tiki_layouts
+Building and testing layouts <../dev/tiki_layouts>
 ```
 
 ```{toctree}
-:caption: Tiki
+:caption: Framework
 :maxdepth: 1
 
-../dev/extensions
-../dev/metal_debugger
-../dev/metal_logging
-../dev/custom_metal_kernels
-../dev/tiki_in_cpp
+Extensions <../dev/extensions>
+Metal debugger <../dev/metal_debugger>
+Metal logging <../dev/metal_logging>
+Custom Metal kernels <../dev/custom_metal_kernels>
+Tiki in C++ <../dev/tiki_in_cpp>
 ```
