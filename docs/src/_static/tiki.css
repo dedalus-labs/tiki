@@ -1,0 +1,52 @@
+/* Tiki palette: the mark's vermilion, ember orange, and golden yellow, with
+   darker links on the light background for contrast. Body text stays neutral. */
+html[data-theme="light"] {
+  --pst-color-primary: #e5330f;
+  --pst-color-primary-highlight: #ff7a17;
+  --pst-color-secondary: #ff7a17;
+  --pst-color-link: #c92c0b;
+  --pst-color-link-hover: #ff7a17;
+  --pst-color-inline-code-links: #c92c0b;
+  --pst-color-accent: #ffc62b;
+}
+html[data-theme="dark"] {
+  --pst-color-primary: #ff7a17;
+  --pst-color-primary-highlight: #ffa04d;
+  --pst-color-secondary: #ffc62b;
+  --pst-color-link: #ffa04d;
+  --pst-color-link-hover: #ffc62b;
+  --pst-color-inline-code-links: #ffa04d;
+  --pst-color-accent: #ff3f2e;
+}
+html {
+  --pst-font-family-monospace: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+/* The torch line: the three bar colors as a stripe over the header. */
+.bd-header {
+  border-top: 4px solid transparent;
+  border-image: linear-gradient(90deg, #ff3f2e 0%, #ff7a17 50%, #ffc62b 100%) 1;
+}
+/* Wordmark order: the name, then the mark. */
+.navbar-brand {
+  flex-direction: row-reverse;
+  gap: 0.5rem;
+}
+.navbar-brand img {
+  height: 30px;
+}
+.navbar-brand .title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.bd-article p, .bd-article li {
+  max-width: 72ch;
+}
+.sd-card {
+  border-color: var(--pst-color-border);
+}
+.sd-card:hover {
+  border-color: var(--pst-color-primary);
+}
+.sd-card .sd-card-title {
+  font-weight: 600;
+}
