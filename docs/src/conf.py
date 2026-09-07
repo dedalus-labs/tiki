@@ -62,9 +62,14 @@ html_theme = "pydata_sphinx_theme"
 html_title = "Tiki"
 html_baseurl = "https://oss.dedaluslabs.ai/tiki/"
 html_show_sourcelink = False
+html_favicon = "_static/tiki_mark.svg"
 
 html_theme_options = {
-    "logo": {"text": "Tiki"},
+    "logo": {
+        "image_light": "_static/tiki_logo.svg",
+        "image_dark": "_static/tiki_logo_dark.svg",
+        "alt_text": "Tiki",
+    },
     "github_url": "https://github.com/dedalus-labs/tiki",
     "use_edit_page_button": True,
     "show_toc_level": 2,
