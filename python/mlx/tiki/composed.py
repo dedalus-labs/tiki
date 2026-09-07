@@ -15,6 +15,7 @@ This mirrors zop's Rust bootstrap (``src/layout/expression.rs``) and CUTLASS's
 """
 
 from dataclasses import dataclass
+from operator import index
 from typing import Any
 
 from mlx.tiki._pycute import Layout, LayoutBase, Swizzle, rank, size
@@ -32,7 +33,7 @@ def check_swizzle(swizzle: Swizzle) -> Swizzle:
     """
     if swizzle.bits and abs(swizzle.shift) < swizzle.bits:
         raise LayoutError(
-            f"swizzle fields overlap: bits={swizzle.bits} shift={swizzle.shift}; CUTLASS requires abs(shift) >= bits"
+            f"swizzle fields overlap: bits={swizzle.bits} shift={swizzle.shift}. CUTLASS requires abs(shift) >= bits"
         )
     return swizzle
 
@@ -52,13 +53,21 @@ class ComposedLayout(LayoutBase):
             raise LayoutError(f"swizzle input {index} must be nonnegative")
         return self.outer(index)
 
+    def _offset_and_slice(
+        self, coordinate: Coordinate
+    ) -> tuple[int, "Layout | ComposedLayout"]:
+        residual, delta = slice_and_offset(coordinate, self)
+        if rank(residual) == 0:
+            return delta + residual(), Layout((), ())
+        return delta, residual
+
     @property
     def shape(self) -> Any:
         return self.inner.shape
 
     @property
     def stride(self) -> Any:
-        raise LayoutError("a composed layout has no stride; require an affine layout")
+        raise LayoutError("a composed layout has no stride. Require an affine layout")
 
     def __str__(self) -> str:
         return f"{self.outer} o {{{self.offset}}} o {self.inner}"
@@ -76,7 +85,12 @@ def slice_and_offset(
     """
     if not isinstance(layout, ComposedLayout):
         offset, residual = layout._offset_and_slice(coordinate)
-        return residual, int(offset)
+        try:
+            return residual, index(offset)
+        except TypeError as error:
+            raise LayoutError(
+                "slice_and_offset requires integer offset addition, not XOR or coordinate addition"
+            ) from error
     residual, delta = slice_and_offset(coordinate, layout.inner)
     return ComposedLayout(layout.outer, layout.offset + delta, residual), 0
 
