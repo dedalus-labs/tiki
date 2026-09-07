@@ -29,7 +29,15 @@ from mlx.utils import tree_flatten, tree_unflatten
 
 from graph import Graph, Profile, UnsupportedGraphError, capture, dense_strides
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
-from tiki import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
+from tiki import (
+    BackendUnavailableError,
+    Compiled,
+    Schedule,
+    _arrays,
+    _tangents,
+    binary,
+    profile,
+)
 
 Leaves = tuple[mx.array, ...]
 FlatCombine = Callable[..., tuple[mx.array, ...]]
@@ -333,7 +341,8 @@ class ScanOp:
         return self._batched(*moved), (0,) * self.leaves
 
     def _jvp(self, primals: mx.array | Leaves, tangents: mx.array | Leaves) -> Leaves:
-        x, dx = _arrays(primals), _arrays(tangents)
+        x = _arrays(primals)
+        dx = _tangents(x, tangents)
         size, axis = self.leaves, self.axis
         length = x[0].shape[axis]
         y = self.forward(*x)

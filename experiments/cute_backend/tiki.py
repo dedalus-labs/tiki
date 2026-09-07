@@ -1,12 +1,12 @@
 """Experimental tk.compile: MLX export to scheduled CuTe MLIR to CUDA."""
 
 from collections.abc import Callable
-from typing import Any
 from dataclasses import dataclass
 from functools import lru_cache
 from math import prod
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import mlx.core as mx
 
@@ -96,6 +96,16 @@ def binary(lowered: Lowered) -> CudaBinary:
 def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
     """MLX passes a bare array to derivative callbacks of single-input functions."""
     return (value,) if isinstance(value, mx.array) else tuple(value)
+
+
+def _tangents(
+    primals: tuple[mx.array, ...], tangents: mx.array | tuple[mx.array | None, ...]
+) -> tuple[mx.array, ...]:
+    """MLX passes ``None`` for an input that carries no tangent; that is a zero."""
+    return tuple(
+        mx.zeros_like(primal) if tangent is None else tangent
+        for primal, tangent in zip(primals, _arrays(tangents))
+    )
 
 
 class Compiled:
@@ -234,7 +244,8 @@ class Compiled:
         tangents: mx.array | tuple[mx.array, ...],
     ) -> mx.array | tuple[mx.array, ...]:
         """MLX passes (primals, tangents) and expects the output tangents."""
-        primals, tangents = _arrays(primals), _arrays(tangents)
+        primals = _arrays(primals)
+        tangents = _tangents(primals, tangents)
         n = len(primals)
         if self._tangent_kernel is None:
 

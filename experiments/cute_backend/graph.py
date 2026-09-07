@@ -142,6 +142,7 @@ def parse_node(event: ExportEvent) -> Node:
         "Negative": 1,
         "Square": 1,
         "Broadcast": 1,
+        "Full": 1,
         "ReduceSum": 1,
         "Rsqrt": 1,
         "Transpose": 1,

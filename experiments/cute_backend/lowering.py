@@ -164,9 +164,13 @@ def logical_coordinate(shape: Shape, index: int) -> list[str]:
     return lines
 
 
+ALIASES = ("Broadcast", "Full")
+"""Nodes whose value is their input: a broadcast, or MLX's fill of a broadcast scalar."""
+
+
 def expression(node: Node, names: dict[str, str]) -> str:
     args = [names[name] for name in node.inputs]
-    if node.operation == "Broadcast":
+    if node.operation in ALIASES:
         return args[0]
     if node.operation == "Square":
         return f"arith.mulf {args[0]}, {args[0]} : f32"
@@ -206,7 +210,7 @@ def element(graph: Graph, index: int) -> list[str]:
         lines.append(f"%constant{i} = arith.constant 0x{bits:08X} : f32")
     for i, node in enumerate(graph.nodes):
         result = expression(node, names)
-        if node.operation == "Broadcast":
+        if node.operation in ALIASES:
             names[node.output.name] = result
             continue
         names[node.output.name] = f"%value{i}"
