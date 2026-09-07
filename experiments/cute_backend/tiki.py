@@ -6,6 +6,7 @@ from functools import lru_cache
 from math import prod
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Any
 
 import mlx.core as mx
 
@@ -97,6 +98,16 @@ def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
     return (value,) if isinstance(value, mx.array) else tuple(value)
 
 
+def _tangents(
+    primals: tuple[mx.array, ...], tangents: mx.array | tuple[mx.array | None, ...]
+) -> tuple[mx.array, ...]:
+    """MLX passes ``None`` for an input that carries no tangent; that is a zero."""
+    return tuple(
+        mx.zeros_like(primal) if tangent is None else tangent
+        for primal, tangent in zip(primals, _arrays(tangents))
+    )
+
+
 class Compiled:
     """A specialized array function with registered reverse and forward derivatives.
 
@@ -116,6 +127,7 @@ class Compiled:
         self._differentiable = mx.custom_function(self.launch)
         self._differentiable.vjp(self._vjp)
         self._differentiable.jvp(self._jvp)
+        self._differentiable.vmap(self._vmap)
         self._cotangent_kernels: dict[int, Compiled] = {}
         self._tangent_kernel: Compiled | None = None
 
@@ -131,15 +143,30 @@ class Compiled:
             self.function, self.schedule, tuple(profile(value) for value in inputs)
         )
 
-    def __call__(self, *inputs: mx.array) -> mx.array:
+    def __call__(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
         return self._differentiable(*inputs)
 
-    def launch(self, *inputs: mx.array) -> mx.array:
+    def launch(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
+        """Run the region specialized on the live layout of every input.
+
+        Under a transformation the inputs are tracers with no storage yet, so
+        array inputs are packed and the layout follows from the shape alone.
+        """
+        if any(value.is_tracer for value in inputs):
+            inputs = tuple(
+                value if value.ndim == 0 else mx.contiguous(value) for value in inputs
+            )
+            profiles = tuple(
+                (tuple(value.shape), dense_strides(tuple(value.shape)))
+                for value in inputs
+            )
+            lowered = specialize(self.function, self.schedule, profiles)
+        else:
+            lowered = self.lower(*inputs)
         if not mx.cuda.is_available():
             raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
-        lowered = self.lower(*inputs)
         shapes = lowered.output_shapes
         if prod(lowered.graph.shape) == 0:
             outputs = [
@@ -181,8 +208,35 @@ class Compiled:
         primals, cotangents = _arrays(primals), _arrays(cotangents)
         n = len(primals)
         return tuple(
-            self._cotangent_kernel(i, n).launch(*primals, *cotangents) for i in range(n)
+            self._cotangent_kernel(i, n)(*primals, *cotangents) for i in range(n)
         )
+
+    def _vmap(
+        self,
+        primals: mx.array | tuple[mx.array, ...],
+        axes: int | None | tuple[int | None, ...],
+    ) -> tuple[mx.array | tuple[mx.array, ...], int | tuple[int, ...]]:
+        """An elementwise region is the same region over rank-plus-one arrays.
+
+        The vectorized axis moves to the front of every array input, an
+        unvectorized array input broadcasts along a stride-0 axis, and scalars
+        stay scalars; the batched arrays are tracers, so they are packed.
+        """
+        primals = _arrays(primals)
+        axes = axes if isinstance(axes, tuple) else (axes,)
+        size = next(
+            value.shape[axis] for value, axis in zip(primals, axes) if axis is not None
+        )
+        moved = []
+        for value, axis in zip(primals, axes):
+            if axis is not None:
+                moved.append(mx.moveaxis(value, axis, 0))
+            elif value.ndim == 0:
+                moved.append(value)
+            else:
+                moved.append(mx.broadcast_to(value[None], (size, *value.shape)))
+        outputs = self(*moved)
+        return outputs, 0 if isinstance(outputs, mx.array) else (0,) * len(outputs)
 
     def _jvp(
         self,
@@ -190,7 +244,8 @@ class Compiled:
         tangents: mx.array | tuple[mx.array, ...],
     ) -> mx.array | tuple[mx.array, ...]:
         """MLX passes (primals, tangents) and expects the output tangents."""
-        primals, tangents = _arrays(primals), _arrays(tangents)
+        primals = _arrays(primals)
+        tangents = _tangents(primals, tangents)
         n = len(primals)
         if self._tangent_kernel is None:
 
@@ -198,7 +253,7 @@ class Compiled:
                 return tuple(mx.jvp(self.function, list(args[:n]), list(args[n:]))[1])
 
             self._tangent_kernel = Compiled(output_tangent, self.schedule)
-        return self._tangent_kernel.launch(*primals, *tangents)
+        return self._tangent_kernel(*primals, *tangents)
 
 
 DEFAULT_SCHEDULE = Schedule()
