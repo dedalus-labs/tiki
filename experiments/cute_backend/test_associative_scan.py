@@ -12,7 +12,9 @@ from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
+from mlx.tiki.testing import check_grads
 
+import tiki as tk
 from associative_scan import (
     ScanContractError,
     ScanOp,
@@ -267,6 +269,27 @@ class DerivativeTest(unittest.TestCase):
         want = mx.vjp(tree, [base, other], cotangents)[1]
         for actual, expected in zip(got, want):
             self.assertTrue(close(actual, expected, 1e-3))
+
+    def test_check_grads_against_the_tree(self):
+        """The generic checker on the real op: forward, reverse, vmap, and every
+        layout, with the tree as the oracle, at lengths inside and beyond a tile."""
+        for length in (5, 300):
+            a, b = random((3, length), length, 0.9), random((3, length), length + 1)
+            check_grads(
+                lambda a, b: associative_scan(affine, (a, b), axis=1, schedule=MEDIUM),
+                (a, b),
+                reference=lambda a, b: tree_scan(affine, (a, b), axis=1),
+            )
+
+    def test_check_grads_on_a_compiled_elementwise_region(self):
+        function = lambda x, y: x * y + 2.0 - mx.rsqrt(y * y + 1.0)
+        compiled = tk.compile()(function)
+        check_grads(
+            compiled,
+            (random((7, 9), 30), random((7, 9), 31)),
+            reference=function,
+            order=2,
+        )
 
     def test_training_a_linear_recurrence(self):
         """A diagonal linear SSM trained with value_and_grad; the first step's

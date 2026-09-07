@@ -53,6 +53,22 @@ def flip(array: mx.array, axis: int) -> mx.array:
     return view(array, axis, None, None, -1)
 
 
+def batched(leaves: Leaves, axes: tuple[int | None, ...]) -> Leaves:
+    """Every leaf with its vectorized axis first; unvectorized leaves broadcast
+    along a stride-0 axis, which the layout-aware kernels consume in place."""
+    size = next(
+        leaf.shape[axis] for leaf, axis in zip(leaves, axes) if axis is not None
+    )
+    return [
+        (
+            mx.moveaxis(leaf, axis, 0)
+            if axis is not None
+            else mx.broadcast_to(leaf[None], (size, *leaf.shape))
+        )
+        for leaf, axis in zip(leaves, axes)
+    ]
+
+
 def basis(array: mx.array, value: float) -> mx.array:
     """A constant tangent the graph capture accepts: a float32 scalar broadcast."""
     return mx.broadcast_to(mx.array(value, dtype=mx.float32), array.shape)
@@ -174,7 +190,9 @@ class ScanOp:
         self._function = mx.custom_function(self.forward)
         self._function.vjp(self._vjp)
         self._function.jvp(self._jvp)
+        self._function.vmap(self._vmap)
         self._aggregate: ScanOp | None = None
+        self._batched: ScanOp | None = None
         self._affine: ScanOp | None = None
         self._jacobian = Compiled(self.jacobian, Schedule())
         self._matvec = Compiled(matvec(leaves, transpose=False), Schedule())
@@ -283,6 +301,19 @@ class ScanOp:
             mx.concatenate([view(gy[column], axis, 0, 1), gx_tail[column]], axis=axis)
             for column in range(size)
         )
+
+    def _vmap(
+        self, primals: mx.array | Leaves, axes: int | None | tuple[int | None, ...]
+    ) -> tuple[Leaves, tuple[int, ...]]:
+        """A vectorized axis is one more batch axis: move it to the front and scan
+        the same axis of the rank-plus-one arrays; unvectorized leaves broadcast."""
+        leaves = _arrays(primals)
+        moved = batched(leaves, axes if isinstance(axes, tuple) else (axes,))
+        if self._batched is None:
+            self._batched = ScanOp(
+                self.combine, self.leaves, self.axis + 1, self.schedule
+            )
+        return self._batched(*moved), (0,) * self.leaves
 
     def _jvp(self, primals: mx.array | Leaves, tangents: mx.array | Leaves) -> Leaves:
         x, dx = _arrays(primals), _arrays(tangents)
