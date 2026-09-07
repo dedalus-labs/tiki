@@ -1,6 +1,7 @@
 # Reference layout layer
 
-`mlx.tiki` combines a pinned PyCuTe algebra with an MLX-backed reference Engine.
+`mlx.tiki` combines a pinned PyCuTe algebra, Rust-owned indexing transforms,
+and an MLX-backed reference Engine.
 It is an experimental Python interface, not the Rust array backend or a
 replacement for `mlx.core.array`.
 
@@ -29,7 +30,20 @@ kernel lowering is provided here.
 
 ## Composition and axis operations
 
-`Swizzle` validates integer parameters and disjoint bit fields at construction.
+`Swizzle` owns its validated parameters in Rust. Its immutable value accepts
+nonnegative signed 64-bit indices. Generic composition and `.swizzle(...)`
+share the same operation:
+
+```python
+import mlx.tiki as tk
+
+base = tk.Layout((4, 4), (4, 1))
+transform = tk.Swizzle(2, 0, 2)
+layout = base.swizzle(transform)
+assert layout == tk.compose(transform, base)
+assert layout(1, 2) == transform(base(1, 2)) == 7
+```
+
 `ComposedLayout` retains an internal offset and supports scalar and partial
 tensor indexing. Its slicing contract is:
 
@@ -55,6 +69,11 @@ evaluation is not evidence that a tensor access is in bounds.
 PyCuTe source remains unmodified. Its revision and license are recorded in
 [_pycute/VENDORED.md](_pycute/VENDORED.md). Tiki's validation and MLX adapters
 live outside that directory.
+
+The Rust extension is required. Missing native bindings do not select a Python
+implementation. See the [layout guide](../../../docs/src/usage/layouts.rst),
+[recipes](../../../docs/src/examples/layouts.rst), and
+[build instructions](../../../docs/src/dev/tiki_layouts.rst).
 
 ```sh
 python -m unittest discover -s python/tests -p 'test_tiki_*.py'

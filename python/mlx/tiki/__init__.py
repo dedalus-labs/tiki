@@ -4,9 +4,9 @@
 
 A Tiki array follows the zop tensor model: an Engine paired with a first-class
 CuTe ``Layout``, so ``tensor[coordinate] == engine[layout(coordinate)]``. The
-layout algebra is NVIDIA's PyCuTe, vendored under ``_pycute`` and re-exported
-here under zop's vocabulary. ``composed`` adds zop's ``outer o {offset} o inner``
-form and its slicing invariant, which CuTe expresses differently.
+stride algebra is NVIDIA's PyCuTe, vendored under ``_pycute``. Rust owns the
+validated Swizzle index transform. Generic composition preserves the exact
+``outer o {offset} o inner`` map and its slicing invariant.
 """
 
 from mlx.tiki.composed import ComposedLayout, check_swizzle, slice_and_offset
@@ -53,6 +53,7 @@ from mlx.tiki.layout import (
     unflatten,
     zipped_divide,
 )
+from mlx.tiki.tensor import expand, from_array, realize, squeeze, unsqueeze
 
 __all__ = [
     "Array",
@@ -82,6 +83,11 @@ __all__ = [
     "crd2idx",
     "depth",
     "flatten",
+    "from_array",
+    "realize",
+    "expand",
+    "squeeze",
+    "unsqueeze",
     "identity_tensor",
     "idx2crd",
     "is_layout",
