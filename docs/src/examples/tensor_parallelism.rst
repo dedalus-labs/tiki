@@ -11,7 +11,7 @@ Sharded Layers
 --------------
 
 :class:`AllToShardedLinear <tiki.nn.AllToShardedLinear>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This layer replicates a common input and shards the weight matrix along the
 output dimension across all devices in the :class:`tiki.distributed.Group`.
@@ -39,7 +39,7 @@ included in any gradient computation.
 
 
 :class:`ShardedToAllLinear <tiki.nn.ShardedToAllLinear>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This layer expects inputs that are sharded along the feature dimension and
 shards the weight matrix along the input dimension across all devices in the
@@ -75,7 +75,7 @@ Shard Utility Functions
 -----------------------
 
 :func:`shard_linear <tiki.nn.layers.distributed.shard_linear>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Converts a regular linear layer into a tensor parallel layer that distributes
 computation across multiple devices. Takes an existing :class:`tiki.nn.Linear`
@@ -85,7 +85,7 @@ or :class:`tiki.nn.QuantizedLinear` layer and returns a new distributed layer
 original layer is not modified.
 
 :func:`shard_inplace <tiki.nn.layers.distributed.shard_inplace>`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Splits the parameters of an existing layer across multiple devices by modifying
 the layer in-place. Unlike :func:`shard_linear

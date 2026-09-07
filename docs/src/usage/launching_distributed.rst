@@ -106,7 +106,7 @@ See :ref:`the JACCL section <jaccl_section>` for an example.
 
 
 ``tiki.launch``
---------------
+---------------
 
 The minimal usage example of ``tiki.launch`` is simply
 

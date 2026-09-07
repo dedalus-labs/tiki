@@ -4,7 +4,7 @@
 ```{toctree}
 :maxdepth: 1
 
-architecture
-decision
-validation
+ARCHITECTURE
+DECISION-2026-09-05
+VALIDATION-2026-09-06
 ```

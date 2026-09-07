@@ -1,5 +1,5 @@
 Custom Extensions in Tiki
-========================
+=========================
 
 You can extend Tiki with custom operations on the CPU or GPU. This guide
 explains how to do that with a simple example.

@@ -1,7 +1,7 @@
 .. _tiki_in_cpp:
 
 Using Tiki in C++
-================
+=================
 
 You can use Tiki in a C++ project with CMake.
 

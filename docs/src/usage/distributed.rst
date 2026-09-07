@@ -491,7 +491,7 @@ to use.
 .. _no_tiki_launch:
 
 Distributed Without ``tiki.launch``
-----------------------------------
+-----------------------------------
 
 None of the implementations of the distributed backends require launching with
 ``tiki.launch``. The script simply connects to each host. Starts a process per

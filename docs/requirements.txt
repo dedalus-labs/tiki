@@ -3,5 +3,6 @@ pydata-sphinx-theme
 myst-parser
 sphinx-design
 sphinx-copybutton
+sphinxcontrib-mermaid
 breathe
 tiki

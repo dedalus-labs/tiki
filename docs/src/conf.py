@@ -19,6 +19,7 @@ release = version
 
 extensions = [
     "myst_parser",
+    "sphinxcontrib.mermaid",
     "sphinx_design",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
@@ -52,6 +53,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 main_doc = "index"
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "attrs_block"]
 myst_heading_anchors = 3
+myst_fence_as_directive = ["mermaid"]
 highlight_language = "python"
 pygments_style = "sphinx"
 add_module_names = False
