@@ -7,7 +7,7 @@ from types import ModuleType as _ModuleType
 
 from tiki import core as _core
 from tiki.core import *  # noqa: F401,F403
-from tiki.core import __version__  # noqa: F401
+from tiki.core import __array_namespace_info__, __version__  # noqa: F401
 
 # The core's submodules are the public ones: ``import tiki.random`` names the
 # same module object as ``tiki.core.random``.
