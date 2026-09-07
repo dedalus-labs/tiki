@@ -97,6 +97,15 @@ Python API
 
 .. _python install:
 
+.. note::
+   Tiki Python source builds require Rust 1.92 or newer and Cargo on every
+   backend, including CPU and Metal. Its backend-independent indexing extension
+   uses the same Rust validation on each device. Installing a prebuilt wheel
+   does not require Cargo. C++ CPU and Metal builds with
+   ``MLX_BUILD_PYTHON_BINDINGS=OFF`` do not build this extension. The CUDA runtime
+   has a separate Rust dependency. These are Tiki requirements, not requirements
+   of the upstream MLX distributions described below.
+
 To build and install the MLX python library from source, first, clone MLX from
 `its GitHub repo <https://github.com/ml-explore/mlx>`_:
 

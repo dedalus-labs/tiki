@@ -87,6 +87,9 @@ set_target_properties(
 
 target_link_libraries(core PRIVATE mlx)
 
+add_subdirectory(${PROJECT_SOURCE_DIR}/mlx/layout
+                 ${CMAKE_BINARY_DIR}/mlx/layout)
+
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     set_target_properties(core PROPERTIES INSTALL_RPATH "@loader_path/lib")
