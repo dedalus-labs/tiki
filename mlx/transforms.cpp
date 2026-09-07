@@ -669,7 +669,13 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       }
     }
 
-    auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    std::vector<array> jvps;
+    {
+      // As in vjp: a rule may evaluate its primals, and under an enclosing
+      // transformation that must not detach them from the outer graph.
+      detail::RetainGraph retain;
+      jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    }
     auto outputs = a.outputs();
     // A primitive's jvp returns one tangent per output
     assert(jvps.size() <= outputs.size());
