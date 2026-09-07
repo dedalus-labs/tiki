@@ -5,8 +5,8 @@ import subprocess
 import time
 
 import matplotlib.pyplot as plt
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 import torch
 
 results_dir = "./results"
@@ -45,21 +45,21 @@ def bench(f, m, v):
     return (e - s) * 1e-9
 
 
-def gemv_mlx(m, v):
+def gemv_tiki(m, v):
     ys = []
     for i in range(N_iter_func):
         y = m @ v
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
-def gemv_t_mlx(m, v):
+def gemv_t_tiki(m, v):
     ys = []
     for i in range(N_iter_func):
         y = v @ m
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
@@ -89,8 +89,8 @@ def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
 
     mat_npy = np.random.normal(0.0, 2.0 / in_vec_len, shape_mat).astype(np_dtype)
     vec_npy = np.random.normal(0.0, 2.0 / in_vec_len, shape_vec).astype(np_dtype)
-    mat_mlx = mx.array(mat_npy)
-    vec_mlx = mx.array(vec_npy)
+    mat_tiki = tk.array(mat_npy)
+    vec_tiki = tk.array(vec_npy)
     mat_trc = torch.from_numpy(mat_npy).to("mps")
     vec_trc = torch.from_numpy(vec_npy).to("mps")
 
@@ -101,23 +101,25 @@ def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
         if transpose
         else bench(gemv_torch, mat_trc, vec_trc)
     )
-    time_mlx = (
-        bench(gemv_t_mlx, mat_mlx, vec_mlx)
+    time_tiki = (
+        bench(gemv_t_tiki, mat_tiki, vec_tiki)
         if transpose
-        else bench(gemv_mlx, mat_mlx, vec_mlx)
+        else bench(gemv_tiki, mat_tiki, vec_tiki)
     )
 
-    c_mlx = (
-        np.asarray(vec_mlx @ mat_mlx) if transpose else np.asarray(mat_mlx @ vec_mlx)
+    c_tiki = (
+        np.asarray(vec_tiki @ mat_tiki)
+        if transpose
+        else np.asarray(mat_tiki @ vec_tiki)
     )
     c_npy = (vec_npy @ mat_npy) if transpose else (mat_npy @ vec_npy)
 
-    if not np.allclose(c_mlx, c_npy, atol=2e-5):
+    if not np.allclose(c_tiki, c_npy, atol=2e-5):
         print(
-            f"Failed at {shape_mat} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_mlx))}"
+            f"Failed at {shape_mat} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_tiki))}"
         )
 
-    return time_mlx, time_torch
+    return time_tiki, time_torch
 
 
 def get_gflop_count(in_vec_len, out_vec_len):
@@ -134,8 +136,8 @@ def get_gbyte_size(in_vec_len, out_vec_len, np_dtype):
 
 def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
     np_dtype = getattr(np, dtype)
-    mlx_gb_s = []
-    mlx_gflops = []
+    tiki_gb_s = []
+    tiki_gflops = []
     pyt_gb_s = []
     pyt_gflops = []
 
@@ -143,12 +145,12 @@ def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
         gflop_count = get_gflop_count(in_vec_len, out_vec_len)
         gbyte_size = get_gbyte_size(in_vec_len, out_vec_len, np_dtype)
 
-        time_mlx, time_torch = bench_lens(in_vec_len, out_vec_len, np_dtype, transpose)
+        time_tiki, time_torch = bench_lens(in_vec_len, out_vec_len, np_dtype, transpose)
 
-        mlx_gb_s.append(gbyte_size / time_mlx)
+        tiki_gb_s.append(gbyte_size / time_tiki)
         pyt_gb_s.append(gbyte_size / time_torch)
 
-        mlx_gflops.append(gflop_count / time_mlx)
+        tiki_gflops.append(gflop_count / time_tiki)
         pyt_gflops.append(gflop_count / time_torch)
 
     if transpose:
@@ -156,7 +158,7 @@ def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
     else:
         title = f"gemv ([out_vec_len, {in_vec_len}] X [{in_vec_len}, 1] ) | {dtype}"
 
-    ax.plot(out_vector_lens, mlx_gb_s, "tab:blue", label="MLX")
+    ax.plot(out_vector_lens, tiki_gb_s, "tab:blue", label="Tiki")
     ax.plot(out_vector_lens, pyt_gb_s, "tab:red", label="Torch")
     ax.set_title(title)
     ax.set(xlabel="out_vector_len", ylabel="Performance (GB/s)")
@@ -165,8 +167,8 @@ def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
 
 def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
     np_dtype = getattr(np, dtype)
-    mlx_gb_s = []
-    mlx_gflops = []
+    tiki_gb_s = []
+    tiki_gflops = []
     pyt_gb_s = []
     pyt_gflops = []
 
@@ -174,12 +176,12 @@ def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
         gflop_count = get_gflop_count(in_vec_len, out_vec_len)
         gbyte_size = get_gbyte_size(in_vec_len, out_vec_len, np_dtype)
 
-        time_mlx, time_torch = bench_lens(in_vec_len, out_vec_len, np_dtype, transpose)
+        time_tiki, time_torch = bench_lens(in_vec_len, out_vec_len, np_dtype, transpose)
 
-        mlx_gb_s.append(gbyte_size / time_mlx)
+        tiki_gb_s.append(gbyte_size / time_tiki)
         pyt_gb_s.append(gbyte_size / time_torch)
 
-        mlx_gflops.append(gflop_count / time_mlx)
+        tiki_gflops.append(gflop_count / time_tiki)
         pyt_gflops.append(gflop_count / time_torch)
 
     if transpose:
@@ -187,7 +189,7 @@ def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
     else:
         title = f"([{out_vec_len}, in_vec_len] X [in_vec_len, 1] )"
 
-    ax.plot(in_vector_lens, mlx_gb_s, "tab:blue", label="MLX")
+    ax.plot(in_vector_lens, tiki_gb_s, "tab:blue", label="Tiki")
     ax.plot(in_vector_lens, pyt_gb_s, "tab:red", label="Torch")
     ax.set_title(title)
     ax.set(xlabel="in_vector_len", ylabel="Performance (GB/s)")

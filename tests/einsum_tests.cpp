@@ -1,9 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
 #include "doctest/doctest.h"
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 namespace std {
 

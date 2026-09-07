@@ -3,9 +3,9 @@
 Saving and Loading Arrays
 =========================
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
-MLX supports multiple array serialization formats.
+Tiki supports multiple array serialization formats.
 
 .. list-table:: Serialization Formats
    :widths: 20 8 25 25
@@ -40,8 +40,8 @@ Here's an example of saving a single array to a file:
 
 .. code-block:: shell
 
-   >>> a = mx.array([1.0])
-   >>> mx.save("array", a)
+   >>> a = tk.array([1.0])
+   >>> tk.save("array", a)
 
 The array ``a`` will be saved in the file ``array.npy`` (notice the extension
 is automatically added). Including the extension is optional; if it is missing
@@ -49,24 +49,24 @@ it will be added. You can load the array with:
 
 .. code-block:: shell
 
-   >>> mx.load("array.npy")
+   >>> tk.load("array.npy")
    array([1], dtype=float32)
 
 Here's an example of saving several arrays to a single file:
 
 .. code-block:: shell
 
-   >>> a = mx.array([1.0])
-   >>> b = mx.array([2.0])
-   >>> mx.savez("arrays", a, b=b)
+   >>> a = tk.array([1.0])
+   >>> b = tk.array([2.0])
+   >>> tk.savez("arrays", a, b=b)
 
-For compatibility with :func:`numpy.savez` the MLX :func:`savez` takes arrays
+For compatibility with :func:`numpy.savez` the Tiki :func:`savez` takes arrays
 as arguments. If the keywords are missing, then default names will be
 provided. This can be loaded with:
 
 .. code-block:: shell
 
-   >>> mx.load("arrays.npz")
+   >>> tk.load("arrays.npz")
    {'b': array([2], dtype=float32), 'arr_0': array([1], dtype=float32)}
 
 In this case :func:`load` returns a dictionary of names to arrays.
@@ -76,6 +76,6 @@ The functions :func:`save_safetensors` and :func:`save_gguf` are similar to
 
 .. code-block:: shell
 
-   >>> a = mx.array([1.0])
-   >>> b = mx.array([2.0])
-   >>> mx.save_safetensors("arrays", {"a": a, "b": b})
+   >>> a = tk.array([1.0])
+   >>> b = tk.array([2.0])
+   >>> tk.save_safetensors("arrays", {"a": a, "b": b})

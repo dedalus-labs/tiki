@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 from math import prod
 
-from mlx.tiki import Swizzle
+from tiki.layout import Swizzle
 
 from graph import Graph, Node, Shape, UnsupportedGraphError, Value
 from operations import Operation

@@ -7,9 +7,9 @@
 #include <cstdlib>
 #include <set>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 template <typename T, size_t N>
 void check_strict_weak_ordering(const std::array<T, N>& ordered_values) {

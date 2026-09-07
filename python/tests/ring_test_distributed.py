@@ -1,22 +1,22 @@
 # Copyright © 2024 Apple Inc.
 
-import mlx.core as mx
-import mlx_distributed_tests
-import mlx_tests
+import tiki as tk
+import tiki_distributed_tests
+import tiki_tests
 
 
-class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
+class TestRingDistributed(tiki_distributed_tests.TIKIDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
-        _ = mx.distributed.init(strict=True, backend="ring")
+        _ = tk.distributed.init(strict=True, backend="ring")
         cls.atol = 1e-6
         cls.rtol = 1e-4
 
     def test_groups(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         self.assertTrue(0 <= world.rank() < world.size())
 
-        world2 = mx.distributed.init()
+        world2 = tk.distributed.init()
         self.assertEqual(world.size(), world2.size())
         self.assertEqual(world.rank(), world2.rank())
 
@@ -24,11 +24,11 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             sub = world.split(world.rank() % 2)
 
     def test_all_reduce_extra(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         dtypes = [
-            (mx.int16, 0),
-            (mx.uint16, 0),
-            (mx.complex64, 1e-6),
+            (tk.int16, 0),
+            (tk.uint16, 0),
+            (tk.complex64, 1e-6),
         ]
         sizes = [
             (7,),
@@ -36,16 +36,16 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             (1024,),
             (1024, 1024),
         ]
-        key = mx.random.key(0)
+        key = tk.random.key(0)
 
         for dt, rtol in dtypes:
             for sh in sizes:
                 x = (
-                    mx.random.uniform(shape=(world.size(),) + sh, key=key) * 10
+                    tk.random.uniform(shape=(world.size(),) + sh, key=key) * 10
                 ).astype(dt)
 
                 # All sum
-                y = mx.distributed.all_sum(x[world.rank()])
+                y = tk.distributed.all_sum(x[world.rank()])
                 z = x.sum(0)
                 maxrelerror = (y - z).abs()
                 if rtol > 0:
@@ -54,41 +54,41 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 self.assertLessEqual(maxrelerror, rtol)
 
                 # All max
-                y = mx.distributed.all_max(x[world.rank()])
+                y = tk.distributed.all_max(x[world.rank()])
                 z = x.max(0)
-                self.assertTrue(mx.all(y == z))
+                self.assertTrue(tk.all(y == z))
 
                 # All min
-                y = mx.distributed.all_min(x[world.rank()])
+                y = tk.distributed.all_min(x[world.rank()])
                 z = x.min(0)
-                self.assertTrue(mx.all(y == z))
+                self.assertTrue(tk.all(y == z))
 
     def test_all_gather_extra(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         dtypes = [
-            mx.int16,
-            mx.uint16,
-            mx.complex64,
+            tk.int16,
+            tk.uint16,
+            tk.complex64,
         ]
         for dt in dtypes:
-            x = mx.ones((2, 2, 4), dtype=dt)
-            y = mx.distributed.all_gather(x)
+            x = tk.ones((2, 2, 4), dtype=dt)
+            y = tk.distributed.all_gather(x)
             self.assertEqual(y.shape, (world.size() * 2, 2, 4))
-            self.assertTrue(mx.all(y == 1))
+            self.assertTrue(tk.all(y == 1))
 
     def test_send_recv(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         dtypes = [
-            mx.int8,
-            mx.uint8,
-            mx.int16,
-            mx.uint16,
-            mx.int32,
-            mx.uint32,
-            mx.float32,
-            mx.float16,
-            mx.bfloat16,
-            mx.complex64,
+            tk.int8,
+            tk.uint8,
+            tk.int16,
+            tk.uint16,
+            tk.int32,
+            tk.uint32,
+            tk.float32,
+            tk.float16,
+            tk.bfloat16,
+            tk.complex64,
         ]
         sizes = [
             (7,),
@@ -96,35 +96,35 @@ class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             (1024,),
             (1024, 1024),
         ]
-        key = mx.random.key(0)
+        key = tk.random.key(0)
         right = (world.rank() + 1) % world.size()
         left = (world.rank() + world.size() - 1) % world.size()
         for dt in dtypes:
             for sh in sizes:
                 x = (
-                    mx.random.uniform(shape=(world.size(),) + sh, key=key) * 10
+                    tk.random.uniform(shape=(world.size(),) + sh, key=key) * 10
                 ).astype(dt)
                 if world.rank() % 2 == 0:
-                    y = mx.distributed.send(x[world.rank()], right)
-                    z = mx.distributed.recv_like(y, left)
-                    mx.eval(y, z)
+                    y = tk.distributed.send(x[world.rank()], right)
+                    z = tk.distributed.recv_like(y, left)
+                    tk.eval(y, z)
                 else:
-                    z = mx.distributed.recv_like(x[world.rank()], left)
-                    y = mx.distributed.send(x[world.rank()], right)
-                    mx.eval(z, y)
-                self.assertTrue(mx.all(y == x[world.rank()]))
-                self.assertTrue(mx.all(z == x[left]))
+                    z = tk.distributed.recv_like(x[world.rank()], left)
+                    y = tk.distributed.send(x[world.rank()], right)
+                    tk.eval(z, y)
+                self.assertTrue(tk.all(y == x[world.rank()]))
+                self.assertTrue(tk.all(z == x[left]))
 
     def test_all_gather_vjp(self):
         def fun(x):
-            return mx.distributed.all_gather(x)[0]
+            return tk.distributed.all_gather(x)[0]
 
-        dfdx = mx.grad(fun)(mx.array(1.0))
-        if mx.distributed.init().rank() == 0:
+        dfdx = tk.grad(fun)(tk.array(1.0))
+        if tk.distributed.init().rank() == 0:
             self.assertEqual(dfdx.item(), 1.0)
         else:
             self.assertEqual(dfdx.item(), 0.0)
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

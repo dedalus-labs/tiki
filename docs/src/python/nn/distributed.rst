@@ -6,10 +6,10 @@ Distributed
 Helper Routines
 ^^^^^^^^^^^^^^^
 
-The :code:`mlx.nn.layers.distributed` package contains helpful routines to 
-create sharded layers from existing :class:`Modules <mlx.nn.Module>`.
+The :code:`tiki.nn.layers.distributed` package contains helpful routines to 
+create sharded layers from existing :class:`Modules <tiki.nn.Module>`.
 
-.. currentmodule:: mlx.nn.layers.distributed
+.. currentmodule:: tiki.nn.layers.distributed
 .. autosummary::
    :toctree: _autosummary
 
@@ -20,7 +20,7 @@ create sharded layers from existing :class:`Modules <mlx.nn.Module>`.
 Layers
 ^^^^^^
 
-.. currentmodule:: mlx.nn
+.. currentmodule:: tiki.nn
 .. autosummary::
    :toctree: _autosummary
    :template: nn-module-template.rst

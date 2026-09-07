@@ -3,12 +3,12 @@
 Custom Metal Kernels
 ====================
 
-MLX supports writing custom Metal kernels through the Python and C++ APIs.
+Tiki supports writing custom Metal kernels through the Python and C++ APIs.
 
 Simple Example
 --------------
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
 Let's write a custom kernel that computes ``exp`` elementwise:
 
@@ -20,17 +20,17 @@ Let's write a custom kernel that computes ``exp`` elementwise:
       out[elem] = metal::exp(tmp);
   """
 
-  kernel = mx.fast.metal_kernel(
+  kernel = tk.fast.metal_kernel(
       name="myexp",
       input_names=["inp"],
       output_names=["out"],
       source=source,
   )
 
-  def exp_elementwise(a: mx.array):
+  def exp_elementwise(a: tk.array):
       outputs = kernel(
           inputs=[a],
-          template=[("T", mx.float32)],
+          template=[("T", tk.float32)],
           grid=(a.size, 1, 1),
           threadgroup=(256, 1, 1),
           output_shapes=[a.shape],
@@ -38,9 +38,9 @@ Let's write a custom kernel that computes ``exp`` elementwise:
       )
       return outputs[0]
 
-  a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
+  a = tk.random.normal(shape=(4, 16)).astype(tk.float16)
   b = exp_elementwise(a)
-  assert mx.allclose(b, mx.exp(a))
+  assert tk.allclose(b, tk.exp(a))
 
 Every time you make a kernel, a new Metal library is created and possibly
 JIT compiled. To reduce the overhead from that, build the kernel once with
@@ -53,17 +53,17 @@ JIT compiled. To reduce the overhead from that, build the kernel once with
 The full function signature will be generated using:
 
 * The shapes/dtypes of ``inputs``
-    In the above, ``a`` is an ``mx.array`` of type ``mx.float16`` and we pass it with the key ``inp``
+    In the above, ``a`` is an ``tk.array`` of type ``tk.float16`` and we pass it with the key ``inp``
     so we will add ``const device float16_t* inp`` to the signature.
     ``inp_shape``, ``inp_strides`` and ``inp_ndim`` are also added for convenience if they are present
     in ``source``.
 * The list of ``output_dtypes``
-    In the above, ``out`` is an ``mx.array`` of type ``mx.float16``
+    In the above, ``out`` is an ``tk.array`` of type ``tk.float16``
     so we add ``device float16_t* out``.
 * Template parameters passed using ``template``
-    In the above, ``template=[("T", mx.float32)]`` adds a template of ``template <typename T>`` to the function
+    In the above, ``template=[("T", tk.float32)]`` adds a template of ``template <typename T>`` to the function
     and instantiates the template with ``custom_kernel_myexp_float_float16_t_float16_t<float>``.
-    Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
+    Template parameters can be ``tk.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]``
     These will be added as function arguments.
     All the attributes defined in Table 5.8 of the `Metal Shading Language Specification <https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf>`_ are supported.
@@ -88,7 +88,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
 Note: ``grid`` and ``threadgroup`` are parameters to the Metal `dispatchThreads
 <https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/2866532-dispatchthreads>`_
-function. This means we will launch ``mx.prod(grid)`` threads, subdivided into
+function. This means we will launch ``tk.prod(grid)`` threads, subdivided into
 ``threadgroup`` size threadgroups.  For optimal performance, each thread group
 dimension should be less than or equal to the corresponding grid dimension.
 
@@ -110,7 +110,7 @@ math with ``compile_options={"math_mode": "relaxed"}`` or
 
 .. code-block:: python
 
-  kernel = mx.fast.metal_kernel(
+  kernel = tk.fast.metal_kernel(
       name="my_kernel",
       input_names=["x"],
       output_names=["y"],
@@ -129,7 +129,7 @@ have to worry about gaps or the ordering of the dims when indexing.
 
 If we want to avoid this copy, :func:`fast.metal_kernel` automatically passes
 ``a_shape``, ``a_strides`` and ``a_ndim`` for each input array ``a`` if any are
-present in ``source``. We can then use MLX's built in indexing utils to fetch
+present in ``source``. We can then use Tiki's built in indexing utils to fetch
 the right elements for each thread.
 
 Let's convert ``myexp`` above to support arbitrarily strided arrays without
@@ -139,14 +139,14 @@ relying on a copy from ``ensure_row_contiguous``:
    
   source = """
       uint elem = thread_position_in_grid.x;
-      // Utils from `mlx/backend/metal/kernels/utils.h` are automatically included
+      // Utils from `tiki/backend/metal/kernels/utils.h` are automatically included
       uint loc = elem_to_loc(elem, inp_shape, inp_strides, inp_ndim);
       T tmp = inp[loc];
       // Output arrays are always row contiguous
       out[elem] = metal::exp(tmp);
   """
 
-  kernel = mx.fast.metal_kernel(
+  kernel = tk.fast.metal_kernel(
       name="myexp_strided",
       input_names=["inp"],
       output_names=["out"],
@@ -154,10 +154,10 @@ relying on a copy from ``ensure_row_contiguous``:
       ensure_row_contiguous=False,
   )
 
-  def exp_elementwise(a: mx.array):
+  def exp_elementwise(a: tk.array):
       outputs = kernel(
           inputs=[a],
-          template=[("T", mx.float32)],
+          template=[("T", tk.float32)],
           grid=(a.size, 1, 1),
           threadgroup=(256, 1, 1),
           output_shapes=[a.shape],
@@ -165,18 +165,18 @@ relying on a copy from ``ensure_row_contiguous``:
       )
       return outputs[0]
 
-  a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
+  a = tk.random.normal(shape=(4, 16)).astype(tk.float16)
   # make non-contiguous
   a = a[::2]
   b = exp_elementwise(a)
-  assert mx.allclose(b, mx.exp(a))
+  assert tk.allclose(b, tk.exp(a))
 
 Complex Example
 -----------------------------
 
 Let's implement a more complex example: ``grid_sample`` in ``"bilinear"`` mode.
 
-We'll start with the following MLX implementation using standard ops:
+We'll start with the following Tiki implementation using standard ops:
 
 .. code-block:: python
 
@@ -185,8 +185,8 @@ We'll start with the following MLX implementation using standard ops:
       ix = ((grid[..., 0] + 1) * W_in - 1) / 2
       iy = ((grid[..., 1] + 1) * H_in - 1) / 2
 
-      ix_nw = mx.floor(ix).astype(mx.int32)
-      iy_nw = mx.floor(iy).astype(mx.int32)
+      ix_nw = tk.floor(ix).astype(tk.int32)
+      iy_nw = tk.floor(iy).astype(tk.int32)
 
       ix_ne = ix_nw + 1
       iy_ne = iy_nw
@@ -202,10 +202,10 @@ We'll start with the following MLX implementation using standard ops:
       sw = (ix_ne - ix)    * (iy    - iy_ne)
       se = (ix    - ix_nw) * (iy    - iy_nw)
 
-      I_nw = x[mx.arange(N)[:, None, None], iy_nw, ix_nw, :]
-      I_ne = x[mx.arange(N)[:, None, None], iy_ne, ix_ne, :]
-      I_sw = x[mx.arange(N)[:, None, None], iy_sw, ix_sw, :]
-      I_se = x[mx.arange(N)[:, None, None], iy_se, ix_se, :]
+      I_nw = x[tk.arange(N)[:, None, None], iy_nw, ix_nw, :]
+      I_ne = x[tk.arange(N)[:, None, None], iy_ne, ix_ne, :]
+      I_sw = x[tk.arange(N)[:, None, None], iy_sw, ix_sw, :]
+      I_se = x[tk.arange(N)[:, None, None], iy_se, ix_se, :]
 
       mask_nw = (iy_nw >= 0) & (iy_nw <= H_in - 1) & (ix_nw >= 0) & (ix_nw <= W_in - 1)
       mask_ne = (iy_ne >= 0) & (iy_ne <= H_in - 1) & (ix_ne >= 0) & (ix_ne <= W_in - 1)
@@ -278,14 +278,14 @@ First we'll implement the forward pass as a fused kernel:
       out[elem] = nw * I_nw + ne * I_ne + sw * I_sw + se * I_se;
   """
 
-  kernel = mx.fast.metal_kernel(
+  kernel = tk.fast.metal_kernel(
       name="grid_sample",
       input_names=["x", "grid"],
       output_names=["out"],
       source=source,
   )
 
-  @mx.custom_function
+  @tk.custom_function
   def grid_sample(x, grid):
 
       assert x.ndim == 4, "`x` must be 4D."
@@ -322,7 +322,7 @@ Grid Sample VJP
 ---------------
 
 Since we decorated ``grid_sample`` with :func:`custom_function`, we can now
-define its custom vjp transform so MLX can differentiate it.
+define its custom vjp transform so Tiki can differentiate it.
 
 The backwards pass requires atomically updating ``x_grad``/``grid_grad`` and so
 requires a few extra :func:`fast.metal_kernel` features:
@@ -431,7 +431,7 @@ We can then implement the backwards pass as follows:
           atomic_fetch_add_explicit(&grid_grad[grid_idx + 1], giy * giy_mult, memory_order_relaxed);
       }
   """
-  kernel = mx.fast.metal_kernel(
+  kernel = tk.fast.metal_kernel(
       name="grid_sample_grad",
       input_names=["x", "grid", "cotangent"],
       output_names=["x_grad", "grid_grad"],

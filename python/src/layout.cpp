@@ -29,10 +29,10 @@ auto checked(Function&& function) {
 struct Swizzle {
   Swizzle(int64_t bits, int64_t base, int64_t shift)
       : value(checked([&] {
-          return mlx::core::layout_rt::new_swizzle(bits, base, shift);
+          return tiki::core::layout_rt::new_swizzle(bits, base, shift);
         })) {}
 
-  rust::Box<mlx::core::layout_rt::Swizzle> value;
+  rust::Box<tiki::core::layout_rt::Swizzle> value;
 };
 
 } // namespace

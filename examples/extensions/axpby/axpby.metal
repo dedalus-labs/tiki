@@ -2,7 +2,7 @@
 
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/utils.h"
+#include "tiki/backend/metal/kernels/utils.h"
 
 template <typename T>
 [[kernel]] void axpby_general(

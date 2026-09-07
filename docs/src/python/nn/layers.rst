@@ -1,6 +1,6 @@
 .. _layers:
 
-.. currentmodule:: mlx.nn
+.. currentmodule:: tiki.nn
 
 Layers
 ------

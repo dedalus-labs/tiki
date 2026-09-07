@@ -4,10 +4,10 @@
 #include <iostream>
 #include <sstream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 #include "time_utils.h"
 
-namespace mx = mlx::core;
+namespace mx = tiki::core;
 
 // mx::astype is overloaded, so it cannot be passed directly to the timing
 // helpers. Wrap the three argument form instead.
