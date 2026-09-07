@@ -6,6 +6,7 @@
 #include <set>
 #include <sstream>
 #include <stack>
+#include <typeinfo>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -855,13 +856,23 @@ std::vector<array> vmap_replace(
       cache.insert(s.id());
     }
 
+    // A custom function records its forward outputs as trailing inputs so
+    // it can replay the forward; its vmap rule owns the batched computation,
+    // so the recorded graph is never vmapped itself.
+    auto inputs = a.inputs();
+    if (a.has_primitive() &&
+        typeid(a.primitive()) == typeid(CustomTransforms)) {
+      inputs.resize(
+          inputs.size() -
+          static_cast<CustomTransforms&>(a.primitive()).num_outputs());
+    }
     // Recurse on inputs
-    for (auto& input : a.inputs()) {
+    for (auto& input : inputs) {
       recurse(input);
     }
     // If any input needs a vmap, then the outputs also need
     // a vmap
-    for (auto& input : a.inputs()) {
+    for (auto& input : inputs) {
       if (needs_vmap.find(input.id()) != needs_vmap.end()) {
         tape.push_back(a);
         tape.back().set_tracer(false);
