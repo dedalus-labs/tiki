@@ -22,7 +22,8 @@ __device__ void tree_scan(float (&s)[F][N]) {
       for (int field = 1; field < F; ++field) {
         float lb = s[field][left], pb = s[field][right];
         s[field][left] = pb;
-        s[field][right] = la * pb + lb;
+        // The first segment has an empty prefix, not an IEEE arithmetic identity.
+        s[field][right] = node ? la * pb + lb : lb;
       }
       s[0][left] = pa;
       s[0][right] = la * pa;

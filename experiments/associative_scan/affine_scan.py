@@ -27,7 +27,7 @@ HEADER = Path(__file__).with_name("blelloch.cuh").read_text()
 
 FORWARD_SOURCE = """
 __shared__ float s[2][N];
-int row = blockIdx.x * T;
+size_t row = size_t(blockIdx.x) * T;
 for (int j = threadIdx.x; j < N; j += blockDim.x) {
   s[0][j] = j < T ? a[row + j] : 1.f;
   s[1][j] = j < T ? b[row + j] : 0.f;
@@ -35,14 +35,14 @@ for (int j = threadIdx.x; j < N; j += blockDim.x) {
 __syncthreads();
 tree_scan(s);
 for (int j = threadIdx.x; j < T; j += blockDim.x) {
-  p[row + j] = a[row + j] * s[0][j];
-  h[row + j] = a[row + j] * s[1][j] + b[row + j];
+  p[row + j] = j ? a[row + j] * s[0][j] : a[row];
+  h[row + j] = j ? a[row + j] * s[1][j] + b[row + j] : b[row];
 }
 """
 
 BACKWARD_SOURCE = """
 __shared__ float s[3][N];
-int row = blockIdx.x * T;
+size_t row = size_t(blockIdx.x) * T;
 for (int j = threadIdx.x; j < N; j += blockDim.x) {
   int t = T - 1 - j;
   s[0][j] = j < T ? (t + 1 < T ? a[row + t + 1] : 0.f) : 1.f;
@@ -56,8 +56,7 @@ for (int j = threadIdx.x; j < T; j += blockDim.x) {
   float coef = t + 1 < T ? a[row + t + 1] : 0.f;
   float rp = coef * s[1][j] + gp[row + t];
   float rh = coef * s[2][j] + gh[row + t];
-  da[row + t] = rp * (t ? p[row + t - 1] : 1.f)
-             + rh * (t ? h[row + t - 1] : 0.f);
+  da[row + t] = t ? rp * p[row + t - 1] + rh * h[row + t - 1] : rp;
   db[row + t] = rh;
 }
 """
@@ -86,6 +85,8 @@ backward_kernel = _kernel(
 
 
 def _check_contract(inputs: tuple[mx.array, ...]) -> tuple[int, int]:
+    if not inputs or any(not isinstance(array, mx.array) for array in inputs):
+        raise ScanContractError("affine_scan inputs must be MLX arrays")
     shape = inputs[0].shape
     if len(shape) != 2:
         raise ScanContractError(
@@ -100,6 +101,10 @@ def _check_contract(inputs: tuple[mx.array, ...]) -> tuple[int, int]:
     if batch == 0 or not 1 <= time <= MAX_TIME:
         raise ScanContractError(
             f"affine_scan needs batch > 0 and 1 <= time <= {MAX_TIME}, got {shape}"
+        )
+    if batch > (2**31 - 1) // THREADS:
+        raise ScanContractError(
+            "affine_scan batch exceeds the signed 32-bit launch grid"
         )
     return batch, time
 
