@@ -19,6 +19,10 @@ on the JVP and VJP with fixed directions, so ``order=2`` checks that the
 derivative programs are themselves differentiable. A random direction shows
 that a derivative is wrong in a few evaluations at any size; ``full_jacobian``
 then shows which element.
+
+Tolerances assume the dtype's own arithmetic. A CUDA float32 matmul may run
+in reduced precision (TF32), so check matmul-bearing functions in float64 on
+the CPU stream or through ``reference``.
 """
 
 from collections.abc import Callable, Sequence
@@ -69,22 +73,27 @@ class Flat:
         return [leaf for _, leaf in flat]
 
 
-def fixed_jvp(flat: Flat | None, tangents: Leaves) -> Flat | None:
-    """The JVP with fixed tangents as a function of the primals."""
+def leaves_of(args: tuple[Tree, ...]) -> Leaves:
+    return [leaf for _, leaf in tree_flatten(list(args))]
+
+
+def derive(flat: Flat | None, function: Callable[..., Leaves]) -> Flat | None:
+    """A function of the same structured arguments as ``flat``."""
     if flat is None:
         return None
-    derived = Flat(lambda *leaves: mx.jvp(flat, list(leaves), tangents)[1], ())
+    derived = Flat(function, ())
     derived.paths = flat.paths
     return derived
+
+
+def fixed_jvp(flat: Flat | None, tangents: Leaves) -> Flat | None:
+    """The JVP with fixed tangents as a function of the primals."""
+    return derive(flat, lambda *args: mx.jvp(flat, leaves_of(args), tangents)[1])
 
 
 def fixed_vjp(flat: Flat | None, cotangents: Leaves) -> Flat | None:
     """The VJP with fixed cotangents as a function of the primals."""
-    if flat is None:
-        return None
-    derived = Flat(lambda *leaves: mx.vjp(flat, list(leaves), cotangents)[1], ())
-    derived.paths = flat.paths
-    return derived
+    return derive(flat, lambda *args: mx.vjp(flat, leaves_of(args), cotangents)[1])
 
 
 def to_float64(leaves: Leaves) -> Leaves:
@@ -384,7 +393,7 @@ def check_grads(
         raise ValueError(
             f"unknown modes {sorted(unknown)}; choose from {sorted(MODES)}"
         )
-    x = [leaf for _, leaf in tree_flatten(list(args))]
+    x = leaves_of(args)
     if not x:
         raise ValueError("args must contain at least one array")
     if any(

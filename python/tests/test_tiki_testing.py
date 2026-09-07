@@ -19,16 +19,19 @@ class PassingFunctions(unittest.TestCase):
     def test_pytree_function_passes_every_mode_at_second_order(self) -> None:
         def f(inputs: dict[str, mx.array], y: mx.array) -> dict[str, mx.array]:
             x = inputs["x"]
-            return {"s": mx.sin(x) @ y, "t": (x * inputs["w"]).sum()}
+            return {"s": mx.sin(x) * y, "t": (x * inputs["w"]).sum()}
 
-        args = ({"x": normal((3, 4), 1), "w": normal((3, 4), 2)}, normal((4, 2), 3))
+        args = ({"x": normal((3, 4), 1), "w": normal((3, 4), 2)}, normal((3, 4), 3))
         check_grads(f, args, order=2, full_jacobian=True)
 
-    def test_float64_on_the_cpu_stream(self) -> None:
+    def test_matmul_in_float64_on_the_cpu_stream(self) -> None:
+        """A CUDA float32 matmul may run in reduced precision, so a matmul-bearing
+        function is checked where the arithmetic is exact: float64 on the CPU."""
         with mx.stream(mx.cpu):
-            x = normal((6,), 4).astype(mx.float64)
+            x = normal((3, 4), 4).astype(mx.float64)
+            y = normal((4, 2), 5).astype(mx.float64)
             check_grads(
-                lambda x: mx.exp(x) * mx.cos(x), (x,), order=2, full_jacobian=True
+                lambda x, y: mx.exp(x) @ mx.cos(y), (x, y), order=2, full_jacobian=True
             )
 
     def test_reference_replaces_finite_differences_for_a_float32_only_kernel(

@@ -174,7 +174,9 @@ def expression(node: Node, names: dict[str, str]) -> str:
         return f"arith.negf {args[0]} : f32"
     if node.operation == "Rsqrt":
         return f"math.rsqrt {args[0]} : f32"
-    opcode = {"Add": "addf", "Subtract": "subf", "Multiply": "mulf"}[node.operation]
+    opcode = {"Add": "addf", "Subtract": "subf", "Multiply": "mulf", "Divide": "divf"}[
+        node.operation
+    ]
     return f"arith.{opcode} {args[0]}, {args[1]} : f32"
 
 

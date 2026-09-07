@@ -1,6 +1,7 @@
 """Experimental tk.compile: MLX export to scheduled CuTe MLIR to CUDA."""
 
 from collections.abc import Callable
+from typing import Any
 from dataclasses import dataclass
 from functools import lru_cache
 from math import prod
@@ -132,15 +133,30 @@ class Compiled:
             self.function, self.schedule, tuple(profile(value) for value in inputs)
         )
 
-    def __call__(self, *inputs: mx.array) -> mx.array:
+    def __call__(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
         return self._differentiable(*inputs)
 
-    def launch(self, *inputs: mx.array) -> mx.array:
+    def launch(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
+        """Run the region specialized on the live layout of every input.
+
+        Under a transformation the inputs are tracers with no storage yet, so
+        array inputs are packed and the layout follows from the shape alone.
+        """
+        if any(value.is_tracer for value in inputs):
+            inputs = tuple(
+                value if value.ndim == 0 else mx.contiguous(value) for value in inputs
+            )
+            profiles = tuple(
+                (tuple(value.shape), dense_strides(tuple(value.shape)))
+                for value in inputs
+            )
+            lowered = specialize(self.function, self.schedule, profiles)
+        else:
+            lowered = self.lower(*inputs)
         if not mx.cuda.is_available():
             raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
-        lowered = self.lower(*inputs)
         shapes = lowered.output_shapes
         if prod(lowered.graph.shape) == 0:
             outputs = [
@@ -182,7 +198,7 @@ class Compiled:
         primals, cotangents = _arrays(primals), _arrays(cotangents)
         n = len(primals)
         return tuple(
-            self._cotangent_kernel(i, n).launch(*primals, *cotangents) for i in range(n)
+            self._cotangent_kernel(i, n)(*primals, *cotangents) for i in range(n)
         )
 
     def _vmap(
@@ -194,7 +210,7 @@ class Compiled:
 
         The vectorized axis moves to the front of every array input, an
         unvectorized array input broadcasts along a stride-0 axis, and scalars
-        stay scalars; the new profiles specialize a kernel like any other.
+        stay scalars; the batched arrays are tracers, so they are packed.
         """
         primals = _arrays(primals)
         axes = axes if isinstance(axes, tuple) else (axes,)
@@ -226,7 +242,7 @@ class Compiled:
                 return tuple(mx.jvp(self.function, list(args[:n]), list(args[n:]))[1])
 
             self._tangent_kernel = Compiled(output_tangent, self.schedule)
-        return self._tangent_kernel.launch(*primals, *tangents)
+        return self._tangent_kernel(*primals, *tangents)
 
 
 DEFAULT_SCHEDULE = Schedule()

@@ -27,7 +27,7 @@ from typing import Any
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
 
-from graph import Graph, Profile, UnsupportedGraphError, capture
+from graph import Graph, Profile, UnsupportedGraphError, capture, dense_strides
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
 from tiki import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
 
@@ -225,12 +225,29 @@ class ScanOp:
         return shape
 
     def forward(self, *leaves: mx.array) -> Leaves:
+        """Consume every leaf through its live layout.
+
+        Under a transformation the leaves are tracers with no storage yet, so
+        they are packed and the layout follows from the shape alone.
+        """
         shape = self.check(leaves)
+        if any(leaf.is_tracer for leaf in leaves):
+            leaves = tuple(mx.contiguous(leaf) for leaf in leaves)
+            profiles = ((shape, dense_strides(shape)),) * self.leaves
+        else:
+            profiles = tuple(profile(leaf) for leaf in leaves)
+        return self._scan(leaves, shape, profiles)
+
+    def _scan(
+        self,
+        leaves: Leaves,
+        shape: tuple[int, ...],
+        profiles: tuple[Profile, ...],
+    ) -> Leaves:
         if prod(shape) == 0:
             return tuple(
                 mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for _ in leaves
             )
-        profiles = tuple(profile(leaf) for leaf in leaves)
         lowered = tile_kernel(self.graph, profiles, self.axis, self.schedule)
         outputs = launch(lowered, leaves)
         local, aggregates = outputs[: self.leaves], outputs[self.leaves :]

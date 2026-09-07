@@ -347,6 +347,15 @@ void init_array(nb::module_& m) {
             The array's :class:`Dtype`.
           )pbdoc")
       .def_prop_ro(
+          "is_tracer",
+          &mx::array::is_tracer,
+          R"pbdoc(
+            Whether the array is a placeholder inside a function transformation.
+
+            A tracer has no storage yet, so its layout cannot be read; code that
+            specializes on strides packs tracers instead.
+          )pbdoc")
+      .def_prop_ro(
           "strides",
           [](mx::array& a) {
             a.eval();
