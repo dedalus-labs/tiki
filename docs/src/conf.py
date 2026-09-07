@@ -98,8 +98,38 @@ html_context = {
 htmlhelp_basename = "tiki_doc"
 
 
+def repository_link(app, env, node, contnode):
+    """Included Markdown links to repository files; those resolve to the repository.
+
+    The Tiki pages are the repository's own Markdown, included as they are, and
+    they link to sources and sibling documents by relative path. A link that
+    names a file in the checkout becomes a link to that file on GitHub.
+    """
+    from pathlib import Path
+
+    from docutils import nodes
+
+    target = node.get("reftarget", "")
+    if node.get("refdomain") not in (None, "std") or "://" in target or target.startswith("#"):
+        return None
+    source = Path(env.doc2path(node.get("refdoc", env.docname)))
+    root = Path(app.srcdir).parents[1]
+    resolved = (source.parent / target.split("#")[0]).resolve()
+    try:
+        relative = resolved.relative_to(root)
+    except ValueError:
+        return None
+    if not resolved.exists():
+        return None
+    context = app.config.html_context
+    url = f"https://github.com/{context['github_user']}/{context['github_repo']}/blob/{context['github_version']}/{relative}"
+    return nodes.reference("", "", contnode, internal=False, refuri=url)
+
+
 def setup(app):
     from sphinx.util import inspect
+
+    app.connect("missing-reference", repository_link)
 
     wrapped_isfunc = inspect.isfunction
 
