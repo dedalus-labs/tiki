@@ -7,8 +7,6 @@ from typing import TypedDict
 
 import mlx.core as mx
 
-from operations import Operation, UnsupportedGraphError
-
 Shape = tuple[int, ...]
 
 Strides = tuple[int, ...]
@@ -21,8 +19,11 @@ def dense_strides(shape: Shape) -> Strides:
 
 
 Descriptor = tuple[str, Shape, mx.Dtype]
-ArrayResult = mx.array | tuple[mx.array, ...]
-ArrayFunction = Callable[..., ArrayResult]
+ArrayFunction = Callable[..., mx.array]
+
+
+class UnsupportedGraphError(ValueError):
+    """The exported graph is outside the elementwise compiler contract."""
 
 
 class ExportEvent(TypedDict, total=False):
@@ -81,20 +82,6 @@ class Graph:
         return self.outputs[0].shape
 
 
-def replay(graph: Graph, inputs: tuple[mx.array, ...]) -> tuple[mx.array, ...]:
-    """Differentiate the captured program with its frozen constants and branches."""
-    values = {value.name: array for value, array in zip(graph.inputs, inputs)}
-    values.update(
-        {name: mx.array(value, dtype=mx.float32) for name, value in graph.constants}
-    )
-    for node in graph.nodes:
-        args = tuple(values[name] for name in node.inputs)
-        values[node.output.name] = Operation.require(node.operation).replay(
-            args, node.output.shape
-        )
-    return tuple(values[output.name] for output in graph.outputs)
-
-
 def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
     name, shape, dtype = raw
     if dtype != mx.float32:
@@ -108,16 +95,9 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     Strides do not change the traced graph, only how the lowering addresses
     each input, so tracing stays on dense placeholders.
     """
-
-    def array_output(*inputs: mx.array) -> mx.array:
-        output = function(*inputs)
-        if not isinstance(output, mx.array):
-            raise UnsupportedGraphError("return must be an MLX array")
-        return output
-
     events: list[ExportEvent] = []
     placeholders = [mx.zeros(shape, dtype=mx.float32) for shape, _ in profiles]
-    mx.export_function(events.append, array_output, *placeholders)
+    mx.export_function(events.append, function, *placeholders)
     headers = {event["type"]: event for event in events if event["type"] != "primitive"}
     raw_inputs = headers["inputs"]["inputs"]
     if len(raw_inputs) != len(profiles):
@@ -154,9 +134,23 @@ def parse_node(event: ExportEvent) -> Node:
         operation = "Rsqrt"
     if operation == "Transpose" and event["arguments"] != [[1, 0]]:
         raise UnsupportedGraphError("only a two-dimensional transpose is supported")
-    contract = Operation.require(operation)
+    arity = {
+        "Add": 2,
+        "Subtract": 2,
+        "Multiply": 2,
+        "Divide": 2,
+        "Negative": 1,
+        "Square": 1,
+        "Broadcast": 1,
+        "Full": 1,
+        "ReduceSum": 1,
+        "Rsqrt": 1,
+        "Transpose": 1,
+    }
+    if operation not in arity:
+        raise UnsupportedGraphError(f"unsupported MLX primitive: {operation}")
     inputs = tuple(descriptor(raw) for raw in event["inputs"])
     outputs = tuple(descriptor(raw) for raw in event["outputs"])
-    if len(inputs) != contract.arity or len(outputs) != 1:
+    if len(inputs) != arity[operation] or len(outputs) != 1:
         raise UnsupportedGraphError(f"unsupported arity for {operation}")
     return Node(operation, tuple(value.name for value in inputs), outputs[0])

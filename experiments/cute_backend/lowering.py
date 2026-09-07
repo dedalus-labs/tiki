@@ -4,10 +4,7 @@ import struct
 from dataclasses import dataclass
 from math import prod
 
-from mlx.tiki import Swizzle
-
 from graph import Graph, Node, Shape, UnsupportedGraphError, Value
-from operations import Operation
 
 
 class UnsupportedScheduleError(ValueError):
@@ -68,21 +65,34 @@ class RowSchedule:
 
 
 @dataclass(frozen=True)
+class Swizzle:
+    bits: int = 5
+    base: int = 0
+    shift: int = 5
+
+    def __post_init__(self) -> None:
+        if any(type(value) is not int for value in (self.bits, self.base, self.shift)):
+            raise UnsupportedScheduleError("swizzle parameters must be integers")
+        if not (
+            0 <= self.bits <= 5 and 0 <= self.base <= 5 - self.bits and self.shift == 5
+        ):
+            raise UnsupportedScheduleError(
+                "32x32 transpose requires 0 <= bits + base <= 5 and shift=5"
+            )
+
+    def offset(self, index: int) -> int:
+        mask = ((1 << self.bits) - 1) << self.base
+        return index ^ ((index >> self.shift) & mask)
+
+
+@dataclass(frozen=True)
 class TransposeSchedule:
     arch: str = "sm_90"
     threads: int = 128
-    swizzle: Swizzle = Swizzle(bits=5, base=0, shift=5)
+    swizzle: Swizzle = Swizzle()
 
     def __post_init__(self) -> None:
         Schedule(arch=self.arch, threads=self.threads)
-        if not isinstance(self.swizzle, Swizzle):
-            raise UnsupportedScheduleError(
-                "transpose requires a validated Tiki Swizzle"
-            )
-        if self.swizzle.bits + self.swizzle.base > 5 or self.swizzle.shift != 5:
-            raise UnsupportedScheduleError(
-                "32x32 transpose requires bits + base <= 5 and shift=5"
-            )
 
 
 @dataclass(frozen=True)
@@ -90,10 +100,6 @@ class Lowered:
     graph: Graph
     schedule: Schedule | RowSchedule | TransposeSchedule
     mlir: str
-
-    def __post_init__(self) -> None:
-        if self.grid[0] > 2**31 - 1:
-            raise UnsupportedScheduleError("launch grid exceeds signed 32-bit range")
 
     @property
     def grid(self) -> tuple[int, int, int]:
@@ -158,10 +164,24 @@ def logical_coordinate(shape: Shape, index: int) -> list[str]:
     return lines
 
 
+ALIASES = ("Broadcast", "Full")
+"""Nodes whose value is their input: a broadcast, or MLX's fill of a broadcast scalar."""
+
+
 def expression(node: Node, names: dict[str, str]) -> str:
-    return Operation.require(node.operation).expression(
-        tuple(names[name] for name in node.inputs)
-    )
+    args = [names[name] for name in node.inputs]
+    if node.operation in ALIASES:
+        return args[0]
+    if node.operation == "Square":
+        return f"arith.mulf {args[0]}, {args[0]} : f32"
+    if node.operation == "Negative":
+        return f"arith.negf {args[0]} : f32"
+    if node.operation == "Rsqrt":
+        return f"math.rsqrt {args[0]} : f32"
+    opcode = {"Add": "addf", "Subtract": "subf", "Multiply": "mulf", "Divide": "divf"}[
+        node.operation
+    ]
+    return f"arith.{opcode} {args[0]}, {args[1]} : f32"
 
 
 def element(graph: Graph, index: int) -> list[str]:
@@ -190,7 +210,7 @@ def element(graph: Graph, index: int) -> list[str]:
         lines.append(f"%constant{i} = arith.constant 0x{bits:08X} : f32")
     for i, node in enumerate(graph.nodes):
         result = expression(node, names)
-        if node.operation == "Broadcast":
+        if node.operation in ALIASES:
             names[node.output.name] = result
             continue
         names[node.output.name] = f"%value{i}"
