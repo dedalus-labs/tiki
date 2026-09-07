@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from math import prod
 
 from graph import Graph, Profile, Shape, Strides, UnsupportedGraphError, dense_strides
-from lowering import Schedule, UnsupportedScheduleError, expression
+from lowering import ALIASES, Schedule, UnsupportedScheduleError, expression
 
 COORD = '!cute.coord<"(?,?)">'
 INDENT = "      "
@@ -134,7 +134,7 @@ class Combine:
         lines = []
         for index, node in enumerate(self.graph.nodes):
             result = expression(node, names)
-            if node.operation == "Broadcast":
+            if node.operation in ALIASES:
                 names[node.output.name] = result
                 continue
             names[node.output.name] = f"%c{self.applications}_{index}"

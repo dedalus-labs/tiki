@@ -3,7 +3,7 @@
 import struct
 
 from graph import Graph, Node, Shape, UnsupportedGraphError, Value
-from lowering import Lowered, RowSchedule, expression, memref
+from lowering import ALIASES, Lowered, RowSchedule, expression, memref
 
 
 def scalar_code(
@@ -32,7 +32,7 @@ def scalar_code(
                 emit(operand)
             result = f"%v{len(names)}"
             rhs = expression(node, names)
-            if node.operation == "Broadcast":
+            if node.operation in ALIASES:
                 names[name] = rhs
                 return rhs
         names[name] = result
