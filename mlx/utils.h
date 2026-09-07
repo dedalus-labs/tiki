@@ -211,8 +211,10 @@ inline bool metal_fast_synch() {
   return metal_fast_synch;
 }
 
+// TF32 rounds float32 matmul and convolution inputs to ten mantissa bits; it
+// is opt-in so that float32 means float32 unless a program asks otherwise.
 inline bool enable_tf32() {
-  static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 1);
+  static bool enable_tf32_ = get_var("MLX_ENABLE_TF32", 0);
   return enable_tf32_;
 }
 
