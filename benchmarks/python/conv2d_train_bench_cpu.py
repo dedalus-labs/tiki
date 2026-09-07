@@ -1,32 +1,32 @@
 import time
 
-import mlx.core as mx
-import mlx.nn
-import mlx.optimizers as opt
+import tiki as tk
+import tiki.nn
+import tiki.optimizers as opt
 import torch
 
 
-def bench_mlx(steps: int = 20) -> float:
-    mx.set_default_device(mx.cpu)
+def bench_tiki(steps: int = 20) -> float:
+    tk.set_default_device(tk.cpu)
 
-    class BenchNetMLX(mlx.nn.Module):
+    class BenchNetTiki(tiki.nn.Module):
         # simple encoder-decoder net
 
         def __init__(self, in_channels, hidden_channels=32):
             super().__init__()
 
-            self.net = mlx.nn.Sequential(
-                mlx.nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1),
-                mlx.nn.ReLU(),
-                mlx.nn.Conv2d(
+            self.net = tiki.nn.Sequential(
+                tiki.nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1),
+                tiki.nn.ReLU(),
+                tiki.nn.Conv2d(
                     hidden_channels, 2 * hidden_channels, kernel_size=3, padding=1
                 ),
-                mlx.nn.ReLU(),
-                mlx.nn.ConvTranspose2d(
+                tiki.nn.ReLU(),
+                tiki.nn.ConvTranspose2d(
                     2 * hidden_channels, hidden_channels, kernel_size=3, padding=1
                 ),
-                mlx.nn.ReLU(),
-                mlx.nn.ConvTranspose2d(
+                tiki.nn.ReLU(),
+                tiki.nn.ConvTranspose2d(
                     hidden_channels, in_channels, kernel_size=3, padding=1
                 ),
             )
@@ -34,11 +34,11 @@ def bench_mlx(steps: int = 20) -> float:
         def __call__(self, input):
             return self.net(input)
 
-    benchNet = BenchNetMLX(3)
-    mx.eval(benchNet.parameters())
+    benchNet = BenchNetTiki(3)
+    tk.eval(benchNet.parameters())
     optim = opt.Adam(learning_rate=1e-3)
 
-    inputs = mx.random.normal([10, 256, 256, 3])
+    inputs = tk.random.normal([10, 256, 256, 3])
 
     params = benchNet.parameters()
     optim.init(params)
@@ -51,17 +51,17 @@ def bench_mlx(steps: int = 20) -> float:
         return (pred_image - image).abs().mean()
 
     def step(params, image):
-        loss, grads = mx.value_and_grad(loss_fn)(params, image)
+        loss, grads = tk.value_and_grad(loss_fn)(params, image)
         optim.update(benchNet, grads)
         return loss
 
     total_time = 0.0
-    print("MLX:")
+    print("Tiki:")
     for i in range(steps):
         start_time = time.perf_counter()
 
         step(benchNet.parameters(), inputs)
-        mx.eval(state)
+        tk.eval(state)
         end_time = time.perf_counter()
 
         print(f"{i:3d}, time={(end_time-start_time) * 1000:7.2f} ms")
@@ -127,16 +127,16 @@ def bench_torch(steps: int = 20) -> float:
 
 def main():
     steps = 20
-    time_mlx = bench_mlx(steps)
+    time_tiki = bench_tiki(steps)
     time_torch = bench_torch(steps)
 
-    print(f"average time of MLX:     {time_mlx/steps:9.2f} ms")
-    print(f"total time of MLX:       {time_mlx:9.2f} ms")
+    print(f"average time of Tiki:     {time_tiki/steps:9.2f} ms")
+    print(f"total time of Tiki:       {time_tiki:9.2f} ms")
     print(f"average time of PyTorch: {time_torch/steps:9.2f} ms")
     print(f"total time of PyTorch:   {time_torch:9.2f} ms")
 
-    diff = time_torch / time_mlx - 1.0
-    print(f"torch/mlx diff: {100. * diff:+5.2f}%")
+    diff = time_torch / time_tiki - 1.0
+    print(f"torch/tiki diff: {100. * diff:+5.2f}%")
 
 
 if __name__ == "__main__":

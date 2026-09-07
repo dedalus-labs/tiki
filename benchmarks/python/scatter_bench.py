@@ -2,24 +2,24 @@
 
 import argparse
 
-import mlx.core as mx
+import tiki as tk
 import torch
 from time_utils import measure_runtime
 
 
-def benchmark_scatter_mlx(dst_shape, x_shape, idx_shapes):
+def benchmark_scatter_tiki(dst_shape, x_shape, idx_shapes):
     def scatter(dst, x, idx):
         dst[tuple(idx)] = x
-        mx.eval(dst)
+        tk.eval(dst)
 
     idx = []
     for idx_shape in idx_shapes:
-        idx.append(mx.random.randint(0, dst_shape[0] - 1, idx_shape))
-    x = mx.random.normal(x_shape).astype(mx.float32)
-    dst = mx.random.normal(dst_shape).astype(mx.float32)
+        idx.append(tk.random.randint(0, dst_shape[0] - 1, idx_shape))
+    x = tk.random.normal(x_shape).astype(tk.float32)
+    dst = tk.random.normal(dst_shape).astype(tk.float32)
 
     runtime = measure_runtime(scatter, dst=dst, x=x, idx=idx)
-    print(f"MLX: {runtime:.3f}ms")
+    print(f"Tiki: {runtime:.3f}ms")
 
 
 def benchmark_scatter_torch(dst_shape, x_shape, idx_shapes, device):
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.cpu:
-        mx.set_default_device(mx.cpu)
+        tk.set_default_device(tk.cpu)
         device = torch.device("cpu")
     else:
         device = torch.device("mps")
@@ -92,5 +92,5 @@ if __name__ == "__main__":
     for dst_shape, x_shape, idx_shape in zip(dst_shapes, x_shapes, idx_shapes):
         print("=" * 20)
         print(f"Dst: {dst_shape}, X {x_shape}, Indices {idx_shape}")
-        benchmark_scatter_mlx(dst_shape, x_shape, idx_shape)
+        benchmark_scatter_tiki(dst_shape, x_shape, idx_shape)
         benchmark_scatter_torch(dst_shape, x_shape, idx_shape, device=device)

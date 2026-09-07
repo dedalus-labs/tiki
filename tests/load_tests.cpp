@@ -7,9 +7,9 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name).string();

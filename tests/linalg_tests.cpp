@@ -5,13 +5,13 @@
 #include <cmath>
 #include <limits>
 
-#include "mlx/mlx.h"
-#include "mlx/ops.h"
+#include "tiki/ops.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
-using namespace mlx::core::linalg;
+using namespace tiki::core;
+using namespace tiki::core::linalg;
 
-TEST_CASE("[mlx.core.linalg.norm] no ord") {
+TEST_CASE("[tiki.linalg.norm] no ord") {
   // Zero dimensions
   array x(2.0);
   CHECK_EQ(norm(x).item<float>(), 2.0f);
@@ -75,7 +75,7 @@ TEST_CASE("[mlx.core.linalg.norm] no ord") {
   CHECK_THROWS(norm(x, std::vector<int>{0, 1, 2}));
 }
 
-TEST_CASE("[mlx.core.linalg.norm] double ord") {
+TEST_CASE("[tiki.linalg.norm] double ord") {
   CHECK_THROWS(norm(array(0), 2.0));
 
   array x({1, 2, 3});
@@ -300,7 +300,7 @@ TEST_CASE("[mlx.core.linalg.norm] double ord") {
             .item<bool>());
 }
 
-TEST_CASE("[mlx.core.linalg.norm] string ord") {
+TEST_CASE("[tiki.linalg.norm] string ord") {
   array x({1, 2, 3});
   CHECK_THROWS(norm(x, "fro"));
 
@@ -384,7 +384,7 @@ TEST_CASE("test SVD factorization") {
   CHECK_THROWS(linalg::svd(array({0, 1}, {1, 2})));
 
   const auto prng_key = random::key(42);
-  const auto A = mlx::core::random::normal({5, 4}, prng_key);
+  const auto A = tiki::core::random::normal({5, 4}, prng_key);
   const auto outs = linalg::svd(A, true, Device::cpu);
   CHECK_EQ(outs.size(), 3);
 
@@ -515,7 +515,7 @@ TEST_CASE("test matrix pseudo-inverse") {
 }
 
 TEST_CASE("test cross product") {
-  using namespace mlx::core::linalg;
+  using namespace tiki::core::linalg;
 
   // Test for vectors of length 3
   array a = array({1.0, 2.0, 3.0});

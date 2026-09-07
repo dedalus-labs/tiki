@@ -2,12 +2,12 @@
 # Primary project setup.                                                       #
 ################################################################################
 
-PROJECT_NAME           = "MLX"
+PROJECT_NAME           = "Tiki"
 OUTPUT_DIRECTORY       = build
 XML_OUTPUT             = xml
 HTML_OUTPUT            = html
 STRIP_FROM_PATH        = ../
-INPUT                  = ../mlx
+INPUT                  = ../tiki
 FILE_PATTERNS          = *.h
 EXCLUDE_PATTERNS       = */private/*
 CREATE_SUBDIRS         = NO
@@ -26,7 +26,7 @@ ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = NO
 SKIP_FUNCTION_MACROS   = NO
-PREDEFINED             = MLX_API=
+PREDEFINED             = TIKI_API=
 
 ################################################################################
 # Compound extraction control.                                                 #

@@ -2,20 +2,20 @@
 
 import argparse
 
-import mlx.core as mx
+import tiki as tk
 import torch
 from time_utils import measure_runtime
 
 
-def benchmark_gather_mlx(x_shape, idx_shape):
+def benchmark_gather_tiki(x_shape, idx_shape):
     def gather(x, idx):
-        mx.eval(x[idx])
+        tk.eval(x[idx])
 
-    idx = mx.random.randint(0, x_shape[0] - 1, idx_shape)
-    x = mx.random.normal(x_shape).astype(mx.float32)
+    idx = tk.random.randint(0, x_shape[0] - 1, idx_shape)
+    x = tk.random.normal(x_shape).astype(tk.float32)
 
     runtime = measure_runtime(gather, x=x, idx=idx)
-    print(f"MLX: {runtime:.3f}ms")
+    print(f"Tiki: {runtime:.3f}ms")
 
 
 def benchmark_gather_torch(x_shape, idx_shape, device):
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.cpu:
-        mx.set_default_device(mx.cpu)
+        tk.set_default_device(tk.cpu)
         device = torch.device("cpu")
     else:
         device = torch.device("mps")
@@ -48,5 +48,5 @@ if __name__ == "__main__":
     for x_shape, idx_shape in zip(x_shapes, idx_shapes):
         print("=" * 20)
         print(f"X {x_shape}, Indices {idx_shape}")
-        benchmark_gather_mlx(x_shape, idx_shape)
+        benchmark_gather_tiki(x_shape, idx_shape)
         benchmark_gather_torch(x_shape, idx_shape, device=device)

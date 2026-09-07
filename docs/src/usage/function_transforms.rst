@@ -3,9 +3,9 @@
 Function Transforms
 ===================
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
-MLX uses composable function transformations for automatic differentiation,
+Tiki uses composable function transformations for automatic differentiation,
 vectorization, and compute graph optimizations. To see the complete list of
 function transformations check-out the :ref:`API documentation <transforms>`.
 
@@ -16,10 +16,10 @@ Here is a simple example:
 
 .. code-block:: shell
 
-   >>> dfdx = mx.grad(mx.sin)
-   >>> dfdx(mx.array(mx.pi))
+   >>> dfdx = tk.grad(tk.sin)
+   >>> dfdx(tk.array(tk.pi))
    array(-1, dtype=float32)
-   >>> mx.cos(mx.array(mx.pi))
+   >>> tk.cos(tk.array(tk.pi))
    array(-1, dtype=float32)
 
 
@@ -29,16 +29,16 @@ function. To get the second derivative you can do:
 
 .. code-block:: shell
 
-   >>> d2fdx2 = mx.grad(mx.grad(mx.sin))
-   >>> d2fdx2(mx.array(mx.pi / 2))
+   >>> d2fdx2 = tk.grad(tk.grad(tk.sin))
+   >>> d2fdx2(tk.array(tk.pi / 2))
    array(-1, dtype=float32)
-   >>> mx.sin(mx.array(mx.pi / 2))
+   >>> tk.sin(tk.array(tk.pi / 2))
    array(1, dtype=float32)
 
 Using :func:`grad` on the output of :func:`grad` is always ok. You keep
 getting higher order derivatives.
 
-Any of the MLX function transformations can be composed in any order to any
+Any of the Tiki function transformations can be composed in any order to any
 depth. See the following sections for more information on :ref:`automatic
 differentiation <auto diff>` and :ref:`automatic vectorization <vmap>`.
 For more information on :func:`compile` see the :ref:`compile documentation <compile>`.
@@ -49,12 +49,12 @@ Automatic Differentiation
 
 .. _auto diff:
 
-Automatic differentiation in MLX works on functions rather than on implicit
+Automatic differentiation in Tiki works on functions rather than on implicit
 graphs.
 
 .. note::
 
-   If you are coming to MLX from PyTorch, you no longer need functions like
+   If you are coming to Tiki from PyTorch, you no longer need functions like
    ``backward``, ``zero_grad``, and ``detach``, or properties like
    ``requires_grad``.
 
@@ -66,20 +66,20 @@ the gradient with respect to the first argument:
 .. code-block:: python
 
    def loss_fn(w, x, y):
-      return mx.mean(mx.square(w * x - y))
+      return tk.mean(tk.square(w * x - y))
 
-   w = mx.array(1.0)
-   x = mx.array([0.5, -0.5])
-   y = mx.array([1.5, -1.5])
+   w = tk.array(1.0)
+   x = tk.array([0.5, -0.5])
+   y = tk.array([1.5, -1.5])
 
    # Computes the gradient of loss_fn with respect to w:
-   grad_fn = mx.grad(loss_fn)
+   grad_fn = tk.grad(loss_fn)
    dloss_dw = grad_fn(w, x, y)
    # Prints array(-1, dtype=float32)
    print(dloss_dw)
 
    # To get the gradient with respect to x we can do:
-   grad_fn = mx.grad(loss_fn, argnums=1)
+   grad_fn = tk.grad(loss_fn, argnums=1)
    dloss_dx = grad_fn(w, x, y)
    # Prints array([-1, 1], dtype=float32)
    print(dloss_dx)
@@ -93,7 +93,7 @@ should use :func:`value_and_grad`. Continuing the above example:
 .. code-block:: python
 
    # Computes the gradient of loss_fn with respect to w:
-   loss_and_grad_fn = mx.value_and_grad(loss_fn)
+   loss_and_grad_fn = tk.value_and_grad(loss_fn)
    loss, dloss_dw = loss_and_grad_fn(w, x, y)
 
    # Prints array(1, dtype=float32)
@@ -115,15 +115,15 @@ way to do that is the following:
    def loss_fn(params, x, y):
       w, b = params["weight"], params["bias"]
       h = w * x + b
-      return mx.mean(mx.square(h - y))
+      return tk.mean(tk.square(h - y))
 
-   params = {"weight": mx.array(1.0), "bias": mx.array(0.0)}
-   x = mx.array([0.5, -0.5])
-   y = mx.array([1.5, -1.5])
+   params = {"weight": tk.array(1.0), "bias": tk.array(0.0)}
+   x = tk.array([0.5, -0.5])
+   y = tk.array([1.5, -1.5])
 
    # Computes the gradient of loss_fn with respect to both the
    # weight and bias:
-   grad_fn = mx.grad(loss_fn)
+   grad_fn = tk.grad(loss_fn)
    grads = grad_fn(params, x, y)
 
    # Prints
@@ -157,8 +157,8 @@ A naive way to add the elements from two sets of vectors is with a loop:
 
 .. code-block:: python
 
-  xs = mx.random.uniform(shape=(4096, 100))
-  ys = mx.random.uniform(shape=(100, 4096))
+  xs = tk.random.uniform(shape=(4096, 100))
+  ys = tk.random.uniform(shape=(100, 4096))
 
   def naive_add(xs, ys):
       return [xs[i] + ys[:, i] for i in range(xs.shape[0])]
@@ -169,7 +169,7 @@ Instead you can use :func:`vmap` to automatically vectorize the addition:
 
    # Vectorize over the second dimension of x and the
    # first dimension of y
-   vmap_add = mx.vmap(lambda x, y: x + y, in_axes=(0, 1))
+   vmap_add = tk.vmap(lambda x, y: x + y, in_axes=(0, 1))
 
 The ``in_axes`` parameter can be used to specify which dimensions of the
 corresponding input to vectorize over. Similarly, use ``out_axes`` to specify
@@ -181,8 +181,8 @@ Let's time these two different versions:
 
   import timeit
 
-  print(timeit.timeit(lambda: mx.eval(naive_add(xs, ys)), number=100))
-  print(timeit.timeit(lambda: mx.eval(vmap_add(xs, ys)), number=100))
+  print(timeit.timeit(lambda: tk.eval(naive_add(xs, ys)), number=100))
+  print(timeit.timeit(lambda: tk.eval(vmap_add(xs, ys)), number=100))
 
 On an M1 Max the naive version takes in total ``5.639`` seconds whereas the
 vectorized version takes only ``0.024`` seconds, more than 200 times faster.

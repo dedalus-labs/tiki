@@ -9,7 +9,7 @@ integer-stride layout or a composed layout::
 
    tensor[coordinate] = engine[layout(coordinate)]
 
-A :class:`mlx.tiki.Swizzle` is a first-class indexing transform. It mixes index
+A :class:`tiki.layout.Swizzle` is a first-class indexing transform. It mixes index
 bits with exclusive-or (XOR). It permutes index values, rather than merely
 reordering individual bits. Composing it with a layout supplies the coordinate
 domain::
@@ -22,7 +22,7 @@ the same layout interface, but it generally has no ordinary stride tuple.
 .. important::
 
    This API requires a Tiki build with its Rust indexing extension. Installing
-   upstream MLX alone does not provide ``mlx.tiki``. See :ref:`tiki-layout-build`.
+   upstream MLX alone does not provide ``tiki.layout``. See :ref:`tiki-layout-build`.
 
 Shape, stride, and coordinates
 ------------------------------
@@ -32,12 +32,12 @@ coordinate contributes its coordinate value multiplied by its stride.
 
 .. doctest:: tiki-layouts
 
-   >>> import mlx.tiki as tk
-   >>> row_major = tk.Layout((4, 8), (8, 1))
-   >>> column_major = tk.Layout((4, 8), (1, 4))
+   >>> import tiki.layout as tl
+   >>> row_major = tl.Layout((4, 8), (8, 1))
+   >>> column_major = tl.Layout((4, 8), (1, 4))
    >>> row_major(2, 3), column_major(2, 3)
    (19, 14)
-   >>> tk.Layout((4, 8)) == column_major
+   >>> tl.Layout((4, 8)) == column_major
    True
 
 The default strides follow CuTe's column-major order. Pass explicit strides
@@ -46,7 +46,7 @@ modes instead of flattening them into unrelated axes.
 
 .. doctest:: tiki-layouts
 
-   >>> blocked = tk.Layout((3, (2, 4)), (2, (1, 6)))
+   >>> blocked = tl.Layout((3, (2, 4)), (2, (1, 6)))
    >>> blocked.shape
    (3, (2, 4))
    >>> blocked(17), blocked(2, 5), blocked(2, (1, 2))
@@ -74,7 +74,7 @@ fit a nonnegative signed 64-bit integer.
 
 .. doctest:: tiki-layouts
 
-   >>> swizzle = tk.Swizzle(2, 0, 2)
+   >>> swizzle = tl.Swizzle(2, 0, 2)
    >>> swizzle.bits, swizzle.base, swizzle.shift
    (2, 0, 2)
    >>> swizzle(6), swizzle(swizzle(6))
@@ -86,19 +86,19 @@ the first application, and XOR with the same value twice cancels.
 Composition supplies the domain
 -------------------------------
 
-Use :func:`mlx.tiki.compose` or the layout's ``swizzle`` method. Both construct
+Use :func:`tiki.layout.compose` or the layout's ``swizzle`` method. Both construct
 the same composition. The transform does not allocate storage or change the
 coordinate domain.
 
 .. doctest:: tiki-layouts
 
-   >>> base = tk.Layout((4, 4), (4, 1))
-   >>> tiled = tk.compose(swizzle, base)
+   >>> base = tl.Layout((4, 4), (4, 1))
+   >>> tiled = tl.compose(swizzle, base)
    >>> tiled == base.swizzle(swizzle)
    True
    >>> tiled.shape
    (4, 4)
-   >>> tk.is_layout(swizzle), tk.is_layout(tiled)
+   >>> tl.is_layout(swizzle), tl.is_layout(tiled)
    (False, True)
    >>> for row in range(4):
    ...     print([tiled(row, column) for column in range(4)])
@@ -111,7 +111,7 @@ coordinate domain.
 
 The column increment changes between rows. No fixed pair of integer strides
 describes this map on the same ``(4, 4)`` domain. Asking for ``tiled.stride``
-raises :class:`mlx.tiki.LayoutError`. An explicit composition remains inspectable
+raises :class:`tiki.layout.LayoutError`. An explicit composition remains inspectable
 even when a restricted subdomain could admit an affine simplification.
 
 Offsets stay inside the transform
@@ -122,20 +122,20 @@ Moving an offset outside XOR changes the map.
 
 .. doctest:: tiki-layouts
 
-   >>> inner = tk.Layout(4, 1)
-   >>> shifted = tk.compose(swizzle, inner, offset=4)
+   >>> inner = tl.Layout(4, 1)
+   >>> shifted = tl.compose(swizzle, inner, offset=4)
    >>> [shifted(column) for column in range(4)]
    [5, 4, 7, 6]
    >>> [4 + swizzle(inner(column)) for column in range(4)]
    [4, 5, 6, 7]
 
-Slicing retains this distinction. :func:`mlx.tiki.slice_and_offset` returns a
+Slicing retains this distinction. :func:`tiki.layout.slice_and_offset` returns a
 residual layout and an external Engine displacement. For every retained
 coordinate, their sum equals the original address.
 
 .. doctest:: tiki-layouts
 
-   >>> residual, displacement = tk.slice_and_offset((1, None), tiled)
+   >>> residual, displacement = tl.slice_and_offset((1, None), tiled)
    >>> displacement
    0
    >>> [residual(column) for column in range(4)]
@@ -151,7 +151,7 @@ that a particular layout stays inside a particular allocation. Shape, internal
 offset, Engine displacement, and backing storage size still matter.
 
 ``ArrayEngine`` checks scalar accesses against its retained array. ``realize``
-checks integer-affine bounds before constructing an MLX ``as_strided`` view.
+checks integer-affine bounds before constructing an Tiki ``as_strided`` view.
 It rejects composed or XOR-valued layouts. It does not reinterpret them as
 ordinary strides or silently gather them into a dense array.
 
@@ -172,8 +172,8 @@ A compiler can select a different layout for private temporary storage without
 changing a user-visible array. The current transpose schedule makes that choice
 explicit. Automatic hardware-dependent selection is not implemented.
 
-General composed ``mlx.tiki`` tensor layouts are not yet accepted by the
-elementwise ``tk.compile`` path, which consumes MLX shape/stride profiles.
+General composed ``tiki.layout`` tensor layouts are not yet accepted by the
+elementwise ``tl.compile`` path, which consumes Tiki shape/stride profiles.
 The transpose path lowers Swizzle parameters for its private shared-memory
 tile. These are different integration claims.
 

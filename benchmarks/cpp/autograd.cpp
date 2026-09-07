@@ -2,10 +2,10 @@
 
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 #include "time_utils.h"
 
-namespace mx = mlx::core;
+namespace mx = tiki::core;
 
 void time_value_and_grad() {
   auto x = mx::ones({200, 1000});

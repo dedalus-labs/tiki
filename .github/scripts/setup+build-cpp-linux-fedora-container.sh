@@ -21,7 +21,7 @@ export CMAKE_CXX_COMPILER=/usr/bin/clang++
 
 mkdir -p build
 pushd build
-cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
+cmake .. -DTIKI_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
 make -j $(nproc)
 ./tests/tests
 popd

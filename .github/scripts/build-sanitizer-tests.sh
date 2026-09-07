@@ -5,7 +5,7 @@ export CMAKE_C_COMPILER=/usr/bin/clang
 export CMAKE_CXX_COMPILER=/usr/bin/clang++
 BASE_CMAKE_ARGS="-DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  BASE_CMAKE_ARGS+=" -DMLX_BUILD_METAL=OFF"
+  BASE_CMAKE_ARGS+=" -DTIKI_BUILD_METAL=OFF"
 fi
 
 run_test() {

@@ -4,13 +4,13 @@
 #include <cmath>
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 #include "timer.h"
 
 /**
- * An example of linear regression with MLX.
+ * An example of linear regression with Tiki.
  */
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 
 int main() {
   int num_features = 100;
@@ -19,35 +19,35 @@ int main() {
   float learning_rate = 0.01;
 
   // True parameters
-  auto w_star = mx::random::normal({num_features});
+  auto w_star = tk::random::normal({num_features});
 
   // The input examples (design matrix)
-  auto X = mx::random::normal({num_examples, num_features});
+  auto X = tk::random::normal({num_examples, num_features});
 
   // Noisy labels
-  auto eps = 1e-2 * mx::random::normal({num_examples});
-  auto y = mx::matmul(X, w_star) + eps;
+  auto eps = 1e-2 * tk::random::normal({num_examples});
+  auto y = tk::matmul(X, w_star) + eps;
 
   // Initialize random parameters
-  mx::array w = 1e-2 * mx::random::normal({num_features});
+  tk::array w = 1e-2 * tk::random::normal({num_features});
 
-  auto loss_fn = [&](mx::array w) {
-    auto yhat = mx::matmul(X, w);
-    return (0.5f / num_examples) * mx::sum(mx::square(yhat - y));
+  auto loss_fn = [&](tk::array w) {
+    auto yhat = tk::matmul(X, w);
+    return (0.5f / num_examples) * tk::sum(tk::square(yhat - y));
   };
 
-  auto grad_fn = mx::grad(loss_fn);
+  auto grad_fn = tk::grad(loss_fn);
 
   auto tic = timer::time();
   for (int it = 0; it < num_iters; ++it) {
     auto grads = grad_fn(w);
     w = w - learning_rate * grads;
-    mx::eval(w);
+    tk::eval(w);
   }
   auto toc = timer::time();
 
   auto loss = loss_fn(w);
-  auto error_norm = std::sqrt(mx::sum(mx::square(w - w_star)).item<float>());
+  auto error_norm = std::sqrt(tk::sum(tk::square(w - w_star)).item<float>());
   auto throughput = num_iters / timer::seconds(toc - tic);
   std::cout << "Loss " << loss << ", |w - w*| = " << error_norm
             << ", Throughput " << throughput << " (it/s)." << std::endl;

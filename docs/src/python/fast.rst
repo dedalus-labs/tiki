@@ -3,7 +3,7 @@
 Fast
 ====
 
-.. currentmodule:: mlx.core.fast
+.. currentmodule:: tiki.fast
 
 .. autosummary:: 
   :toctree: _autosummary

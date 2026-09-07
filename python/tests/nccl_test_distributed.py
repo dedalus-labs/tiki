@@ -1,28 +1,28 @@
 # Copyright © 2024 Apple Inc.
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx_distributed_tests
-import mlx_tests
-from mlx.nn.utils import average_gradients
-from mlx.utils import tree_flatten, tree_map
+import tiki as tk
+import tiki.nn as nn
+import tiki_distributed_tests
+import tiki_tests
+from tiki.nn.utils import average_gradients
+from tiki.utils import tree_flatten, tree_map
 
 
-class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
+class TestNCCLDistributed(tiki_distributed_tests.TIKIDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
-        _ = mx.distributed.init(strict=True, backend="nccl")
+        _ = tk.distributed.init(strict=True, backend="nccl")
         cls.atol = 1e-4
         cls.rtol = 1e-4
 
     def test_sum_scatter(self):
 
-        world = mx.distributed.init()
+        world = tk.distributed.init()
 
         dtypes = [
-            (mx.float32, 1e-6),
-            (mx.float16, 5e-3),
-            (mx.bfloat16, 1e-1),
+            (tk.float32, 1e-6),
+            (tk.float16, 5e-3),
+            (tk.bfloat16, 1e-1),
         ]
         sizes = [
             (8,),
@@ -30,15 +30,15 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             (1024,),
             (1024, 1024),
         ]
-        key = mx.random.key(world.rank())
+        key = tk.random.key(world.rank())
 
         for dt, rtol in dtypes:
             for sh in sizes:
-                x = (mx.random.uniform(shape=sh, key=key) * 10).astype(dt)  # shape=sh
+                x = (tk.random.uniform(shape=sh, key=key) * 10).astype(dt)  # shape=sh
 
                 # Sum scatter
-                y = mx.distributed.sum_scatter(x)  # shape=sh/world.size()
-                z = mx.distributed.all_sum(x)  # shape=sh
+                y = tk.distributed.sum_scatter(x)  # shape=sh/world.size()
+                z = tk.distributed.all_sum(x)  # shape=sh
                 chunk = sh[0] // world.size()
                 start = world.rank() * chunk
                 stop = start + chunk
@@ -51,11 +51,11 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 self.assertLessEqual(maxrelerror, rtol)
 
     def test_groups(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         self.assertEqual(world.size(), 8)
         self.assertTrue(0 <= world.rank() < 8)
 
-        world2 = mx.distributed.init()
+        world2 = tk.distributed.init()
         self.assertEqual(world.size(), world2.size())
         self.assertEqual(world.rank(), world2.rank())
 
@@ -67,11 +67,11 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
         self.assertEqual(sub.size(), 2)
 
     def test_all_reduce_split(self):
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         dtypes = [
-            (mx.float32, 1e-6),
-            (mx.float16, 5e-3),
-            (mx.bfloat16, 1e-1),
+            (tk.float32, 1e-6),
+            (tk.float16, 5e-3),
+            (tk.bfloat16, 1e-1),
         ]
         sizes = [
             (7,),
@@ -79,17 +79,17 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
             (1024,),
             (1024, 1024),
         ]
-        key = mx.random.key(0)
+        key = tk.random.key(0)
         group = world.split(world.rank() % 2)
 
         for dt, rtol in dtypes:
             for sh in sizes:
                 x = (
-                    mx.random.uniform(shape=(group.size(),) + sh, key=key) * 10
+                    tk.random.uniform(shape=(group.size(),) + sh, key=key) * 10
                 ).astype(dt)
 
                 # All sum
-                y = mx.distributed.all_sum(x[group.rank()], group=group)
+                y = tk.distributed.all_sum(x[group.rank()], group=group)
                 z = x.sum(0)
                 maxrelerror = (y - z).abs()
                 if rtol > 0:
@@ -98,32 +98,32 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 self.assertLessEqual(maxrelerror, rtol)
 
                 # All max
-                y = mx.distributed.all_max(x[group.rank()], group=group)
+                y = tk.distributed.all_max(x[group.rank()], group=group)
                 z = x.max(0)
-                self.assertTrue(mx.all(y == z))
+                self.assertTrue(tk.all(y == z))
 
                 # All min
-                y = mx.distributed.all_min(x[group.rank()], group=group)
+                y = tk.distributed.all_min(x[group.rank()], group=group)
                 z = x.min(0)
-                self.assertTrue(mx.all(y == z))
+                self.assertTrue(tk.all(y == z))
 
     def test_all_gather_split(self):
-        world = mx.distributed.init()
-        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        world = tk.distributed.init()
+        dtypes = [tk.float32, tk.float16, tk.bfloat16]
         sub = world.split(world.rank() % 2)
         for dt in dtypes:
-            x = mx.ones((2, 2, 4), dtype=dt)
-            y = mx.distributed.all_gather(x, group=sub)
+            x = tk.ones((2, 2, 4), dtype=dt)
+            y = tk.distributed.all_gather(x, group=sub)
             self.assertEqual(y.shape, (sub.size() * 2, 2, 4))
-            self.assertTrue(mx.all(y == 1))
+            self.assertTrue(tk.all(y == 1))
 
     def test_fully_shard_grads(self):
         dtypes = [
-            (mx.float32, 1e-6, 1e-6),
-            (mx.bfloat16, 1e-3, 1e-3),
+            (tk.float32, 1e-6, 1e-6),
+            (tk.bfloat16, 1e-3, 1e-3),
         ]
 
-        world = mx.distributed.init()
+        world = tk.distributed.init()
         N = world.size()
         rank = world.rank()
         dims = 8 * N
@@ -139,16 +139,16 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
                 return self.l2(nn.relu(self.l1(x)))
 
         def loss_fn(model, x, y):
-            logits = model(x).astype(mx.float32)
+            logits = model(x).astype(tk.float32)
             return ((logits - y) ** 2).mean()
 
         for dtype, atol, rtol in dtypes:
 
-            mx.random.seed(0xF0F0F0F0)
+            tk.random.seed(0xF0F0F0F0)
 
-            kx, ky = mx.random.split(mx.random.key(rank))
-            x = mx.random.normal((4, dims), dtype=dtype, key=kx)
-            y = mx.random.normal((4, dims), key=ky)
+            kx, ky = tk.random.split(tk.random.key(rank))
+            x = tk.random.normal((4, dims), dtype=dtype, key=kx)
+            y = tk.random.normal((4, dims), key=ky)
 
             # DDP reference: replicated params, gradients averaged across ranks
             model = MLP(dims)
@@ -156,28 +156,28 @@ class TestNCCLDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
 
             # Cast parameters to dtype for forward
             model.update(tree_map(lambda p: p.astype(dtype), params))
-            loss, grads = mx.value_and_grad(loss_fn)(model, x, y)
+            loss, grads = tk.value_and_grad(loss_fn)(model, x, y)
             grads = average_gradients(grads, group=world)
-            loss = mx.distributed.all_sum(loss, group=world) / N
-            mx.eval(loss, grads)
+            loss = tk.distributed.all_sum(loss, group=world) / N
+            tk.eval(loss, grads)
 
             # Shard the model
             model_sharded = MLP(dims)
             model_sharded.update(params)
             model_sharded = nn.fully_shard(model_sharded, compute_dtype=dtype)
-            loss_sharded, grads_sharded = mx.value_and_grad(loss_fn)(
+            loss_sharded, grads_sharded = tk.value_and_grad(loss_fn)(
                 model_sharded, x, y
             )
 
-            loss_sharded = mx.distributed.all_sum(loss_sharded, group=world) / N
-            mx.eval(loss_sharded, grads_sharded)
+            loss_sharded = tk.distributed.all_sum(loss_sharded, group=world) / N
+            tk.eval(loss_sharded, grads_sharded)
             grads_ref = dict(tree_flatten(grads))
-            self.assertTrue(mx.allclose(loss, loss_sharded, atol=1e-4, rtol=1e-4))
+            self.assertTrue(tk.allclose(loss, loss_sharded, atol=1e-4, rtol=1e-4))
             for k, gs in tree_flatten(grads_sharded["module"]):
                 self.assertTrue(
-                    mx.allclose(gs, grads_ref[k][part], atol=atol, rtol=rtol)
+                    tk.allclose(gs, grads_ref[k][part], atol=atol, rtol=rtol)
                 )
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

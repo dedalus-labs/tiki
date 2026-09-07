@@ -6,9 +6,9 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test array basics") {
   // Scalar
@@ -118,13 +118,13 @@ TEST_CASE("test array basics") {
 }
 
 TEST_CASE("test array types") {
-#define basic_dtype_test(T, mlx_type) \
-  T val = 42;                         \
-  array x(val);                       \
-  CHECK_EQ(x.dtype(), mlx_type);      \
-  CHECK_EQ(x.item<T>(), val);         \
-  x = array({val, val});              \
-  CHECK_EQ(x.dtype(), mlx_type);
+#define basic_dtype_test(T, tiki_type) \
+  T val = 42;                          \
+  array x(val);                        \
+  CHECK_EQ(x.dtype(), tiki_type);      \
+  CHECK_EQ(x.item<T>(), val);          \
+  x = array({val, val});               \
+  CHECK_EQ(x.dtype(), tiki_type);
 
   // bool_
   {

@@ -14,4 +14,4 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: ./build/cpp/mlx/tests.exe -tce="*gguf*"
+      run: ./build/cpp/tiki/tests.exe -tce="*gguf*"

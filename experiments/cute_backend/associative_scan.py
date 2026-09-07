@@ -24,15 +24,22 @@ from math import prod
 from operator import add
 from typing import Any
 
-import mlx.core as mx
-from mlx.utils import tree_flatten, tree_unflatten
+import tiki as tk
+from tiki.utils import tree_flatten, tree_unflatten
 
+from compiler import (
+    BackendUnavailableError,
+    Compiled,
+    Schedule,
+    _arrays,
+    binary,
+    profile,
+)
 from graph import Graph, Profile, UnsupportedGraphError, capture, replay
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
-from tiki import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
 
-Leaves = tuple[mx.array, ...]
-FlatCombine = Callable[..., tuple[mx.array, ...]]
+Leaves = tuple[tk.array, ...]
+FlatCombine = Callable[..., tuple[tk.array, ...]]
 DEFAULT_SCAN_SCHEDULE = ScanSchedule()
 
 
@@ -41,27 +48,27 @@ class ScanContractError(ValueError):
 
 
 def view(
-    array: mx.array, axis: int, start: int | None, stop: int | None, step: int = 1
-) -> mx.array:
+    array: tk.array, axis: int, start: int | None, stop: int | None, step: int = 1
+) -> tk.array:
     index: list[slice] = [slice(None)] * array.ndim
     index[axis] = slice(start, stop, step)
     return array[tuple(index)]
 
 
-def flip(array: mx.array, axis: int) -> mx.array:
+def flip(array: tk.array, axis: int) -> tk.array:
     """A negatively strided view; the kernels consume it in place."""
     return view(array, axis, None, None, -1)
 
 
-def basis(array: mx.array, value: float) -> mx.array:
+def basis(array: tk.array, value: float) -> tk.array:
     """A constant tangent the graph capture accepts: a float32 scalar broadcast."""
-    return mx.broadcast_to(mx.array(value, dtype=mx.float32), array.shape)
+    return tk.broadcast_to(tk.array(value, dtype=tk.float32), array.shape)
 
 
 def affine_combine(size: int) -> FlatCombine:
     """``(A_l, b_l) o (A_r, b_r) = (A_r A_l, A_r b_l + b_r)`` over ``size*size + size`` leaves."""
 
-    def combine(*args: mx.array) -> tuple[mx.array, ...]:
+    def combine(*args: tk.array) -> tuple[tk.array, ...]:
         a_left, b_left = args[: size * size], args[size * size : size * size + size]
         a_right, b_right = (
             args[size * size + size : 2 * size * size + size],
@@ -91,10 +98,10 @@ def affine_combine(size: int) -> FlatCombine:
     return combine
 
 
-def matvec(size: int, transpose: bool) -> Callable[..., tuple[mx.array, ...]]:
+def matvec(size: int, transpose: bool) -> Callable[..., tuple[tk.array, ...]]:
     """``M v`` (or ``M^T v``) over ``size*size`` matrix leaves and ``size`` vector leaves."""
 
-    def function(*args: mx.array) -> tuple[mx.array, ...]:
+    def function(*args: tk.array) -> tuple[tk.array, ...]:
         matrix, vector = args[: size * size], args[size * size :]
         if transpose:
             return tuple(
@@ -137,23 +144,23 @@ def apply_kernel(
 
 
 def launch(lowered: ScanLowered, inputs: Leaves) -> Leaves:
-    if not mx.cuda.is_available():
-        raise BackendUnavailableError("associative_scan execution requires MLX CUDA")
-    if mx.device_info(mx.gpu)["architecture"] != lowered.schedule.arch:
+    if not tk.cuda.is_available():
+        raise BackendUnavailableError("associative_scan execution requires Tiki CUDA")
+    if tk.device_info(tk.gpu)["architecture"] != lowered.schedule.arch:
         raise BackendUnavailableError(f"schedule requires {lowered.schedule.arch}")
     return tuple(
-        mx.fast.precompiled_cuda_kernel(
+        tk.fast.precompiled_cuda_kernel(
             name=lowered.name,
             compiled_source=binary(lowered).cubin,
             inputs=list(inputs),
             output_shapes=list(lowered.output_shapes),
-            output_dtypes=[mx.float32] * len(lowered.output_shapes),
+            output_dtypes=[tk.float32] * len(lowered.output_shapes),
             scalars=[],
             grid=lowered.grid,
             threadgroup=(lowered.schedule.threads, 1, 1),
             shared_memory=lowered.shared_memory_bytes,
             ensure_row_contiguous=False,
-            stream=mx.gpu,
+            stream=tk.gpu,
         )
     )
 
@@ -170,7 +177,7 @@ class ScanOp:
         self.graph = capture(combine, (((), ()),) * (2 * leaves))
         if len(self.graph.outputs) != leaves:
             raise UnsupportedGraphError("the combine must return one array per leaf")
-        self._function = mx.custom_function(self.forward)
+        self._function = tk.custom_function(self.forward)
         self._function.vjp(self._vjp)
         self._function.jvp(self._jvp)
         self._aggregate: ScanOp | None = None
@@ -179,13 +186,13 @@ class ScanOp:
         self._matvec = Compiled(matvec(leaves, transpose=False), Schedule())
         self._matvec_transposed = Compiled(matvec(leaves, transpose=True), Schedule())
 
-    def __call__(self, *leaves: mx.array) -> Leaves:
+    def __call__(self, *leaves: tk.array) -> Leaves:
         return _arrays(self._function(*leaves))
 
-    def combine(self, *inputs: mx.array) -> Leaves:
+    def combine(self, *inputs: tk.array) -> Leaves:
         return replay(self.graph, inputs)
 
-    def reverse(self, *leaves: mx.array) -> Leaves:
+    def reverse(self, *leaves: tk.array) -> Leaves:
         axis = self.axis
         return tuple(
             flip(result, axis)
@@ -197,7 +204,7 @@ class ScanOp:
             raise ScanContractError(f"expected {self.leaves} leaves, got {len(leaves)}")
         shape = tuple(leaves[0].shape)
         if any(
-            tuple(leaf.shape) != shape or leaf.dtype != mx.float32 for leaf in leaves
+            tuple(leaf.shape) != shape or leaf.dtype != tk.float32 for leaf in leaves
         ):
             raise ScanContractError("all leaves must be float32 arrays of one shape")
         if not 0 <= self.axis < len(shape):
@@ -208,11 +215,11 @@ class ScanOp:
             raise ScanContractError("element count exceeds signed 32-bit indexing")
         return shape
 
-    def forward(self, *leaves: mx.array) -> Leaves:
+    def forward(self, *leaves: tk.array) -> Leaves:
         shape = self.check(leaves)
         if prod(shape) == 0:
             return tuple(
-                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for _ in leaves
+                tk.zeros(shape, dtype=tk.float32, stream=tk.gpu) for _ in leaves
             )
         profiles = tuple(profile(leaf) for leaf in leaves)
         lowered = tile_kernel(self.graph, profiles, self.axis, self.schedule)
@@ -237,7 +244,7 @@ class ScanOp:
             )
         return self._affine
 
-    def jacobian(self, *args: mx.array) -> tuple[mx.array, ...]:
+    def jacobian(self, *args: tk.array) -> tuple[tk.array, ...]:
         """``J_y`` then ``J_x`` entries, row-major ``(output row, input column)``, per position."""
         size = self.leaves
         primals = list(args)
@@ -248,7 +255,7 @@ class ScanOp:
                 for row, primal in enumerate(primals)
             ]
             columns.append(
-                mx.jvp(lambda *a: list(self.combine(*a)), primals, tangents)[1]
+                tk.jvp(lambda *a: list(self.combine(*a)), primals, tangents)[1]
             )
         left = [columns[column][row] for row in range(size) for column in range(size)]
         right = [
@@ -258,9 +265,9 @@ class ScanOp:
 
     def _vjp(
         self,
-        primals: mx.array | Leaves,
-        cotangents: mx.array | Leaves,
-        outputs: mx.array | Leaves,
+        primals: tk.array | Leaves,
+        cotangents: tk.array | Leaves,
+        outputs: tk.array | Leaves,
     ) -> Leaves:
         x, g, y = _arrays(primals), _arrays(cotangents), _arrays(outputs)
         size, axis = self.leaves, self.axis
@@ -269,9 +276,9 @@ class ScanOp:
         tail = [view(leaf, axis, 1, length) for leaf in x]
         jacobians = _arrays(self._jacobian(*head, *tail))
         left, right = jacobians[: size * size], jacobians[size * size :]
-        pad = mx.zeros_like(view(x[0], axis, 0, 1))
+        pad = tk.zeros_like(view(x[0], axis, 0, 1))
         matrices = [
-            mx.concatenate([left[column * size + row], pad], axis=axis)
+            tk.concatenate([left[column * size + row], pad], axis=axis)
             for row in range(size)
             for column in range(size)
         ]
@@ -282,11 +289,11 @@ class ScanOp:
             )
         )
         return tuple(
-            mx.concatenate([view(gy[column], axis, 0, 1), gx_tail[column]], axis=axis)
+            tk.concatenate([view(gy[column], axis, 0, 1), gx_tail[column]], axis=axis)
             for column in range(size)
         )
 
-    def _jvp(self, primals: mx.array | Leaves, tangents: mx.array | Leaves) -> Leaves:
+    def _jvp(self, primals: tk.array | Leaves, tangents: tk.array | Leaves) -> Leaves:
         x, dx = _arrays(primals), _arrays(tangents)
         size, axis = self.leaves, self.axis
         length = x[0].shape[axis]
@@ -295,13 +302,13 @@ class ScanOp:
         tail = [view(leaf, axis, 1, length) for leaf in x]
         jacobians = _arrays(self._jacobian(*head, *tail))
         left, right = jacobians[: size * size], jacobians[size * size :]
-        pad = mx.zeros_like(view(x[0], axis, 0, 1))
-        matrices = [mx.concatenate([pad, entry], axis=axis) for entry in left]
+        pad = tk.zeros_like(view(x[0], axis, 0, 1))
+        matrices = [tk.concatenate([pad, entry], axis=axis) for entry in left]
         driven = _arrays(
             self._matvec(*right, *(view(leaf, axis, 1, length) for leaf in dx))
         )
         vectors = [
-            mx.concatenate([view(dx[row], axis, 0, 1), driven[row]], axis=axis)
+            tk.concatenate([view(dx[row], axis, 0, 1), driven[row]], axis=axis)
             for row in range(size)
         ]
         return self.affine(*matrices, *vectors)[size * size :]
@@ -316,7 +323,7 @@ def operation(
 ) -> ScanOp:
     size = len(paths)
 
-    def combine(*args: mx.array) -> tuple[mx.array, ...]:
+    def combine(*args: tk.array) -> tuple[tk.array, ...]:
         left = tree_unflatten(list(zip(paths, args[:size])))
         right = tree_unflatten(list(zip(paths, args[size:])))
         result = tree_flatten(fn(left, right))
