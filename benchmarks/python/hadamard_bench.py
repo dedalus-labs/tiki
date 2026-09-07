@@ -1,8 +1,8 @@
 import argparse
 
 import matplotlib
-import tiki as tk
 import numpy as np
+import tiki as tk
 from time_utils import measure_runtime
 
 matplotlib.use("Agg")

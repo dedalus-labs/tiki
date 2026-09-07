@@ -10,8 +10,8 @@
 #include <nanobind/stl/complex.h>
 #include <nanobind/stl/variant.h>
 
-#include "tiki/array.h"
 #include "python/src/convert.h"
+#include "tiki/array.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

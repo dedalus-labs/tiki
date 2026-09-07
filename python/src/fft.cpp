@@ -8,10 +8,10 @@
 #include <numeric>
 #include <string_view>
 
-#include "tiki/fft.h"
-#include "tiki/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/fft.h"
+#include "tiki/ops.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;
@@ -37,8 +37,8 @@ tk::fft::FFTNorm parse_norm(std::string_view norm, std::string_view op) {
 } // namespace
 
 void init_fft(nb::module_& parent_module) {
-  auto m = parent_module.def_submodule(
-      "fft", "tiki.fft: Fast Fourier Transforms.");
+  auto m =
+      parent_module.def_submodule("fft", "tiki.fft: Fast Fourier Transforms.");
   m.def(
       "fft",
       [](const tk::array& a,

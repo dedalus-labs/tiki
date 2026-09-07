@@ -1,8 +1,8 @@
 import math
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 import torch
 
 N_warmup = 10

@@ -3,9 +3,9 @@ import os
 import unittest
 from itertools import product
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 def tiki_ref_attn(q, k, v, scale=1.0, mask=None, sinks=None):

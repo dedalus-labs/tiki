@@ -7,8 +7,8 @@ import statistics
 import subprocess
 from pathlib import Path
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 from cuda.bindings import driver as cuda
 from cutlass import testing
 
@@ -184,7 +184,9 @@ def main() -> None:
                 reports.append(
                     benchmark_case(
                         shape,
-                        compiler.RowSchedule(threads_per_row=threads, rows_per_block=rows),
+                        compiler.RowSchedule(
+                            threads_per_row=threads, rows_per_block=rows
+                        ),
                         stream,
                         args.output,
                         args.reverse,

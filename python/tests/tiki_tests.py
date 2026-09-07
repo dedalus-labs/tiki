@@ -6,8 +6,8 @@ import sys
 import unittest
 from typing import Any, Callable, List, Tuple, Union
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 
 class TIKITestRunner(unittest.TestProgram):

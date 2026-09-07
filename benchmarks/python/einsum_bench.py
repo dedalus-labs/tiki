@@ -2,8 +2,8 @@
 
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 
 def timeit(fn, its=100, args=[]):

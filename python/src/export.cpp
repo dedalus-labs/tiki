@@ -10,11 +10,11 @@
 
 #include <fstream>
 
+#include "python/src/small_vector.h"
+#include "python/src/trees.h"
 #include "tiki/array.h"
 #include "tiki/export.h"
 #include "tiki/graph_utils.h"
-#include "python/src/small_vector.h"
-#include "python/src/trees.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

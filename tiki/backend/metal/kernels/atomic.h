@@ -42,8 +42,10 @@ tiki_atomic_load_explicit(device tiki_atomic<T>* object, size_t offset) {
 }
 
 template <typename T, enable_if_t<is_metal_atomic<T>, bool> = true>
-METAL_FUNC void
-tiki_atomic_store_explicit(device tiki_atomic<T>* object, T val, size_t offset) {
+METAL_FUNC void tiki_atomic_store_explicit(
+    device tiki_atomic<T>* object,
+    T val,
+    size_t offset) {
   atomic_store_explicit(&(object[offset].val), val, memory_order_relaxed);
 }
 
@@ -276,8 +278,10 @@ tiki_atomic_load_explicit(device tiki_atomic<T>* object, size_t offset) {
 }
 
 template <typename T, enable_if_t<!is_metal_atomic<T>, bool> = true>
-METAL_FUNC void
-tiki_atomic_store_explicit(device tiki_atomic<T>* object, T val, size_t offset) {
+METAL_FUNC void tiki_atomic_store_explicit(
+    device tiki_atomic<T>* object,
+    T val,
+    size_t offset) {
   tiki_atomic_update_and_store<T, __None<T>>(object, val, offset);
 }
 

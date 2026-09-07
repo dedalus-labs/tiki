@@ -8,10 +8,10 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "python/src/small_vector.h"
 #include "tiki/backend/metal/metal.h"
 #include "tiki/device.h"
 #include "tiki/memory.h"
-#include "python/src/small_vector.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

@@ -8,8 +8,8 @@
 #include <cmath>
 #include <limits>
 
-#include "tiki/tiki.h"
 #include "tiki/primitives.h"
+#include "tiki/tiki.h"
 
 using namespace tiki::core;
 

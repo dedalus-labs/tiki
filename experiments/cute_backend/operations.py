@@ -40,7 +40,9 @@ class Operation(Enum):
         try:
             return cls[name]
         except KeyError as error:
-            raise UnsupportedGraphError(f"unsupported Tiki primitive: {name}") from error
+            raise UnsupportedGraphError(
+                f"unsupported Tiki primitive: {name}"
+            ) from error
 
     def replay(self, inputs: tuple[tk.array, ...], shape: tuple[int, ...]) -> tk.array:
         if self.takes_shape:

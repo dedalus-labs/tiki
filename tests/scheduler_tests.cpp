@@ -2,8 +2,8 @@
 
 #include "doctest/doctest.h"
 
-#include "tiki/tiki.h"
 #include "tiki/scheduler.h"
+#include "tiki/tiki.h"
 
 using namespace tiki::core;
 

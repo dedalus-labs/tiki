@@ -57,7 +57,8 @@ if(WIN32)
   target_compile_definitions(tiki PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   # TODO: Remove after removing std::atomic_store/load.
   target_compile_definitions(
-    tiki PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
+    tiki
+    PUBLIC _SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
 endif()
 if(MSVC)
   # Unicode support in fmt does not compile in .cu files.
@@ -77,11 +78,11 @@ if(MSVC)
   # the default 65,535 section limit in COFF object files.
   target_compile_options(
     tiki PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/bigobj>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>)
+                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/bigobj>)
   # Use modern preprocessor, otherwise CCCL would complain.
   target_compile_options(
     tiki PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
-                $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
+                 $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>)
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)

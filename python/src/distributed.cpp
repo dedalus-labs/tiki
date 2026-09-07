@@ -7,10 +7,10 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "tiki/distributed/distributed.h"
-#include "tiki/distributed/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/distributed/distributed.h"
+#include "tiki/distributed/ops.h"
 
 #include <cstring>
 #include <sstream>

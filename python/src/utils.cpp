@@ -1,9 +1,9 @@
 // Copyright © 2024 Apple Inc.
 
 #include "python/src/utils.h"
+#include "python/src/convert.h"
 #include "tiki/ops.h"
 #include "tiki/utils.h"
-#include "python/src/convert.h"
 
 tk::array to_array(
     const ScalarOrArray& v,

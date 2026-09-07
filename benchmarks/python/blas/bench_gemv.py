@@ -5,8 +5,8 @@ import subprocess
 import time
 
 import matplotlib.pyplot as plt
-import tiki as tk
 import numpy as np
+import tiki as tk
 import torch
 
 results_dir = "./results"
@@ -108,7 +108,9 @@ def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
     )
 
     c_tiki = (
-        np.asarray(vec_tiki @ mat_tiki) if transpose else np.asarray(mat_tiki @ vec_tiki)
+        np.asarray(vec_tiki @ mat_tiki)
+        if transpose
+        else np.asarray(mat_tiki @ vec_tiki)
     )
     c_npy = (vec_npy @ mat_npy) if transpose else (mat_npy @ vec_npy)
 

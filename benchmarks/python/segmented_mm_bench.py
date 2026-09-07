@@ -3,8 +3,8 @@
 import argparse
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 TIKI_DTYPES = {
     "float16": tk.float16,

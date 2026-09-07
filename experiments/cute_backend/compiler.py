@@ -133,7 +133,9 @@ class Compiled:
 
     def launch(self, *inputs: tk.array) -> ArrayResult:
         if not tk.cuda.is_available():
-            raise BackendUnavailableError("compiler.compile execution requires Tiki CUDA")
+            raise BackendUnavailableError(
+                "compiler.compile execution requires Tiki CUDA"
+            )
         if tk.device_info(tk.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
         lowered = self.lower(*inputs)

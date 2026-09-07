@@ -5,12 +5,12 @@ import math
 import unittest
 from functools import partial
 
+import numpy as np
 import tiki as tk
 import tiki.nn as nn
 import tiki.optimizers as opt
 import tiki.utils
 import tiki_tests
-import numpy as np
 from tiki.utils import tree_flatten, tree_map, tree_unflatten
 
 try:

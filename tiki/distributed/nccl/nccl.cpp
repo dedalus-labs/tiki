@@ -59,15 +59,15 @@ constexpr int nccl_timeout = 300000; // miliseconds
   } while (0)
 
 #define TIKI_NCCL_TYPE_LIST(X) \
-  X(int8_t, ncclChar)         \
-  X(uint8_t, ncclUint8)       \
-  X(int32_t, ncclInt)         \
-  X(uint32_t, ncclUint32)     \
-  X(int64_t, ncclInt64)       \
-  X(uint64_t, ncclUint64)     \
-  X(float16_t, ncclHalf)      \
-  X(bfloat16_t, ncclBfloat16) \
-  X(float, ncclFloat)         \
+  X(int8_t, ncclChar)          \
+  X(uint8_t, ncclUint8)        \
+  X(int32_t, ncclInt)          \
+  X(uint32_t, ncclUint32)      \
+  X(int64_t, ncclInt64)        \
+  X(uint64_t, ncclUint64)      \
+  X(float16_t, ncclHalf)       \
+  X(bfloat16_t, ncclBfloat16)  \
+  X(float, ncclFloat)          \
   X(double, ncclDouble)
 
 template <class>
@@ -75,7 +75,7 @@ struct nccl_map {
   static constexpr bool ok = false; // default: unsupported
 };
 
-#define TIKI_DEF_NCCL_MAP(T, E)                 \
+#define TIKI_DEF_NCCL_MAP(T, E)                \
   template <>                                  \
   struct nccl_map<T> {                         \
     static constexpr bool ok = true;           \

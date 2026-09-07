@@ -71,7 +71,9 @@ def main() -> None:
         ("transpose_plain", compiler.Swizzle(0, 0, 5)),
         ("transpose_swizzle", compiler.Swizzle(5, 0, 5)),
     ):
-        function = compiler.compile(schedule=compiler.TransposeSchedule(swizzle=swizzle))(transpose)
+        function = compiler.compile(
+            schedule=compiler.TransposeSchedule(swizzle=swizzle)
+        )(transpose)
         save_case(name, function, (matrix,), args.output, args.execute)
 
 

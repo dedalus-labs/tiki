@@ -9,8 +9,8 @@ from collections.abc import Callable
 from statistics import median
 from time import perf_counter
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 from affine_scan import Pair, affine_scan
 from scan import associative_scan

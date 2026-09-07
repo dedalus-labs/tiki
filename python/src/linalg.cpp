@@ -8,8 +8,8 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "tiki/linalg.h"
 #include "python/src/small_vector.h"
+#include "tiki/linalg.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

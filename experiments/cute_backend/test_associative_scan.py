@@ -10,8 +10,8 @@ import sys
 import unittest
 from pathlib import Path
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 from associative_scan import (
     ScanContractError,

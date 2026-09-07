@@ -2,10 +2,10 @@
 import math
 import unittest
 
+import numpy as np
 import tiki as tk
 import tiki.nn.init as init
 import tiki_tests
-import numpy as np
 
 
 class TestInit(tiki_tests.TIKITestCase):

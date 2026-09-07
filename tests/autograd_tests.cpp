@@ -437,8 +437,10 @@ TEST_CASE("test op vjps") {
 
   // Test sqrt
   {
-    auto out = vjp(
-        [](array in) { return tiki::core::sqrt(in); }, array(4.0f), array(8.0f));
+    auto out =
+        vjp([](array in) { return tiki::core::sqrt(in); },
+            array(4.0f),
+            array(8.0f));
     CHECK_EQ(out.second.item<float>(), 2.0f);
   }
 

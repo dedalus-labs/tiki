@@ -2,9 +2,9 @@
 
 import unittest
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 class TestConstants(tiki_tests.TIKITestCase):

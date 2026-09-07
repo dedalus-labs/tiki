@@ -8,9 +8,9 @@ import threading
 from functools import partial, wraps
 from io import StringIO
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 class TestCompile(tiki_tests.TIKITestCase):

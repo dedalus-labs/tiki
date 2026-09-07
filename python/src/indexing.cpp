@@ -5,10 +5,10 @@
 
 #include <nanobind/ndarray.h>
 
-#include "tiki/dtype.h"
-#include "tiki/ops.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
+#include "tiki/dtype.h"
+#include "tiki/ops.h"
 
 bool is_none_slice(const nb::slice& in_slice) {
   return (

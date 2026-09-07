@@ -20,7 +20,7 @@ cublasComputeType_t dtype_to_compute_type(Dtype dtype) {
     case float32:
     case complex64:
       return tiki::core::env::enable_tf32() ? CUBLAS_COMPUTE_32F_FAST_TF32
-                                           : CUBLAS_COMPUTE_32F;
+                                            : CUBLAS_COMPUTE_32F;
     case float64:
       return CUBLAS_COMPUTE_64F;
     default:

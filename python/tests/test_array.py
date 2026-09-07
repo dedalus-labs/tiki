@@ -11,9 +11,9 @@ import weakref
 from copy import copy, deepcopy
 from itertools import permutations
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 try:
     import tensorflow as tf
@@ -2010,7 +2010,9 @@ class TestArray(tiki_tests.TIKITestCase):
             for f in [lambda x: x, lambda x: x.T]:
                 mv_mx = memoryview(f(a_mx))
                 mv_np = memoryview(f(a_np))
-                self.assertEqual(mv_mx.strides, mv_np.strides, f"{tiki_dtype}{np_dtype}")
+                self.assertEqual(
+                    mv_mx.strides, mv_np.strides, f"{tiki_dtype}{np_dtype}"
+                )
                 self.assertEqual(mv_mx.shape, mv_np.shape, f"{tiki_dtype}{np_dtype}")
                 # correct buffer format for 8 byte (unsigned) 'long long' is Q/q, see
                 # https://docs.python.org/3.10/library/struct.html#format-characters

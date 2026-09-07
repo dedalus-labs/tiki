@@ -9,7 +9,8 @@ namespace tk = tiki::core;
 
 int main() {
   // To use Metal debugging and profiling:
-  // 1. Build with the TIKI_METAL_DEBUG CMake option (i.e. -DTIKI_METAL_DEBUG=ON).
+  // 1. Build with the TIKI_METAL_DEBUG CMake option (i.e.
+  // -DTIKI_METAL_DEBUG=ON).
   // 2. Run with MTL_CAPTURE_ENABLED=1.
   tk::metal::start_capture("tiki_trace.gputrace");
 

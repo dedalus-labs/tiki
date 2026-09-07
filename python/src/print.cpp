@@ -4,8 +4,8 @@
 
 #include <nanobind/typing.h>
 
-#include "tiki/utils.h"
 #include "python/src/utils.h"
+#include "tiki/utils.h"
 
 #include "tiki/tiki.h"
 

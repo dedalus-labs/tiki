@@ -79,12 +79,13 @@ if(TIKI_BUILD_ACCELERATE)
   target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/bnns.cpp)
 else()
   target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simd_fp16.cpp
-                             ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simd_bf16.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/gemms/simd_bf16.cpp)
 endif()
 
 if(IOS)
-  target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../no_cpu/compiled.cpp)
+  target_sources(tiki
+                 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../no_cpu/compiled.cpp)
 else()
   target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
-                             ${CMAKE_CURRENT_SOURCE_DIR}/jit_compiler.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/jit_compiler.cpp)
 endif()

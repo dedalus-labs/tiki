@@ -7,8 +7,8 @@ from copy import copy
 from functools import partial
 
 import matplotlib.pyplot as plt
-import tiki as tk
 import numpy as np
+import tiki as tk
 import torch
 from matplotlib.ticker import FuncFormatter
 
@@ -142,7 +142,15 @@ def build_case(length, density, np_dtype, torch_dtype):
     if not np.allclose(np.array(mx_out), torch_out.cpu().numpy(), atol=atol):
         raise AssertionError("masked_scatter results diverged between Tiki and Torch")
 
-    return (self_tiki, mask_tiki, src_tiki, self_torch, mask_torch, src_torch, true_count)
+    return (
+        self_tiki,
+        mask_tiki,
+        src_tiki,
+        self_torch,
+        mask_torch,
+        src_torch,
+        true_count,
+    )
 
 
 def bench_case(length, density, dtype):

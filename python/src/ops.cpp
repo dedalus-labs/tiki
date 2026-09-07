@@ -13,13 +13,13 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "tiki/einsum.h"
-#include "tiki/ops.h"
-#include "tiki/utils.h"
 #include "python/src/convert.h"
 #include "python/src/load.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/einsum.h"
+#include "tiki/ops.h"
+#include "tiki/utils.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

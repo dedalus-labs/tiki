@@ -84,7 +84,9 @@ if __name__ == "__main__":
 
     if args.tiki_dtypes:
         compare_filtered = lambda x: (
-            compare_tiki_dtypes(x.split() + rest, args.tiki_dtypes[0], args.tiki_dtypes[1])
+            compare_tiki_dtypes(
+                x.split() + rest, args.tiki_dtypes[0], args.tiki_dtypes[1]
+            )
             if _filter(x)
             else None
         )

@@ -8,12 +8,12 @@
 #include <unordered_map>
 #include <vector>
 
-#include "tiki/io/load.h"
-#include "tiki/ops.h"
-#include "tiki/utils.h"
 #include "python/src/load.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/io/load.h"
+#include "tiki/ops.h"
+#include "tiki/utils.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

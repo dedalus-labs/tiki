@@ -5,8 +5,8 @@ import unittest
 from collections.abc import Callable
 from typing import Any
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 from tiki.utils import tree_flatten, tree_unflatten
 
 from scan import associative_scan

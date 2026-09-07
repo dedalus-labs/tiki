@@ -7,11 +7,11 @@
 
 #include <chrono>
 
-#include "tiki/ops.h"
-#include "tiki/random.h"
 #include "python/src/random.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/ops.h"
+#include "tiki/random.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

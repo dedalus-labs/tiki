@@ -2,10 +2,10 @@
 
 import unittest
 
+import numpy as np
 import tiki as tk
 import tiki.nn as nn
 import tiki_tests
-import numpy as np
 
 
 class TestLosses(tiki_tests.TIKITestCase):

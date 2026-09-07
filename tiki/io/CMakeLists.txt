@@ -24,7 +24,7 @@ if(TIKI_BUILD_GGUF)
   target_compile_options(gguflib PRIVATE -UNDEBUG)
   target_link_libraries(tiki PRIVATE $<BUILD_INTERFACE:gguflib>)
   target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/gguf.cpp
-                             ${CMAKE_CURRENT_SOURCE_DIR}/gguf_quants.cpp)
+                              ${CMAKE_CURRENT_SOURCE_DIR}/gguf_quants.cpp)
 else()
   target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_gguf.cpp)
 endif()

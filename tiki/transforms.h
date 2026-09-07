@@ -214,7 +214,8 @@ custom_function(
  * Return a function that behaves exactly like `fun` but if the vjp of the
  * results is computed `fun_vjp` will be used instead of `vjp(fun, ...)` .
  */
-TIKI_API std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
+TIKI_API std::function<std::vector<array>(const std::vector<array>&)>
+custom_vjp(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::function<std::vector<array>(
         const std::vector<array>&,
@@ -225,7 +226,7 @@ TIKI_API std::function<std::vector<array>(const std::vector<array>&)> custom_vjp
  * Checkpoint the gradient of a function. Namely, discard all intermediate
  * state and recalculate it when we need to compute the gradient.
  */
-TIKI_API std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
-    std::function<std::vector<array>(const std::vector<array>&)> fun);
+TIKI_API std::function<std::vector<array>(const std::vector<array>&)>
+checkpoint(std::function<std::vector<array>(const std::vector<array>&)> fun);
 
 } // namespace tiki::core

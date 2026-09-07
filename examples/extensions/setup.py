@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
-from tiki import extension
 from setuptools import setup
+from tiki import extension
 
 if __name__ == "__main__":
     setup(

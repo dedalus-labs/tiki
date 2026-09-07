@@ -161,7 +161,8 @@ struct QuantizedBlockLoader {
   TIKI_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
   TIKI_MTL_CONST short n_reads =
       (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
-  TIKI_MTL_CONST short group_steps = group_size < BCOLS ? 1 : group_size / BCOLS;
+  TIKI_MTL_CONST short group_steps =
+      group_size < BCOLS ? 1 : group_size / BCOLS;
   TIKI_MTL_CONST short scale_step = group_size < BCOLS ? BCOLS / group_size : 1;
 
   static_assert(

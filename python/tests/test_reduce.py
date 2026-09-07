@@ -2,9 +2,9 @@
 
 from itertools import combinations, permutations
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 class TestReduce(tiki_tests.TIKITestCase):

@@ -2,8 +2,8 @@
 
 import unittest
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 from scan import associative_scan
 

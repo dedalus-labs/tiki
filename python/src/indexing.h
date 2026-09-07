@@ -4,8 +4,8 @@
 
 #include <nanobind/nanobind.h>
 
-#include "tiki/array.h"
 #include "python/src/utils.h"
+#include "tiki/array.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

@@ -13,13 +13,13 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
 
-#include "tiki/backend/metal/metal.h"
-#include "tiki/utils.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/backend/metal/metal.h"
+#include "tiki/utils.h"
 
 #include "tiki/tiki.h"
 

@@ -4,9 +4,9 @@ import itertools
 import math
 import unittest
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 class TestLinalg(tiki_tests.TIKITestCase):

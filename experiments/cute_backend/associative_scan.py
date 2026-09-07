@@ -27,9 +27,16 @@ from typing import Any
 import tiki as tk
 from tiki.utils import tree_flatten, tree_unflatten
 
+from compiler import (
+    BackendUnavailableError,
+    Compiled,
+    Schedule,
+    _arrays,
+    binary,
+    profile,
+)
 from graph import Graph, Profile, UnsupportedGraphError, capture, replay
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
-from compiler import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
 
 Leaves = tuple[tk.array, ...]
 FlatCombine = Callable[..., tuple[tk.array, ...]]

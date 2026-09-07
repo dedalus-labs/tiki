@@ -53,7 +53,8 @@ class TestTreeUtils(tiki_tests.TIKITestCase):
         # empty dict merging
         self.assertEqual({}, tiki.utils.tree_merge({}, {}))
         self.assertEqual(
-            [{"a": 1, "b": 2}, {}], tiki.utils.tree_merge([{"a": 1}, {}], [{"b": 2}, {}])
+            [{"a": 1, "b": 2}, {}],
+            tiki.utils.tree_merge([{"a": 1}, {}], [{"b": 2}, {}]),
         )
         self.assertEqual({"a": {}}, tiki.utils.tree_merge({"a": {}}, {"a": {}}))
         self.assertEqual(

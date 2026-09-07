@@ -5,8 +5,8 @@
 import statistics
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 WARMUP = 5
 SAMPLES = 30

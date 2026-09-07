@@ -5,8 +5,8 @@
 #include <cmath>
 #include <limits>
 
-#include "tiki/tiki.h"
 #include "tiki/ops.h"
+#include "tiki/tiki.h"
 
 using namespace tiki::core;
 using namespace tiki::core::linalg;

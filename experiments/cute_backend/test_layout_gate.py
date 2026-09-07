@@ -6,8 +6,8 @@ sm_90 and an Tiki build that exposes array strides.
 
 import unittest
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 
 import compiler
 from graph import ArrayFunction, Value, dense_strides
@@ -67,7 +67,9 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # Witness: the elementwise demo graph at (513,) contains no logical
     # coordinate and only flat memrefs.
     def test_dense_mlir_is_unchanged(self):
-        lowered = compiler.specialize(affine, compiler.Schedule(), (((513,), (1,)), ((513,), (1,))))
+        lowered = compiler.specialize(
+            affine, compiler.Schedule(), (((513,), (1,)), ((513,), (1,)))
+        )
         self.assertNotIn("%logical", lowered.mlir)
         self.assertIn('"(513):(1)"', lowered.mlir)
         self.assertNotIn(":(1,", lowered.mlir)

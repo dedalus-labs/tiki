@@ -114,8 +114,8 @@ class DnnGraph : public fe::graph::Graph {
     return attrs;
   }
 
-  // Create a cuDNN tensor description from Tiki array |x|, and transpose it from
-  // NHWC layout to NCHW.
+  // Create a cuDNN tensor description from Tiki array |x|, and transpose it
+  // from NHWC layout to NCHW.
   auto& tensor_nchw(
       std::shared_ptr<fe::graph::Tensor_attributes>& attrs,
       int64_t uid,

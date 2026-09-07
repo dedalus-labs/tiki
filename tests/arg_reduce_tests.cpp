@@ -4,8 +4,8 @@
 
 #include "doctest/doctest.h"
 
-#include "tiki/tiki.h"
 #include "tiki/primitives.h"
+#include "tiki/tiki.h"
 
 using namespace tiki::core;
 

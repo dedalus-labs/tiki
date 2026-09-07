@@ -73,7 +73,8 @@ TIKI_API array as_strided(
 TIKI_API array copy(array a, StreamOrDevice s = {});
 
 /** Fill an array of the given shape with the given value(s). */
-TIKI_API array full(Shape shape, array vals, Dtype dtype, StreamOrDevice s = {});
+TIKI_API array
+full(Shape shape, array vals, Dtype dtype, StreamOrDevice s = {});
 TIKI_API array full(Shape shape, array vals, StreamOrDevice s = {});
 template <typename T>
 array full(Shape shape, T val, Dtype dtype, StreamOrDevice s = {}) {
@@ -503,7 +504,8 @@ array operator<(const array& a, T b) {
 }
 
 /** Returns bool array with (a <= b) element-wise. */
-TIKI_API array less_equal(const array& a, const array& b, StreamOrDevice s = {});
+TIKI_API array
+less_equal(const array& a, const array& b, StreamOrDevice s = {});
 inline array operator<=(const array& a, const array& b) {
   return less_equal(a, b);
 }
@@ -935,7 +937,8 @@ logical_and(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator&&(const array& a, const array& b);
 
 /** Logical or of two arrays */
-TIKI_API array logical_or(const array& a, const array& b, StreamOrDevice s = {});
+TIKI_API array
+logical_or(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator||(const array& a, const array& b);
 
 /** Logical exclusive or of two arrays */
@@ -1137,7 +1140,8 @@ take(const array& a, const array& indices, int axis, StreamOrDevice s = {});
 TIKI_API array take(const array& a, int index, int axis, StreamOrDevice s = {});
 
 /** Take array entries at the given indices treating the array as flattened. */
-TIKI_API array take(const array& a, const array& indices, StreamOrDevice s = {});
+TIKI_API array
+take(const array& a, const array& indices, StreamOrDevice s = {});
 TIKI_API array take(const array& a, int index, StreamOrDevice s = {});
 
 /** Take array entries given indices along the axis */
@@ -1767,7 +1771,8 @@ bitwise_and(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator&(const array& a, const array& b);
 
 /** Bitwise inclusive or. */
-TIKI_API array bitwise_or(const array& a, const array& b, StreamOrDevice s = {});
+TIKI_API array
+bitwise_or(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator|(const array& a, const array& b);
 
 /** Bitwise exclusive or. */
@@ -1776,7 +1781,8 @@ bitwise_xor(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator^(const array& a, const array& b);
 
 /** Shift bits to the left. */
-TIKI_API array left_shift(const array& a, const array& b, StreamOrDevice s = {});
+TIKI_API array
+left_shift(const array& a, const array& b, StreamOrDevice s = {});
 TIKI_API array operator<<(const array& a, const array& b);
 
 /** Shift bits to the right. */

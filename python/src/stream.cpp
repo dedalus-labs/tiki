@@ -7,9 +7,9 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 
+#include "python/src/random.h"
 #include "tiki/stream.h"
 #include "tiki/utils.h"
-#include "python/src/random.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

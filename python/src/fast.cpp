@@ -8,10 +8,10 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "tiki/fast.h"
-#include "tiki/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/fast.h"
+#include "tiki/ops.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;
@@ -115,8 +115,7 @@ tk::CompileOptions parse_compile_options(const nb::object& obj) {
 } // namespace
 
 void init_fast(nb::module_& parent_module) {
-  auto m =
-      parent_module.def_submodule("fast", "tiki.fast: fast operations");
+  auto m = parent_module.def_submodule("fast", "tiki.fast: fast operations");
 
   m.def(
       "rms_norm",

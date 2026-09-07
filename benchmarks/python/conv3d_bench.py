@@ -1,8 +1,8 @@
 import math
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 import torch
 
 N_warmup = 2
@@ -102,7 +102,14 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
             f"with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
         )
 
-    return time_tiki, time_torch, tiki_peak_mb, tiki_active_mb, pt_current_mb, pt_driver_mb
+    return (
+        time_tiki,
+        time_torch,
+        tiki_peak_mb,
+        tiki_active_mb,
+        pt_current_mb,
+        pt_driver_mb,
+    )
 
 
 if __name__ == "__main__":

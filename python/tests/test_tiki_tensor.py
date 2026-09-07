@@ -1,9 +1,9 @@
 # Copyright © 2026 Dedalus Labs, Inc.
 
+import numpy as np
 import tiki as tk
 import tiki.layout as tl
 import tiki_tests
-import numpy as np
 from tiki.layout.tensor import (
     expand,
     from_array,

@@ -157,5 +157,5 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/kernels)
 
-target_compile_definitions(tiki
-                           PRIVATE METAL_PATH="${TIKI_METAL_PATH}/tiki.metallib")
+target_compile_definitions(
+  tiki PRIVATE METAL_PATH="${TIKI_METAL_PATH}/tiki.metallib")

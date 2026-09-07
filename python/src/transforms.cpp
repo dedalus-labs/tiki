@@ -13,15 +13,15 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "python/src/small_vector.h"
+#include "python/src/tiki_func.h"
+#include "python/src/trees.h"
 #include "tiki/array.h"
 #include "tiki/compile.h"
 #include "tiki/compile_impl.h"
 #include "tiki/transforms.h"
 #include "tiki/transforms_impl.h"
 #include "tiki/utils.h"
-#include "python/src/tiki_func.h"
-#include "python/src/small_vector.h"
-#include "python/src/trees.h"
 
 namespace tk = tiki::core;
 namespace nb = nanobind;

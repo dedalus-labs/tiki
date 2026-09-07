@@ -108,13 +108,14 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/unary)
 
 # fp4 is not available on < 12.8
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 12.8.0)
-  target_include_directories(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
+  target_include_directories(tiki
+                             PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/)
   target_sources(tiki
                  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/no_qqmm_impl.cpp)
 else()
   target_sources(
     tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/quantized/qqmm_impl.cpp
-                ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
+                 ${CMAKE_CURRENT_SOURCE_DIR}/quantized/cublas_qqmm.cpp)
 endif()
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.9.0)
@@ -202,7 +203,7 @@ if(NOT DEFINED TIKI_CUDA_ARCHITECTURES)
 endif()
 message(STATUS "CUDA architectures: ${TIKI_CUDA_ARCHITECTURES}")
 set_target_properties(tiki PROPERTIES CUDA_ARCHITECTURES
-                                     "${TIKI_CUDA_ARCHITECTURES}")
+                                      "${TIKI_CUDA_ARCHITECTURES}")
 
 # Configure Windows CUDA DLL loading.
 if(WIN32)

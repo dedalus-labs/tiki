@@ -122,23 +122,28 @@ struct _TIKI_Float16 {
   }
 
 #define half_binop_helper(__op__, __operator__, otype, itype, ctype) \
-  inline otype __operator__(_TIKI_Float16 lhs, itype rhs) {           \
+  inline otype __operator__(_TIKI_Float16 lhs, itype rhs) {          \
     return static_cast<ctype>(lhs) __op__ static_cast<ctype>(rhs);   \
   }                                                                  \
-  inline otype __operator__(itype lhs, _TIKI_Float16 rhs) {           \
+  inline otype __operator__(itype lhs, _TIKI_Float16 rhs) {          \
     return static_cast<ctype>(lhs) __op__ static_cast<ctype>(rhs);   \
   }
 
 // Operators
-#define half_binop(__op__, __operator__)                                      \
-  half_binop_base(                                                            \
-      __op__, __operator__, _TIKI_Float16, _TIKI_Float16, _TIKI_Float16, float); \
-  half_binop_helper(__op__, __operator__, float, float, float);               \
-  half_binop_helper(__op__, __operator__, double, double, double);            \
-  half_binop_helper(__op__, __operator__, _TIKI_Float16, bool, float);         \
-  half_binop_helper(__op__, __operator__, _TIKI_Float16, int32_t, float);      \
-  half_binop_helper(__op__, __operator__, _TIKI_Float16, uint32_t, float);     \
-  half_binop_helper(__op__, __operator__, _TIKI_Float16, int64_t, float);      \
+#define half_binop(__op__, __operator__)                                   \
+  half_binop_base(                                                         \
+      __op__,                                                              \
+      __operator__,                                                        \
+      _TIKI_Float16,                                                       \
+      _TIKI_Float16,                                                       \
+      _TIKI_Float16,                                                       \
+      float);                                                              \
+  half_binop_helper(__op__, __operator__, float, float, float);            \
+  half_binop_helper(__op__, __operator__, double, double, double);         \
+  half_binop_helper(__op__, __operator__, _TIKI_Float16, bool, float);     \
+  half_binop_helper(__op__, __operator__, _TIKI_Float16, int32_t, float);  \
+  half_binop_helper(__op__, __operator__, _TIKI_Float16, uint32_t, float); \
+  half_binop_helper(__op__, __operator__, _TIKI_Float16, int64_t, float);  \
   half_binop_helper(__op__, __operator__, _TIKI_Float16, uint64_t, float);
 
 half_binop(+, operator+);
@@ -149,14 +154,14 @@ half_binop(/, operator/);
 #undef half_binop
 
 // Comparison ops
-#define half_compop(__op__, __operator__)                             \
-  half_binop_base(                                                    \
+#define half_compop(__op__, __operator__)                               \
+  half_binop_base(                                                      \
       __op__, __operator__, bool, _TIKI_Float16, _TIKI_Float16, float); \
-  half_binop_helper(__op__, __operator__, bool, float, float);        \
-  half_binop_helper(__op__, __operator__, bool, double, double);      \
-  half_binop_helper(__op__, __operator__, bool, int32_t, float);      \
-  half_binop_helper(__op__, __operator__, bool, uint32_t, float);     \
-  half_binop_helper(__op__, __operator__, bool, int64_t, float);      \
+  half_binop_helper(__op__, __operator__, bool, float, float);          \
+  half_binop_helper(__op__, __operator__, bool, double, double);        \
+  half_binop_helper(__op__, __operator__, bool, int32_t, float);        \
+  half_binop_helper(__op__, __operator__, bool, uint32_t, float);       \
+  half_binop_helper(__op__, __operator__, bool, int64_t, float);        \
   half_binop_helper(__op__, __operator__, bool, uint64_t, float);
 
 half_compop(>, operator>);
@@ -174,14 +179,14 @@ inline _TIKI_Float16 operator-(_TIKI_Float16 lhs) {
 }
 
 // Inplace ops
-#define half_inplace_op(__op__, __operator__)                              \
+#define half_inplace_op(__op__, __operator__)                                \
   inline _TIKI_Float16& __operator__(_TIKI_Float16& lhs, const float& rhs) { \
-    lhs = lhs __op__ rhs;                                                  \
-    return lhs;                                                            \
-  }                                                                        \
-  inline float& __operator__(float& lhs, _TIKI_Float16 rhs) {               \
-    lhs = lhs __op__ rhs;                                                  \
-    return lhs;                                                            \
+    lhs = lhs __op__ rhs;                                                    \
+    return lhs;                                                              \
+  }                                                                          \
+  inline float& __operator__(float& lhs, _TIKI_Float16 rhs) {                \
+    lhs = lhs __op__ rhs;                                                    \
+    return lhs;                                                              \
   }
 
 half_inplace_op(+, operator+=);
@@ -193,21 +198,21 @@ half_inplace_op(/, operator/=);
 
 // Bitwise ops
 
-#define half_bitop(__op__, __operator__)                                 \
+#define half_bitop(__op__, __operator__)                                    \
   inline _TIKI_Float16 __operator__(_TIKI_Float16 lhs, _TIKI_Float16 rhs) { \
-    _TIKI_Float16 out;                                                    \
-    out.bits_ = lhs.bits_ __op__ rhs.bits_;                              \
-    return out;                                                          \
-  }                                                                      \
-  inline _TIKI_Float16 __operator__(_TIKI_Float16 lhs, uint16_t rhs) {     \
-    _TIKI_Float16 out;                                                    \
-    out.bits_ = lhs.bits_ __op__ rhs;                                    \
-    return out;                                                          \
-  }                                                                      \
-  inline _TIKI_Float16 __operator__(uint16_t lhs, _TIKI_Float16 rhs) {     \
-    _TIKI_Float16 out;                                                    \
-    out.bits_ = lhs __op__ rhs.bits_;                                    \
-    return out;                                                          \
+    _TIKI_Float16 out;                                                      \
+    out.bits_ = lhs.bits_ __op__ rhs.bits_;                                 \
+    return out;                                                             \
+  }                                                                         \
+  inline _TIKI_Float16 __operator__(_TIKI_Float16 lhs, uint16_t rhs) {      \
+    _TIKI_Float16 out;                                                      \
+    out.bits_ = lhs.bits_ __op__ rhs;                                       \
+    return out;                                                             \
+  }                                                                         \
+  inline _TIKI_Float16 __operator__(uint16_t lhs, _TIKI_Float16 rhs) {      \
+    _TIKI_Float16 out;                                                      \
+    out.bits_ = lhs __op__ rhs.bits_;                                       \
+    return out;                                                             \
   }
 
 half_bitop(|, operator|);
@@ -216,14 +221,14 @@ half_bitop(^, operator^);
 
 #undef half_bitop
 
-#define half_inplace_bitop(__op__, __operator__)                           \
+#define half_inplace_bitop(__op__, __operator__)                              \
   inline _TIKI_Float16& __operator__(_TIKI_Float16& lhs, _TIKI_Float16 rhs) { \
-    lhs.bits_ = lhs.bits_ __op__ rhs.bits_;                                \
-    return lhs;                                                            \
-  }                                                                        \
-  inline _TIKI_Float16& __operator__(_TIKI_Float16& lhs, uint16_t rhs) {     \
-    lhs.bits_ = lhs.bits_ __op__ rhs;                                      \
-    return lhs;                                                            \
+    lhs.bits_ = lhs.bits_ __op__ rhs.bits_;                                   \
+    return lhs;                                                               \
+  }                                                                           \
+  inline _TIKI_Float16& __operator__(_TIKI_Float16& lhs, uint16_t rhs) {      \
+    lhs.bits_ = lhs.bits_ __op__ rhs;                                         \
+    return lhs;                                                               \
   }
 
 half_inplace_bitop(|, operator|=);

@@ -32,14 +32,14 @@
 
 #endif
 
-#define INSTANTIATE_LAPACK_REAL(FUNC)                        \
-  template <typename T, typename... Args>                    \
-  void FUNC(Args... args) {                                  \
-    if constexpr (std::is_same_v<T, float>) {                \
+#define INSTANTIATE_LAPACK_REAL(FUNC)                         \
+  template <typename T, typename... Args>                     \
+  void FUNC(Args... args) {                                   \
+    if constexpr (std::is_same_v<T, float>) {                 \
       TIKI_LAPACK_FUNC(s##FUNC)(std::forward<Args>(args)...); \
-    } else if constexpr (std::is_same_v<T, double>) {        \
+    } else if constexpr (std::is_same_v<T, double>) {         \
       TIKI_LAPACK_FUNC(d##FUNC)(std::forward<Args>(args)...); \
-    }                                                        \
+    }                                                         \
   }
 
 INSTANTIATE_LAPACK_REAL(geqrf)
@@ -54,9 +54,9 @@ INSTANTIATE_LAPACK_REAL(trtri)
   template <typename T, typename... Args>                           \
   void FUNC(Args... args) {                                         \
     if constexpr (std::is_same_v<T, std::complex<float>>) {         \
-      TIKI_LAPACK_FUNC(c##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(c##FUNC)(std::forward<Args>(args)...);       \
     } else if constexpr (std::is_same_v<T, std::complex<double>>) { \
-      TIKI_LAPACK_FUNC(z##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(z##FUNC)(std::forward<Args>(args)...);       \
     }                                                               \
   }
 
@@ -66,13 +66,13 @@ INSTANTIATE_LAPACK_COMPLEX(heevd)
   template <typename T, typename... Args>                           \
   void FUNC(Args... args) {                                         \
     if constexpr (std::is_same_v<T, float>) {                       \
-      TIKI_LAPACK_FUNC(s##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(s##FUNC)(std::forward<Args>(args)...);       \
     } else if constexpr (std::is_same_v<T, double>) {               \
-      TIKI_LAPACK_FUNC(d##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(d##FUNC)(std::forward<Args>(args)...);       \
     } else if constexpr (std::is_same_v<T, std::complex<float>>) {  \
-      TIKI_LAPACK_FUNC(c##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(c##FUNC)(std::forward<Args>(args)...);       \
     } else if constexpr (std::is_same_v<T, std::complex<double>>) { \
-      TIKI_LAPACK_FUNC(z##FUNC)(std::forward<Args>(args)...);        \
+      TIKI_LAPACK_FUNC(z##FUNC)(std::forward<Args>(args)...);       \
     }                                                               \
   }
 

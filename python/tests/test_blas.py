@@ -4,9 +4,9 @@ import math
 import unittest
 from itertools import permutations
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 # Ignore matmul warnings.
 np.seterr(divide="ignore", over="ignore", invalid="ignore")
@@ -393,8 +393,12 @@ class TestBlas(tiki_tests.TIKITestCase):
                         np_dtype=np_dtype,
                         np_mat_f=(lambda mat_npy: np.broadcast_to(mat_npy, shape_mat)),
                         np_vec_f=(lambda vec_npy: np.broadcast_to(vec_npy, shape_vec)),
-                        tiki_mat_f=(lambda mat_tiki: tk.broadcast_to(mat_tiki, shape_mat)),
-                        tiki_vec_f=(lambda vec_tiki: tk.broadcast_to(vec_tiki, shape_vec)),
+                        tiki_mat_f=(
+                            lambda mat_tiki: tk.broadcast_to(mat_tiki, shape_mat)
+                        ),
+                        tiki_vec_f=(
+                            lambda vec_tiki: tk.broadcast_to(vec_tiki, shape_vec)
+                        ),
                     )
 
                 # Different broadcasts vec mat
@@ -410,8 +414,12 @@ class TestBlas(tiki_tests.TIKITestCase):
                         mat_first=False,
                         np_mat_f=lambda mat_npy: np.broadcast_to(mat_npy, shape_mat),
                         np_vec_f=lambda vec_npy: np.broadcast_to(vec_npy, shape_vec),
-                        tiki_mat_f=lambda mat_tiki: tk.broadcast_to(mat_tiki, shape_mat),
-                        tiki_vec_f=lambda vec_tiki: tk.broadcast_to(vec_tiki, shape_vec),
+                        tiki_mat_f=lambda mat_tiki: tk.broadcast_to(
+                            mat_tiki, shape_mat
+                        ),
+                        tiki_vec_f=lambda vec_tiki: tk.broadcast_to(
+                            vec_tiki, shape_vec
+                        ),
                     )
 
     def test_matrix_vector_attn(self):

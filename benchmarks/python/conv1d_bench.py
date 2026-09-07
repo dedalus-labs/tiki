@@ -4,8 +4,8 @@ import os
 import subprocess
 import time
 
-import tiki as tk
 import numpy as np
+import tiki as tk
 import torch
 
 device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])

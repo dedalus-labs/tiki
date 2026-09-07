@@ -4,10 +4,10 @@ import os
 import tempfile
 import unittest
 
+import numpy as np
 import tiki as tk
 import tiki.nn as nn
 import tiki_tests
-import numpy as np
 from tiki.utils import tree_flatten, tree_map, tree_reduce
 
 try:
@@ -868,7 +868,9 @@ class TestLayers(tiki_tests.TIKITestCase):
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
 
-            self.assertTrue(tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4)
+            )
             self.assertTrue(
                 tk.allclose(
                     tiki_bn.running_mean,
@@ -893,7 +895,9 @@ class TestLayers(tiki_tests.TIKITestCase):
             torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
-            self.assertTrue(tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4)
+            )
 
         check_batch_norm((5, 4), torch.nn.BatchNorm1d)
         check_batch_norm(

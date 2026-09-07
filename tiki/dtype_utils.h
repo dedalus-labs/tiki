@@ -13,8 +13,8 @@ namespace tiki::core {
 const char* dtype_to_string(Dtype arg);
 
 #define TIKI_INTERNAL_DTYPE_SWITCH_CASE(DTYPE, TYPE) \
-  case DTYPE:                                       \
-    f(type_identity<TYPE>{});                       \
+  case DTYPE:                                        \
+    f(type_identity<TYPE>{});                        \
     break
 
 #define TIKI_INTERNAL_DTYPE_SWITCH_INTS()            \

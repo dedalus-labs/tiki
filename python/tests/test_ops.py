@@ -5,9 +5,9 @@ import os
 import unittest
 from itertools import permutations, product
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 def np_wrap_between(x, a):

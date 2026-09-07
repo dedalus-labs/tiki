@@ -1,9 +1,9 @@
 # Copyright © 2024 Apple Inc.
 
 import matplotlib
-import tiki as tk
 import numpy as np
 import sympy
+import tiki as tk
 import torch
 from time_utils import measure_runtime
 

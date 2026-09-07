@@ -10,7 +10,9 @@ import tiki as tk
 import compiler
 
 
-@compiler.compile(backend="cute", schedule=compiler.Schedule(threads=128, elements_per_thread=4))
+@compiler.compile(
+    backend="cute", schedule=compiler.Schedule(threads=128, elements_per_thread=4)
+)
 def affine(x: tk.array, y: tk.array) -> tk.array:
     return x * y + 2.0 - y
 

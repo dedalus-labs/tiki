@@ -1,12 +1,16 @@
 cmake_minimum_required(VERSION 3.25)
 
 if(NOT TIKI_VERSION)
-  file(STRINGS "tiki/version.h" _tiki_h_version REGEX "^#define TIKI_VERSION_.*$")
-  string(REGEX MATCH "#define TIKI_VERSION_MAJOR ([0-9]+)" _ "${_tiki_h_version}")
+  file(STRINGS "tiki/version.h" _tiki_h_version
+       REGEX "^#define TIKI_VERSION_.*$")
+  string(REGEX MATCH "#define TIKI_VERSION_MAJOR ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_major ${CMAKE_MATCH_1})
-  string(REGEX MATCH "#define TIKI_VERSION_MINOR ([0-9]+)" _ "${_tiki_h_version}")
+  string(REGEX MATCH "#define TIKI_VERSION_MINOR ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_minor ${CMAKE_MATCH_1})
-  string(REGEX MATCH "#define TIKI_VERSION_PATCH ([0-9]+)" _ "${_tiki_h_version}")
+  string(REGEX MATCH "#define TIKI_VERSION_PATCH ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_patch ${CMAKE_MATCH_1})
   set(TIKI_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
   set(TIKI_VERSION ${TIKI_PROJECT_VERSION})
@@ -200,7 +204,8 @@ if(TIKI_BUILD_METAL)
     if(MACOS_SDK_VERSION VERSION_LESS 14.0)
       message(
         FATAL_ERROR
-          "Tiki requires macOS SDK >= 14.0 to be built with TIKI_BUILD_METAL=ON")
+          "Tiki requires macOS SDK >= 14.0 to be built with TIKI_BUILD_METAL=ON"
+      )
     endif()
     message(STATUS "Building with macOS ${MACOS_SDK_VERSION} SDK")
 
@@ -232,8 +237,9 @@ if(TIKI_BUILD_METAL)
   FetchContent_MakeAvailable(metal_cpp)
   target_include_directories(
     tiki PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
-               $<INSTALL_INTERFACE:include/metal_cpp>)
-  target_link_libraries(tiki PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+                $<INSTALL_INTERFACE:include/metal_cpp>)
+  target_link_libraries(tiki PUBLIC ${METAL_LIB} ${FOUNDATION_LIB}
+                                    ${QUARTZ_LIB})
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -305,8 +311,8 @@ if(TIKI_BUILD_CPU)
     set(OPENBLAS_IMPORT_LIBRARY
         "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
     add_library(TIKI::OpenBLAS UNKNOWN IMPORTED GLOBAL)
-    set_target_properties(TIKI::OpenBLAS PROPERTIES IMPORTED_LOCATION
-                                                   "${OPENBLAS_IMPORT_LIBRARY}")
+    set_target_properties(
+      TIKI::OpenBLAS PROPERTIES IMPORTED_LOCATION "${OPENBLAS_IMPORT_LIBRARY}")
     target_link_libraries(tiki PRIVATE TIKI::OpenBLAS)
     # Make sure the DLL file is placed in the same dir with executables.
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
@@ -373,7 +379,7 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tiki)
 
 target_include_directories(
   tiki PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
-             $<INSTALL_INTERFACE:include>)
+              $<INSTALL_INTERFACE:include>)
 
 if(USE_SYSTEM_FMT)
   find_package(fmt REQUIRED)

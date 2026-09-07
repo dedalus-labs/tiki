@@ -4,9 +4,9 @@ import math
 import unittest
 from itertools import permutations
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 try:
     import torch

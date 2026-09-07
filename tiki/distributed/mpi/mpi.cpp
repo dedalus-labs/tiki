@@ -115,7 +115,8 @@ struct MPIWrapper {
     std::string_view version(version_ptr, version_length);
     if (version.find("Open MPI") == std::string::npos) {
       std::cerr << "[mpi] MPI found but it does not appear to be Open MPI."
-                << "Tiki requires Open MPI but this is " << version << std::endl;
+                << "Tiki requires Open MPI but this is " << version
+                << std::endl;
       libmpi_handle_ = nullptr;
       return;
     }

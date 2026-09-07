@@ -7,9 +7,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
 import tiki as tk
 import tiki_tests
-import numpy as np
 
 
 class TestLoad(tiki_tests.TIKITestCase):
@@ -43,7 +43,9 @@ class TestLoad(tiki_tests.TIKITestCase):
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
                     with self.subTest(shape=shape):
-                        save_file_tiki = os.path.join(self.test_dir, f"tiki_{dt}_{i}.npy")
+                        save_file_tiki = os.path.join(
+                            self.test_dir, f"tiki_{dt}_{i}.npy"
+                        )
                         save_file_npy = os.path.join(self.test_dir, f"npy_{dt}_{i}.npy")
 
                         save_arr = np.random.uniform(0.0, 32.0, size=shape)
@@ -55,11 +57,15 @@ class TestLoad(tiki_tests.TIKITestCase):
 
                         # Load array saved by tiki as tiki array
                         load_arr_tiki_tiki = tk.load(save_file_tiki)
-                        self.assertTrue(tk.array_equal(load_arr_tiki_tiki, save_arr_tiki))
+                        self.assertTrue(
+                            tk.array_equal(load_arr_tiki_tiki, save_arr_tiki)
+                        )
 
                         # Load array saved by numpy as tiki array
                         load_arr_npy_tiki = tk.load(save_file_npy)
-                        self.assertTrue(tk.array_equal(load_arr_npy_tiki, save_arr_tiki))
+                        self.assertTrue(
+                            tk.array_equal(load_arr_npy_tiki, save_arr_tiki)
+                        )
 
                         # Load array saved by tiki as numpy array
                         load_arr_tiki_npy = np.load(save_file_tiki)
@@ -461,12 +467,16 @@ class TestLoad(tiki_tests.TIKITestCase):
                         # Load array saved by tiki as tiki array
                         with open(save_file_tiki, "rb") as f:
                             load_arr_tiki_tiki = tk.load(f)
-                        self.assertTrue(tk.array_equal(load_arr_tiki_tiki, save_arr_tiki))
+                        self.assertTrue(
+                            tk.array_equal(load_arr_tiki_tiki, save_arr_tiki)
+                        )
 
                         # Load array saved by numpy as tiki array
                         with open(save_file_npy, "rb") as f:
                             load_arr_npy_tiki = tk.load(f)
-                        self.assertTrue(tk.array_equal(load_arr_npy_tiki, save_arr_tiki))
+                        self.assertTrue(
+                            tk.array_equal(load_arr_npy_tiki, save_arr_tiki)
+                        )
 
                         # Load array saved by tiki as numpy array
                         load_arr_tiki_npy = np.load(save_file_tiki)

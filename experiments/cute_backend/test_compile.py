@@ -20,9 +20,9 @@ class CaptureTests(unittest.TestCase):
         self.assertIn("cute.memref.store", lowered.mlir)
 
     def test_schedule_controls_thread_mapping(self):
-        function = compiler.compile(schedule=compiler.Schedule(threads=64, elements_per_thread=4))(
-            lambda x: x * x
-        )
+        function = compiler.compile(
+            schedule=compiler.Schedule(threads=64, elements_per_thread=4)
+        )(lambda x: x * x)
         lowered = function.lower(tk.zeros((257,)))
         self.assertEqual(lowered.grid, (128, 1, 1))
         self.assertIn("array<i32: 64, 1, 1>", lowered.mlir)
@@ -39,7 +39,9 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaises(compiler.UnsupportedGraphError):
             compiler.compile()(lambda x: x + x).lower(tk.zeros((7,), dtype=tk.float16))
         with self.assertRaises(compiler.UnsupportedGraphError):
-            compiler.compile()(lambda x, y: x + y).lower(tk.zeros((2, 3)), tk.zeros((3,)))
+            compiler.compile()(lambda x, y: x + y).lower(
+                tk.zeros((2, 3)), tk.zeros((3,))
+            )
 
     def test_shape_specialization_is_reused(self):
         function = compiler.compile()(lambda x: x + 2.0)
@@ -74,7 +76,9 @@ class ExecutionTests(unittest.TestCase):
     def test_cuda_results_cover_partial_tiles_scalar_inputs_and_strides(self):
         for threads, elements in ((64, 1), (128, 4)):
             function = compiler.compile(
-                schedule=compiler.Schedule(threads=threads, elements_per_thread=elements)
+                schedule=compiler.Schedule(
+                    threads=threads, elements_per_thread=elements
+                )
             )(lambda x, y: x * y + 2.0 - y)
             for size in (0, 1, 7, 127, 128, 129, 513):
                 with self.subTest(threads=threads, elements=elements, size=size):

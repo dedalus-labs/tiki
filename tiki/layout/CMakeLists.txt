@@ -30,6 +30,7 @@ target_link_libraries(tiki_layout_python PRIVATE ${TIKI_LAYOUT_LIB}
                                                  ${CMAKE_DL_LIBS})
 set_target_properties(
   tiki_layout_python
-  PROPERTIES OUTPUT_NAME _layout LIBRARY_OUTPUT_DIRECTORY
-                                 ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}/layout)
+  PROPERTIES OUTPUT_NAME _layout
+             LIBRARY_OUTPUT_DIRECTORY
+             ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}/layout)
 install(TARGETS tiki_layout_python LIBRARY DESTINATION layout)

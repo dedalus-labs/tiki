@@ -15,7 +15,9 @@ class ScheduleTests(unittest.TestCase):
     def test_subwarp_rows_keep_reductions_inside_their_thread_groups(self):
         for threads, rows in ((8, 16), (16, 8)):
             compiled = compiler.compile(
-                schedule=compiler.RowSchedule(threads_per_row=threads, rows_per_block=rows)
+                schedule=compiler.RowSchedule(
+                    threads_per_row=threads, rows_per_block=rows
+                )
             )(rms_norm)
             lowered = compiled.lower(tk.zeros((5, 31)), tk.ones((31,)))
             self.assertEqual(lowered.shared_memory_bytes, 0)
@@ -24,7 +26,9 @@ class ScheduleTests(unittest.TestCase):
             )
 
     def test_row_schedule_rejects_transpose_even_for_single_column(self):
-        compiled = compiler.compile(schedule=compiler.RowSchedule())(lambda x: (x * x).T)
+        compiled = compiler.compile(schedule=compiler.RowSchedule())(
+            lambda x: (x * x).T
+        )
         with self.assertRaises(compiler.UnsupportedGraphError):
             compiled.lower(tk.ones((1, 1)))
 
@@ -50,7 +54,9 @@ class ScheduleTests(unittest.TestCase):
             lambda x: x + tk.max(x, axis=-1, keepdims=True),
         ):
             with self.assertRaises(compiler.UnsupportedGraphError):
-                compiler.compile(schedule=compiler.RowSchedule())(function).lower(tk.ones((3, 129)))
+                compiler.compile(schedule=compiler.RowSchedule())(function).lower(
+                    tk.ones((3, 129))
+                )
 
     def test_swizzle_is_a_bijection_and_changes_column_banks(self):
         plain = compiler.Swizzle(0, 0, 5)
@@ -103,7 +109,9 @@ class CooperativeExecutionTests(unittest.TestCase):
     def test_rmsnorm_matches_reference_across_thread_schedules(self):
         for threads, rows in ((8, 16), (16, 8), (32, 4), (64, 2), (128, 1), (256, 1)):
             compiled = compiler.compile(
-                schedule=compiler.RowSchedule(threads_per_row=threads, rows_per_block=rows)
+                schedule=compiler.RowSchedule(
+                    threads_per_row=threads, rows_per_block=rows
+                )
             )(rms_norm)
             for width in (1, 31, 129, 1024, 4096):
                 with self.subTest(threads=threads, rows=rows, width=width):
@@ -128,7 +136,9 @@ class CooperativeExecutionTests(unittest.TestCase):
     def test_swizzled_transpose_preserves_values_and_partial_tiles(self):
         for bits, base in ((0, 0), (5, 0), (3, 2)):
             compiled = compiler.compile(
-                schedule=compiler.TransposeSchedule(swizzle=compiler.Swizzle(bits, base, 5))
+                schedule=compiler.TransposeSchedule(
+                    swizzle=compiler.Swizzle(bits, base, 5)
+                )
             )(lambda x: x.T)
             for shape in ((32, 32), (33, 65), (1, 7), (0, 32)):
                 with self.subTest(bits=bits, base=base, shape=shape):

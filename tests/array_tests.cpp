@@ -119,11 +119,11 @@ TEST_CASE("test array basics") {
 
 TEST_CASE("test array types") {
 #define basic_dtype_test(T, tiki_type) \
-  T val = 42;                         \
-  array x(val);                       \
+  T val = 42;                          \
+  array x(val);                        \
   CHECK_EQ(x.dtype(), tiki_type);      \
-  CHECK_EQ(x.item<T>(), val);         \
-  x = array({val, val});              \
+  CHECK_EQ(x.item<T>(), val);          \
+  x = array({val, val});               \
   CHECK_EQ(x.dtype(), tiki_type);
 
   // bool_
