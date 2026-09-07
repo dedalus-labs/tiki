@@ -2,8 +2,8 @@
 
 """Composed layouts: ``outer o {offset} o inner``, zop's form for nonlinear maps.
 
-A swizzle is a bit permutation, so it has no stride tree. zop keeps the exact
-composition of an outer map, an internal offset, and an inner layout:
+A swizzle mixes index bits with XOR. The composed layout keeps the exact
+outer map, internal offset, and inner coordinate domain:
 ``layout(coordinate) == outer(offset + inner(coordinate))``. Slicing must keep
 the fixed contribution inside the composition, because moving it through a
 nonlinear outer map changes addresses. ``slice_and_offset`` returns the residual
@@ -14,59 +14,68 @@ This mirrors zop's Rust bootstrap (``src/layout/expression.rs``) and CUTLASS's
 ``swizzle_layout.hpp``.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from operator import index
-from typing import Any
+from typing import SupportsIndex, TypeAlias, cast
 
-from mlx.tiki._pycute import Layout, LayoutBase, Swizzle, rank, size
-from mlx.tiki.layout import LayoutError
+from mlx.tiki._layout import LayoutError
+from mlx.tiki._pycute import Layout, LayoutBase, Shape, rank, size
+from mlx.tiki._pycute.typedefs import Coord, StrideScalar
+from mlx.tiki.swizzle import Swizzle
 
-Coordinate = Any
+Coordinate: TypeAlias = int | None | slice | tuple["Coordinate", ...]
 
 
 def check_swizzle(swizzle: Swizzle) -> Swizzle:
-    """CUTLASS requires the two bit fields not to overlap: ``abs(shift) >= bits``.
-
-    PyCuTe checks only negative shifts and zop's bootstrap checks only the
-    highest bit, so both accept ``Swizzle(1, 0, 0)``, which maps 0 and 1 to
-    the same index. Tiki rejects it.
-    """
-    if swizzle.bits and abs(swizzle.shift) < swizzle.bits:
-        raise LayoutError(
-            f"swizzle fields overlap: bits={swizzle.bits} shift={swizzle.shift}. CUTLASS requires abs(shift) >= bits"
-        )
+    """Require the Rust-validated indexing transform at this boundary."""
+    if not isinstance(swizzle, Swizzle):
+        raise LayoutError("composition requires a validated Tiki Swizzle")
     return swizzle
 
 
 @dataclass(frozen=True)
 class ComposedLayout(LayoutBase):
-    outer: Swizzle
+    """An index transform composed with an internal offset and a layout domain."""
+
+    outer: Swizzle | Layout | ComposedLayout
     offset: int
-    inner: "Layout | ComposedLayout"
+    inner: Layout | ComposedLayout
 
     def __post_init__(self) -> None:
-        check_swizzle(self.outer)
+        if not isinstance(self.outer, (Swizzle, Layout, ComposedLayout)):
+            raise LayoutError("composition outer must be a Swizzle or a layout")
+        if not isinstance(self.inner, (Layout, ComposedLayout)):
+            raise LayoutError("composition inner must supply a layout domain")
+        if type(self.offset) is not int:
+            raise LayoutError("composition offset must be an integer")
 
     def __call__(self, *coordinate: Coordinate) -> int:
-        index = self.offset + self.inner(*coordinate)
-        if index < 0:
-            raise LayoutError(f"swizzle input {index} must be nonnegative")
-        return self.outer(index)
+        """Evaluate ``outer(offset + inner(coordinate))`` without accessing storage."""
+        argument = self.offset + _evaluate(self.inner, coordinate)
+        if isinstance(self.outer, Swizzle):
+            return self.outer(argument)
+        return _evaluate(self.outer, (argument,))
+
+    def swizzle(self, transform: Swizzle, offset: int = 0) -> "ComposedLayout":
+        """Compose another index transform without changing storage ownership."""
+        return ComposedLayout(check_swizzle(transform), offset, self)
 
     def _offset_and_slice(
         self, coordinate: Coordinate
     ) -> tuple[int, "Layout | ComposedLayout"]:
         residual, delta = slice_and_offset(coordinate, self)
         if rank(residual) == 0:
-            return delta + residual(), Layout((), ())
+            return delta + _evaluate(residual, ()), Layout((), ())
         return delta, residual
 
     @property
-    def shape(self) -> Any:
+    def shape(self) -> Shape:
         return self.inner.shape
 
     @property
-    def stride(self) -> Any:
+    def stride(self) -> None:
         raise LayoutError("a composed layout has no stride. Require an affine layout")
 
     def __str__(self) -> str:
@@ -84,15 +93,27 @@ def slice_and_offset(
     layout keeps it inside the composition and reports zero displacement.
     """
     if not isinstance(layout, ComposedLayout):
-        offset, residual = layout._offset_and_slice(coordinate)
-        try:
-            return residual, index(offset)
-        except TypeError as error:
-            raise LayoutError(
-                "slice_and_offset requires integer offset addition, not XOR or coordinate addition"
-            ) from error
+        offset, residual = layout._offset_and_slice(cast(Coord, coordinate))
+        return residual, _offset(offset)
     residual, delta = slice_and_offset(coordinate, layout.inner)
     return ComposedLayout(layout.outer, layout.offset + delta, residual), 0
+
+
+def _offset(value: StrideScalar | SupportsIndex) -> int:
+    if not isinstance(value, SupportsIndex):
+        raise LayoutError(
+            "composition requires integer offset addition, not XOR or coordinate addition"
+        )
+    return index(value)
+
+
+def _evaluate(
+    layout: Layout | ComposedLayout, coordinate: tuple[Coordinate, ...]
+) -> int:
+    if isinstance(layout, ComposedLayout):
+        return layout(*coordinate)
+    # PyCuTe's coordinate ABCs register Python integers dynamically.
+    return _offset(layout(*cast(tuple[Coord, ...], coordinate)))
 
 
 def composed_size(layout: "Layout | ComposedLayout") -> int:
