@@ -26,7 +26,7 @@ from operator import add
 
 import mlx.core as mx
 
-from graph import Graph, Profile, UnsupportedGraphError, capture
+from graph import Graph, Profile, UnsupportedGraphError, capture, replay
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
 from tiki import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
 
@@ -194,7 +194,6 @@ class ScanOp:
     def __init__(
         self, combine: FlatCombine, leaves: int, axis: int, schedule: ScanSchedule
     ):
-        self.combine = combine
         self.leaves = leaves
         self.axis = axis
         self.schedule = schedule
@@ -212,6 +211,9 @@ class ScanOp:
 
     def __call__(self, *leaves: mx.array) -> Leaves:
         return _arrays(self._function(*leaves))
+
+    def combine(self, *inputs: mx.array) -> Leaves:
+        return replay(self.graph, inputs)
 
     def reverse(self, *leaves: mx.array) -> Leaves:
         axis = self.axis
