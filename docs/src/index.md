@@ -23,21 +23,21 @@ Engine paired with a first-class `Layout`.
 :::
 
 :::{grid-item-card} Compile
-:link: tiki/compile
+:link: tiki/compile/README
 :link-type: doc
 `tk.compile` lowers Tiki graphs to CuTe MLIR with explicit thread schedules,
 consuming strided views in place.
 :::
 
 :::{grid-item-card} Associative scan
-:link: tiki/scan
+:link: tiki/scan/README
 :link-type: doc
 `associative_scan` with the interface of JAX, forward and reverse derivatives,
 and kernels for any length.
 :::
 
 :::{grid-item-card} Rust runtime
-:link: tiki/runtime/index
+:link: tiki/runtime/README
 :link-type: doc
 CUDA storage and completion owned by a checked Rust runtime behind a C++
 boundary.

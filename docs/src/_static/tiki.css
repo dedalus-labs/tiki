@@ -1,22 +1,22 @@
-/* Tiki palette: the mark's red, orange, and yellow, tuned for contrast on
-   each background. Links and accents run hot; body text stays neutral. */
+/* Tiki palette: the mark's vermilion, ember orange, and golden yellow, with
+   darker links on the light background for contrast. Body text stays neutral. */
 html[data-theme="light"] {
-  --pst-color-primary: #e8400c;
-  --pst-color-primary-highlight: #ff6b00;
-  --pst-color-secondary: #ff9f1c;
-  --pst-color-link: #c93a00;
-  --pst-color-link-hover: #ff6b00;
-  --pst-color-inline-code-links: #c93a00;
-  --pst-color-accent: #ffc300;
+  --pst-color-primary: #e5330f;
+  --pst-color-primary-highlight: #ff7a17;
+  --pst-color-secondary: #ff7a17;
+  --pst-color-link: #c92c0b;
+  --pst-color-link-hover: #ff7a17;
+  --pst-color-inline-code-links: #c92c0b;
+  --pst-color-accent: #ffc62b;
 }
 html[data-theme="dark"] {
-  --pst-color-primary: #ff7a2f;
-  --pst-color-primary-highlight: #ffa45c;
-  --pst-color-secondary: #ffc300;
-  --pst-color-link: #ffa45c;
-  --pst-color-link-hover: #ffc300;
-  --pst-color-inline-code-links: #ffa45c;
-  --pst-color-accent: #ff1f3a;
+  --pst-color-primary: #ff7a17;
+  --pst-color-primary-highlight: #ffa04d;
+  --pst-color-secondary: #ffc62b;
+  --pst-color-link: #ffa04d;
+  --pst-color-link-hover: #ffc62b;
+  --pst-color-inline-code-links: #ffa04d;
+  --pst-color-accent: #ff3f2e;
 }
 html {
   --pst-font-family-monospace: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -24,7 +24,7 @@ html {
 /* The torch line: the three bar colors as a stripe over the header. */
 .bd-header {
   border-top: 4px solid transparent;
-  border-image: linear-gradient(90deg, #ff1f3a 0%, #ff6b00 50%, #ffc300 100%) 1;
+  border-image: linear-gradient(90deg, #ff3f2e 0%, #ff7a17 50%, #ffc62b 100%) 1;
 }
 /* Wordmark order: the name, then the mark. */
 .navbar-brand {
