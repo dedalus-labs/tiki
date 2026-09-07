@@ -7,12 +7,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import mlx.core as mx
-import mlx_tests
+import tiki as tk
+import tiki_tests
 import numpy as np
 
 
-class TestLoad(mlx_tests.MLXTestCase):
+class TestLoad(tiki_tests.TIKITestCase):
     dtypes = [
         "uint8",
         "uint16",
@@ -43,42 +43,42 @@ class TestLoad(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
                     with self.subTest(shape=shape):
-                        save_file_mlx = os.path.join(self.test_dir, f"mlx_{dt}_{i}.npy")
+                        save_file_tiki = os.path.join(self.test_dir, f"tiki_{dt}_{i}.npy")
                         save_file_npy = os.path.join(self.test_dir, f"npy_{dt}_{i}.npy")
 
                         save_arr = np.random.uniform(0.0, 32.0, size=shape)
                         save_arr_npy = save_arr.astype(getattr(np, dt))
-                        save_arr_mlx = mx.array(save_arr_npy)
+                        save_arr_tiki = tk.array(save_arr_npy)
 
-                        mx.save(save_file_mlx, save_arr_mlx)
+                        tk.save(save_file_tiki, save_arr_tiki)
                         np.save(save_file_npy, save_arr_npy)
 
-                        # Load array saved by mlx as mlx array
-                        load_arr_mlx_mlx = mx.load(save_file_mlx)
-                        self.assertTrue(mx.array_equal(load_arr_mlx_mlx, save_arr_mlx))
+                        # Load array saved by tiki as tiki array
+                        load_arr_tiki_tiki = tk.load(save_file_tiki)
+                        self.assertTrue(tk.array_equal(load_arr_tiki_tiki, save_arr_tiki))
 
-                        # Load array saved by numpy as mlx array
-                        load_arr_npy_mlx = mx.load(save_file_npy)
-                        self.assertTrue(mx.array_equal(load_arr_npy_mlx, save_arr_mlx))
+                        # Load array saved by numpy as tiki array
+                        load_arr_npy_tiki = tk.load(save_file_npy)
+                        self.assertTrue(tk.array_equal(load_arr_npy_tiki, save_arr_tiki))
 
-                        # Load array saved by mlx as numpy array
-                        load_arr_mlx_npy = np.load(save_file_mlx)
-                        self.assertTrue(np.array_equal(load_arr_mlx_npy, save_arr_npy))
+                        # Load array saved by tiki as numpy array
+                        load_arr_tiki_npy = np.load(save_file_tiki)
+                        self.assertTrue(np.array_equal(load_arr_tiki_npy, save_arr_npy))
 
-        save_file = os.path.join(self.test_dir, f"mlx_path.npy")
-        save_arr = mx.ones((32,))
-        mx.save(Path(save_file), save_arr)
+        save_file = os.path.join(self.test_dir, f"tiki_path.npy")
+        save_arr = tk.ones((32,))
+        tk.save(Path(save_file), save_arr)
 
-        # Load array saved by mlx as mlx array
-        load_arr = mx.load(Path(save_file))
-        self.assertTrue(mx.array_equal(load_arr, save_arr))
+        # Load array saved by tiki as tiki array
+        load_arr = tk.load(Path(save_file))
+        self.assertTrue(tk.array_equal(load_arr, save_arr))
 
     def test_load_npy_dtype(self):
-        save_file = os.path.join(self.test_dir, "mlx_path.npy")
+        save_file = os.path.join(self.test_dir, "tiki_path.npy")
         a = np.random.randn(8).astype(np.float64)
         np.save(save_file, a)
-        out = mx.load(save_file, stream=mx.cpu)
-        self.assertEqual(out.dtype, mx.float64)
+        out = tk.load(save_file, stream=tk.cpu)
+        self.assertEqual(out.dtype, tk.float64)
         self.assertTrue(np.array_equal(np.array(out), a))
 
         a = np.random.randn(8).astype(np.float64)
@@ -86,7 +86,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         c = a + 0j * b
         np.save(save_file, c)
         with self.assertRaises(Exception):
-            out = mx.load(save_file, stream=mx.cpu)
+            out = tk.load(save_file, stream=tk.cpu)
 
     def test_load_npy_read_error(self):
         save_file = os.path.join(self.test_dir, "truncated.npy")
@@ -95,9 +95,9 @@ class TestLoad(mlx_tests.MLXTestCase):
         with open(save_file, "r+b") as f:
             f.truncate(os.path.getsize(save_file) - expected.nbytes)
 
-        out = mx.load(save_file, stream=mx.cpu)
+        out = tk.load(save_file, stream=tk.cpu)
         with self.assertRaises(RuntimeError):
-            mx.eval(out)
+            tk.eval(out)
 
     def test_async_load_npy_read_error_across_streams(self):
         save_file = os.path.join(self.test_dir, "truncated_async.npy")
@@ -106,19 +106,19 @@ class TestLoad(mlx_tests.MLXTestCase):
         with open(save_file, "r+b") as f:
             f.truncate(os.path.getsize(save_file) - expected.nbytes)
 
-        producer_stream = mx.new_stream(mx.cpu)
-        consumer_stream = mx.new_stream(mx.cpu)
-        out = mx.add(
-            mx.load(save_file, stream=producer_stream),
+        producer_stream = tk.new_stream(tk.cpu)
+        consumer_stream = tk.new_stream(tk.cpu)
+        out = tk.add(
+            tk.load(save_file, stream=producer_stream),
             1.0,
             stream=consumer_stream,
         )
         with self.assertRaises(RuntimeError):
-            mx.eval(out)
+            tk.eval(out)
         # Depending on backend the error might be caught early before poisoning
         # the producer_stream, but still sync to clear the errors.
         try:
-            mx.synchronize(producer_stream)
+            tk.synchronize(producer_stream)
         except Exception:
             pass
 
@@ -126,58 +126,58 @@ class TestLoad(mlx_tests.MLXTestCase):
         # The save must eval the lazy input before truncating the file it was
         # loaded from. Shift the data so stale content cannot pass.
         save_file = os.path.join(self.test_dir, "resave.safetensors")
-        mx.save_safetensors(save_file, {"a": mx.ones((4, 4))})
-        a = mx.load(save_file, stream=mx.cpu)["a"]
-        mx.save_safetensors(save_file, {"a": a + 1})
-        out = mx.load(save_file, stream=mx.cpu)["a"]
+        tk.save_safetensors(save_file, {"a": tk.ones((4, 4))})
+        a = tk.load(save_file, stream=tk.cpu)["a"]
+        tk.save_safetensors(save_file, {"a": a + 1})
+        out = tk.load(save_file, stream=tk.cpu)["a"]
         self.assertTrue(np.array_equal(np.array(out), 2 * np.ones((4, 4))))
 
     def test_save_over_lazily_loaded_npy(self):
         save_file = os.path.join(self.test_dir, "resave.npy")
-        mx.save(save_file, mx.ones((4, 4)))
-        a = mx.load(save_file, stream=mx.cpu)
-        mx.save(save_file, a + 2)
-        out = mx.load(save_file, stream=mx.cpu)
+        tk.save(save_file, tk.ones((4, 4)))
+        a = tk.load(save_file, stream=tk.cpu)
+        tk.save(save_file, a + 2)
+        out = tk.load(save_file, stream=tk.cpu)
         self.assertTrue(np.array_equal(np.array(out), 3 * np.ones((4, 4))))
 
     def test_save_and_load_safetensors(self):
         test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):
-            mx.save_safetensors(test_file, {"a": mx.ones((4, 4))}, {"testing": 0})
+            tk.save_safetensors(test_file, {"a": tk.ones((4, 4))}, {"testing": 0})
 
         for obj in [str, Path]:
-            mx.save_safetensors(
+            tk.save_safetensors(
                 obj(test_file),
-                {"test": mx.ones((2, 2))},
-                {"testing": "test", "format": "mlx"},
+                {"test": tk.ones((2, 2))},
+                {"testing": "test", "format": "tiki"},
             )
-            res = mx.load(obj(test_file), return_metadata=True)
+            res = tk.load(obj(test_file), return_metadata=True)
             self.assertEqual(len(res), 2)
-            self.assertEqual(res[1], {"testing": "test", "format": "mlx"})
+            self.assertEqual(res[1], {"testing": "test", "format": "tiki"})
 
         for dt in self.dtypes + ["bfloat16"]:
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
                     with self.subTest(shape=shape):
-                        save_file_mlx = os.path.join(
-                            self.test_dir, f"mlx_{dt}_{i}_fs.safetensors"
+                        save_file_tiki = os.path.join(
+                            self.test_dir, f"tiki_{dt}_{i}_fs.safetensors"
                         )
                         save_dict = {
                             "test": (
-                                mx.random.normal(shape=shape, dtype=getattr(mx, dt))
+                                tk.random.normal(shape=shape, dtype=getattr(tk, dt))
                                 if dt in ["float32", "float16", "bfloat16"]
-                                else mx.ones(shape, dtype=getattr(mx, dt))
+                                else tk.ones(shape, dtype=getattr(tk, dt))
                             )
                         }
 
-                        with open(save_file_mlx, "wb") as f:
-                            mx.save_safetensors(f, save_dict)
-                        with open(save_file_mlx, "rb") as f:
-                            load_dict = mx.load(f)
+                        with open(save_file_tiki, "wb") as f:
+                            tk.save_safetensors(f, save_dict)
+                        with open(save_file_tiki, "rb") as f:
+                            load_dict = tk.load(f)
 
                         self.assertTrue("test" in load_dict)
                         self.assertTrue(
-                            mx.array_equal(load_dict["test"], save_dict["test"])
+                            tk.array_equal(load_dict["test"], save_dict["test"])
                         )
 
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
@@ -191,31 +191,31 @@ class TestLoad(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
                     with self.subTest(shape=shape):
-                        save_file_mlx = os.path.join(
-                            self.test_dir, f"mlx_{dt}_{i}_fs.gguf"
+                        save_file_tiki = os.path.join(
+                            self.test_dir, f"tiki_{dt}_{i}_fs.gguf"
                         )
                         save_dict = {
                             "test": (
-                                mx.random.normal(shape=shape, dtype=getattr(mx, dt))
+                                tk.random.normal(shape=shape, dtype=getattr(tk, dt))
                                 if dt in ["float32", "float16", "bfloat16"]
-                                else mx.ones(shape, dtype=getattr(mx, dt))
+                                else tk.ones(shape, dtype=getattr(tk, dt))
                             )
                         }
 
-                        mx.save_gguf(save_file_mlx, save_dict)
-                        load_dict = mx.load(save_file_mlx)
+                        tk.save_gguf(save_file_tiki, save_dict)
+                        load_dict = tk.load(save_file_tiki)
 
                         self.assertTrue("test" in load_dict)
                         self.assertTrue(
-                            mx.array_equal(load_dict["test"], save_dict["test"])
+                            tk.array_equal(load_dict["test"], save_dict["test"])
                         )
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_path_test_fs.gguf")
-        save_dict = {"test": mx.ones(shape)}
-        mx.save_gguf(Path(save_file_mlx), save_dict)
-        load_dict = mx.load(Path(save_file_mlx))
+        save_file_tiki = os.path.join(self.test_dir, f"tiki_path_test_fs.gguf")
+        save_dict = {"test": tk.ones(shape)}
+        tk.save_gguf(Path(save_file_tiki), save_dict)
+        load_dict = tk.load(Path(save_file_tiki))
         self.assertTrue("test" in load_dict)
-        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertTrue(tk.array_equal(load_dict["test"], save_dict["test"]))
 
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_load_gguf_quantized(self):
@@ -280,11 +280,11 @@ class TestLoad(mlx_tests.MLXTestCase):
             with self.subTest(qtype=name):
                 save_file = os.path.join(self.test_dir, f"quant_{name}.gguf")
                 write_gguf(save_file, type_id, blocks)
-                load_dict = mx.load(save_file)
-                self.assertEqual(load_dict["tensor.weight"].dtype, mx.uint32)
+                load_dict = tk.load(save_file)
+                self.assertEqual(load_dict["tensor.weight"].dtype, tk.uint32)
                 self.assertEqual(load_dict["tensor.scales"].shape, (rows, cols // 32))
                 self.assertEqual(load_dict["tensor.biases"].shape, (rows, cols // 32))
-                dequantized = mx.dequantize(
+                dequantized = tk.dequantize(
                     load_dict["tensor.weight"],
                     load_dict["tensor.scales"],
                     load_dict["tensor.biases"],
@@ -314,43 +314,43 @@ class TestLoad(mlx_tests.MLXTestCase):
             -1.5,
             -0.0039,
         ]
-        expected = mx.array(expected, dtype=mx.bfloat16)
+        expected = tk.array(expected, dtype=tk.bfloat16)
         contents = b'H\x00\x00\x00\x00\x00\x00\x00{"tensor":{"dtype":"F8_E4M3","shape":[10],"data_offsets":[0,10]}}       \x00~\xfe\xb6.\x83\xba\xba\xbc\x82'
         with tempfile.NamedTemporaryFile(suffix=".safetensors") as f:
             f.write(contents)
             f.seek(0)
-            out = mx.load(f)["tensor"]
-        self.assertTrue(mx.allclose(mx.from_fp8(out), expected))
+            out = tk.load(f)["tensor"]
+        self.assertTrue(tk.allclose(tk.from_fp8(out), expected))
 
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_basic(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
-        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
+        save_file_tiki = os.path.join(self.test_dir, f"tiki_gguf_with_metadata.gguf")
+        save_dict = {"test": tk.ones((4, 4), dtype=tk.int32)}
         metadata = {}
 
         # Empty works
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
+        tk.save_gguf(save_file_tiki, save_dict, metadata)
 
         # Loads without the metadata
-        load_dict = mx.load(save_file_mlx)
+        load_dict = tk.load(save_file_tiki)
         self.assertTrue("test" in load_dict)
-        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertTrue(tk.array_equal(load_dict["test"], save_dict["test"]))
 
         # Loads empty metadata
-        load_dict, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        load_dict, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
         self.assertTrue("test" in load_dict)
-        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertTrue(tk.array_equal(load_dict["test"], save_dict["test"]))
         self.assertEqual(len(meta_load_dict), 0)
 
         # Loads string metadata
         metadata = {"meta": "data"}
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
-        load_dict, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        tk.save_gguf(save_file_tiki, save_dict, metadata)
+        load_dict, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
         self.assertTrue("test" in load_dict)
-        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertTrue(tk.array_equal(load_dict["test"], save_dict["test"]))
         self.assertEqual(len(meta_load_dict), 1)
         self.assertTrue("meta" in meta_load_dict)
         self.assertEqual(meta_load_dict["meta"], "data")
@@ -360,77 +360,77 @@ class TestLoad(mlx_tests.MLXTestCase):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
-        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
+        save_file_tiki = os.path.join(self.test_dir, f"tiki_gguf_with_metadata.gguf")
+        save_dict = {"test": tk.ones((4, 4), dtype=tk.int32)}
 
         # Test scalars and one dimensional arrays
         for t in [
-            mx.uint8,
-            mx.int8,
-            mx.uint16,
-            mx.int16,
-            mx.uint32,
-            mx.int32,
-            mx.uint64,
-            mx.int64,
-            mx.float32,
+            tk.uint8,
+            tk.int8,
+            tk.uint16,
+            tk.int16,
+            tk.uint32,
+            tk.int32,
+            tk.uint64,
+            tk.int64,
+            tk.float32,
         ]:
             for shape in [(), (2,)]:
-                arr = mx.random.uniform(shape=shape).astype(t)
+                arr = tk.random.uniform(shape=shape).astype(t)
                 metadata = {"meta": arr}
-                mx.save_gguf(save_file_mlx, save_dict, metadata)
-                _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+                tk.save_gguf(save_file_tiki, save_dict, metadata)
+                _, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
                 self.assertEqual(len(meta_load_dict), 1)
                 self.assertTrue("meta" in meta_load_dict)
-                self.assertTrue(mx.array_equal(meta_load_dict["meta"], arr))
+                self.assertTrue(tk.array_equal(meta_load_dict["meta"], arr))
                 self.assertEqual(meta_load_dict["meta"].dtype, arr.dtype)
 
-        for t in [mx.float16, mx.bfloat16, mx.complex64]:
+        for t in [tk.float16, tk.bfloat16, tk.complex64]:
             with self.assertRaises(ValueError):
-                arr = mx.array(1, t)
+                arr = tk.array(1, t)
                 metadata = {"meta": arr}
-                mx.save_gguf(save_file_mlx, save_dict, metadata)
+                tk.save_gguf(save_file_tiki, save_dict, metadata)
 
     @unittest.skipIf(platform.system() == "Windows", "GGUF is disabled on Windows")
     def test_save_and_load_gguf_metadata_mixed(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
-        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
-        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
+        save_file_tiki = os.path.join(self.test_dir, f"tiki_gguf_with_metadata.gguf")
+        save_dict = {"test": tk.ones((4, 4), dtype=tk.int32)}
 
         # Test string and array
-        arr = mx.array(1.5)
+        arr = tk.array(1.5)
         metadata = {"meta1": arr, "meta2": "data"}
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
-        _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        tk.save_gguf(save_file_tiki, save_dict, metadata)
+        _, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
         self.assertEqual(len(meta_load_dict), 2)
         self.assertTrue("meta1" in meta_load_dict)
-        self.assertTrue(mx.array_equal(meta_load_dict["meta1"], arr))
+        self.assertTrue(tk.array_equal(meta_load_dict["meta1"], arr))
         self.assertEqual(meta_load_dict["meta1"].dtype, arr.dtype)
         self.assertTrue("meta2" in meta_load_dict)
         self.assertEqual(meta_load_dict["meta2"], "data")
 
         # Test list of strings
         metadata = {"meta": ["data1", "data2", "data345"]}
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
-        _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        tk.save_gguf(save_file_tiki, save_dict, metadata)
+        _, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
         self.assertEqual(len(meta_load_dict), 1)
         self.assertEqual(meta_load_dict["meta"], metadata["meta"])
 
         # Test a combination of stuff
         metadata = {
             "meta1": ["data1", "data2", "data345"],
-            "meta2": mx.array([1, 2, 3, 4]),
+            "meta2": tk.array([1, 2, 3, 4]),
             "meta3": "data",
-            "meta4": mx.array(1.5),
+            "meta4": tk.array(1.5),
         }
-        mx.save_gguf(save_file_mlx, save_dict, metadata)
-        _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        tk.save_gguf(save_file_tiki, save_dict, metadata)
+        _, meta_load_dict = tk.load(save_file_tiki, return_metadata=True)
         self.assertEqual(len(meta_load_dict), 4)
         for k, v in metadata.items():
-            if isinstance(v, mx.array):
-                self.assertTrue(mx.array_equal(meta_load_dict[k], v))
+            if isinstance(v, tk.array):
+                self.assertTrue(tk.array_equal(meta_load_dict[k], v))
             else:
                 self.assertEqual(meta_load_dict[k], v)
 
@@ -442,8 +442,8 @@ class TestLoad(mlx_tests.MLXTestCase):
             with self.subTest(dtype=dt):
                 for i, shape in enumerate([(1,), (23,), (1024, 1024), (4, 6, 3, 1, 2)]):
                     with self.subTest(shape=shape):
-                        save_file_mlx = os.path.join(
-                            self.test_dir, f"mlx_{dt}_{i}_fs.npy"
+                        save_file_tiki = os.path.join(
+                            self.test_dir, f"tiki_{dt}_{i}_fs.npy"
                         )
                         save_file_npy = os.path.join(
                             self.test_dir, f"npy_{dt}_{i}_fs.npy"
@@ -451,26 +451,26 @@ class TestLoad(mlx_tests.MLXTestCase):
 
                         save_arr = np.random.uniform(0.0, 32.0, size=shape)
                         save_arr_npy = save_arr.astype(getattr(np, dt))
-                        save_arr_mlx = mx.array(save_arr_npy)
+                        save_arr_tiki = tk.array(save_arr_npy)
 
-                        with open(save_file_mlx, "wb") as f:
-                            mx.save(f, save_arr_mlx)
+                        with open(save_file_tiki, "wb") as f:
+                            tk.save(f, save_arr_tiki)
 
                         np.save(save_file_npy, save_arr_npy)
 
-                        # Load array saved by mlx as mlx array
-                        with open(save_file_mlx, "rb") as f:
-                            load_arr_mlx_mlx = mx.load(f)
-                        self.assertTrue(mx.array_equal(load_arr_mlx_mlx, save_arr_mlx))
+                        # Load array saved by tiki as tiki array
+                        with open(save_file_tiki, "rb") as f:
+                            load_arr_tiki_tiki = tk.load(f)
+                        self.assertTrue(tk.array_equal(load_arr_tiki_tiki, save_arr_tiki))
 
-                        # Load array saved by numpy as mlx array
+                        # Load array saved by numpy as tiki array
                         with open(save_file_npy, "rb") as f:
-                            load_arr_npy_mlx = mx.load(f)
-                        self.assertTrue(mx.array_equal(load_arr_npy_mlx, save_arr_mlx))
+                            load_arr_npy_tiki = tk.load(f)
+                        self.assertTrue(tk.array_equal(load_arr_npy_tiki, save_arr_tiki))
 
-                        # Load array saved by mlx as numpy array
-                        load_arr_mlx_npy = np.load(save_file_mlx)
-                        self.assertTrue(np.array_equal(load_arr_mlx_npy, save_arr_npy))
+                        # Load array saved by tiki as numpy array
+                        load_arr_tiki_npy = np.load(save_file_tiki)
+                        self.assertTrue(np.array_equal(load_arr_tiki_npy, save_arr_npy))
 
     def test_savez_and_loadz(self):
         if not os.path.isdir(self.test_dir):
@@ -479,13 +479,13 @@ class TestLoad(mlx_tests.MLXTestCase):
         for dt in self.dtypes:
             with self.subTest(dtype=dt):
                 shapes = [(6,), (6, 6), (4, 1, 3, 1, 2)]
-                save_file_mlx_uncomp = os.path.join(
-                    self.test_dir, f"mlx_{dt}_uncomp.npz"
+                save_file_tiki_uncomp = os.path.join(
+                    self.test_dir, f"tiki_{dt}_uncomp.npz"
                 )
                 save_file_npy_uncomp = os.path.join(
                     self.test_dir, f"npy_{dt}_uncomp.npz"
                 )
-                save_file_mlx_comp = os.path.join(self.test_dir, f"mlx_{dt}_comp.npz")
+                save_file_tiki_comp = os.path.join(self.test_dir, f"tiki_{dt}_comp.npz")
                 save_file_npy_comp = os.path.join(self.test_dir, f"npy_{dt}_comp.npz")
 
                 # Make dictionary of multiple
@@ -495,115 +495,115 @@ class TestLoad(mlx_tests.MLXTestCase):
                     ).astype(getattr(np, dt))
                     for i in range(len(shapes))
                 }
-                save_arrs_mlx = {k: mx.array(v) for k, v in save_arrs_npy.items()}
+                save_arrs_tiki = {k: tk.array(v) for k, v in save_arrs_npy.items()}
 
                 # Save as npz files
                 np.savez(save_file_npy_uncomp, **save_arrs_npy)
-                mx.savez(save_file_mlx_uncomp, **save_arrs_mlx)
+                tk.savez(save_file_tiki_uncomp, **save_arrs_tiki)
                 np.savez_compressed(save_file_npy_comp, **save_arrs_npy)
-                mx.savez_compressed(save_file_mlx_comp, **save_arrs_mlx)
+                tk.savez_compressed(save_file_tiki_comp, **save_arrs_tiki)
 
-                for save_file_npy, save_file_mlx in (
-                    (save_file_npy_uncomp, save_file_mlx_uncomp),
-                    (save_file_npy_comp, save_file_mlx_comp),
+                for save_file_npy, save_file_tiki in (
+                    (save_file_npy_uncomp, save_file_tiki_uncomp),
+                    (save_file_npy_comp, save_file_tiki_comp),
                 ):
-                    # Load array saved by mlx as mlx array
-                    load_arr_mlx_mlx = mx.load(save_file_mlx)
-                    for k, v in load_arr_mlx_mlx.items():
-                        self.assertTrue(mx.array_equal(save_arrs_mlx[k], v))
+                    # Load array saved by tiki as tiki array
+                    load_arr_tiki_tiki = tk.load(save_file_tiki)
+                    for k, v in load_arr_tiki_tiki.items():
+                        self.assertTrue(tk.array_equal(save_arrs_tiki[k], v))
 
-                    # Load arrays saved by numpy as mlx arrays
-                    load_arr_npy_mlx = mx.load(save_file_npy)
-                    for k, v in load_arr_npy_mlx.items():
-                        self.assertTrue(mx.array_equal(save_arrs_mlx[k], v))
+                    # Load arrays saved by numpy as tiki arrays
+                    load_arr_npy_tiki = tk.load(save_file_npy)
+                    for k, v in load_arr_npy_tiki.items():
+                        self.assertTrue(tk.array_equal(save_arrs_tiki[k], v))
 
-                    # Load array saved by mlx as numpy array
-                    load_arr_mlx_npy = np.load(save_file_mlx)
-                    for k, v in load_arr_mlx_npy.items():
+                    # Load array saved by tiki as numpy array
+                    load_arr_tiki_npy = np.load(save_file_tiki)
+                    for k, v in load_arr_tiki_npy.items():
                         self.assertTrue(np.array_equal(save_arrs_npy[k], v))
 
     def test_non_contiguous(self):
-        a = mx.broadcast_to(mx.array([1, 2]), [4, 2])
+        a = tk.broadcast_to(tk.array([1, 2]), [4, 2])
 
         save_file = os.path.join(self.test_dir, "a.npy")
-        mx.save(save_file, a)
-        aload = mx.load(save_file)
-        self.assertTrue(mx.array_equal(a, aload))
+        tk.save(save_file, a)
+        aload = tk.load(save_file)
+        self.assertTrue(tk.array_equal(a, aload))
 
         save_file = os.path.join(self.test_dir, "a.safetensors")
-        mx.save_safetensors(save_file, {"a": a})
-        aload = mx.load(save_file)["a"]
-        self.assertTrue(mx.array_equal(a, aload))
+        tk.save_safetensors(save_file, {"a": a})
+        aload = tk.load(save_file)["a"]
+        self.assertTrue(tk.array_equal(a, aload))
 
         if platform.system() == "Windows":
             return
 
         save_file = os.path.join(self.test_dir, "a.gguf")
-        mx.save_gguf(save_file, {"a": a})
-        aload = mx.load(save_file)["a"]
-        self.assertTrue(mx.array_equal(a, aload))
+        tk.save_gguf(save_file, {"a": a})
+        aload = tk.load(save_file)["a"]
+        self.assertTrue(tk.array_equal(a, aload))
 
         # safetensors and gguf only work with row contiguous
         # make sure col contiguous is handled properly
         save_file = os.path.join(self.test_dir, "a.safetensors")
-        a = mx.arange(4).reshape(2, 2).T
-        mx.save_safetensors(save_file, {"a": a})
-        aload = mx.load(save_file)["a"]
-        self.assertTrue(mx.array_equal(a, aload))
+        a = tk.arange(4).reshape(2, 2).T
+        tk.save_safetensors(save_file, {"a": a})
+        aload = tk.load(save_file)["a"]
+        self.assertTrue(tk.array_equal(a, aload))
 
         save_file = os.path.join(self.test_dir, "a.gguf")
-        mx.save_gguf(save_file, {"a": a})
-        aload = mx.load(save_file)["a"]
-        self.assertTrue(mx.array_equal(a, aload))
+        tk.save_gguf(save_file, {"a": a})
+        aload = tk.load(save_file)["a"]
+        self.assertTrue(tk.array_equal(a, aload))
 
     def test_load_donation(self):
-        x = mx.random.normal((1024,))
-        mx.eval(x)
+        x = tk.random.normal((1024,))
+        tk.eval(x)
         save_file = os.path.join(self.test_dir, "donation.npy")
-        mx.save(save_file, x)
-        mx.synchronize()
+        tk.save(save_file, x)
+        tk.synchronize()
 
-        mx.reset_peak_memory()
-        scale = mx.array(2.0)
-        y = mx.load(save_file)
-        mx.eval(y)
-        mx.synchronize()
-        load_only = mx.get_peak_memory()
-        y = mx.load(save_file) * scale
-        mx.eval(y)
-        mx.synchronize()
-        load_with_binary = mx.get_peak_memory()
+        tk.reset_peak_memory()
+        scale = tk.array(2.0)
+        y = tk.load(save_file)
+        tk.eval(y)
+        tk.synchronize()
+        load_only = tk.get_peak_memory()
+        y = tk.load(save_file) * scale
+        tk.eval(y)
+        tk.synchronize()
+        load_with_binary = tk.get_peak_memory()
 
         self.assertEqual(load_only, load_with_binary)
 
     def test_save_and_load_empty(self):
         for i, shape in enumerate([(0,), (0, 3), (3, 0), (2, 0, 4)]):
             with self.subTest(shape=shape):
-                save_arr = mx.zeros(shape)
+                save_arr = tk.zeros(shape)
 
                 npy_file = os.path.join(self.test_dir, f"empty_{i}.npy")
-                mx.save(npy_file, save_arr)
-                self.assertEqual(mx.load(npy_file).shape, shape)
+                tk.save(npy_file, save_arr)
+                self.assertEqual(tk.load(npy_file).shape, shape)
                 # numpy can read what we wrote
                 self.assertEqual(np.load(npy_file).shape, shape)
 
                 st_file = os.path.join(self.test_dir, f"empty_{i}.safetensors")
-                mx.save_safetensors(st_file, {"x": save_arr})
-                self.assertEqual(mx.load(st_file)["x"].shape, shape)
+                tk.save_safetensors(st_file, {"x": save_arr})
+                self.assertEqual(tk.load(st_file)["x"].shape, shape)
 
         # An empty array alongside a normal one round trips both
         npz_file = os.path.join(self.test_dir, "empty.npz")
-        mx.savez(npz_file, x=mx.zeros((0, 3)), y=mx.ones((2, 2)))
-        loaded = mx.load(npz_file)
+        tk.savez(npz_file, x=tk.zeros((0, 3)), y=tk.ones((2, 2)))
+        loaded = tk.load(npz_file)
         self.assertEqual(loaded["x"].shape, (0, 3))
-        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(loaded["y"], tk.ones((2, 2))))
 
         st_file = os.path.join(self.test_dir, "empty_mixed.safetensors")
-        mx.save_safetensors(st_file, {"x": mx.zeros((0, 3)), "y": mx.ones((2, 2))})
-        loaded = mx.load(st_file)
+        tk.save_safetensors(st_file, {"x": tk.zeros((0, 3)), "y": tk.ones((2, 2))})
+        loaded = tk.load(st_file)
         self.assertEqual(loaded["x"].shape, (0, 3))
-        self.assertTrue(mx.array_equal(loaded["y"], mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(loaded["y"], tk.ones((2, 2))))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

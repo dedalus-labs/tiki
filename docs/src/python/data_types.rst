@@ -3,7 +3,7 @@
 Data Types
 ==========
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
 The default floating point type is ``float32`` and the default integer type is
 ``int32``. The table below shows supported values for :obj:`Dtype`. 

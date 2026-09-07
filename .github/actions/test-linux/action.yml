@@ -24,7 +24,7 @@ runs:
       if: steps.gpu-check.outputs.good == 'false'
       shell: bash
       run: |
-        mlx.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+        tiki.launch --verbose -n 8 python python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
         if grep -Fq '[WARN]' stderr.log ; then
           grep -F '[WARN]' stderr.log
           echo "Distributed ring test failed";
@@ -49,14 +49,14 @@ runs:
       shell: bash
       env:
         DEVICE: cpu
-      run: ./build/cpp/mlx/tests/tests
+      run: ./build/cpp/tiki/tests/tests
 
     - name: Run CPP tests - GPU
       if: steps.gpu-check.outputs.good == 'true'
       shell: bash
       env:
         DEVICE: gpu
-      run: ./build/cpp/mlx/tests/tests -sfe="*linalg_tests.cpp"
+      run: ./build/cpp/tiki/tests/tests -sfe="*linalg_tests.cpp"
 
     - name: Show stack trace on crash
       if: failure()

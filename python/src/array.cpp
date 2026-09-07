@@ -13,23 +13,23 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/typing.h>
 
-#include "mlx/backend/metal/metal.h"
-#include "mlx/utils.h"
+#include "tiki/backend/metal/metal.h"
+#include "tiki/utils.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 class ArrayAt {
  public:
-  ArrayAt(mx::array x) : x_(std::move(x)) {}
+  ArrayAt(tk::array x) : x_(std::move(x)) {}
   ArrayAt& set_indices(nb::object indices) {
     initialized_ = true;
     indices_ = indices;
@@ -42,55 +42,55 @@ class ArrayAt {
     }
   }
 
-  mx::array add(const ScalarOrArray& v) {
+  tk::array add(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_add_item(x_, indices_, v);
+    return tiki_add_item(x_, indices_, v);
   }
-  mx::array subtract(const ScalarOrArray& v) {
+  tk::array subtract(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_subtract_item(x_, indices_, v);
+    return tiki_subtract_item(x_, indices_, v);
   }
-  mx::array multiply(const ScalarOrArray& v) {
+  tk::array multiply(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_multiply_item(x_, indices_, v);
+    return tiki_multiply_item(x_, indices_, v);
   }
-  mx::array divide(const ScalarOrArray& v) {
+  tk::array divide(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_divide_item(x_, indices_, v);
+    return tiki_divide_item(x_, indices_, v);
   }
-  mx::array maximum(const ScalarOrArray& v) {
+  tk::array maximum(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_maximum_item(x_, indices_, v);
+    return tiki_maximum_item(x_, indices_, v);
   }
-  mx::array minimum(const ScalarOrArray& v) {
+  tk::array minimum(const ScalarOrArray& v) {
     check_initialized();
-    return mlx_minimum_item(x_, indices_, v);
+    return tiki_minimum_item(x_, indices_, v);
   }
 
  private:
-  mx::array x_;
+  tk::array x_;
   bool initialized_{false};
   nb::object indices_;
 };
 
 class ArrayPythonIterator {
  public:
-  ArrayPythonIterator(mx::array x) : idx_(0), x_(std::move(x)) {
+  ArrayPythonIterator(tk::array x) : idx_(0), x_(std::move(x)) {
     if (x_.ndim() == 0) {
       throw nb::type_error("iter() 0-dimensional array.");
     }
     if (x_.shape(0) > 0 && x_.shape(0) < 10) {
-      splits_ = mx::split(x_, x_.shape(0));
+      splits_ = tk::split(x_, x_.shape(0));
     }
   }
 
-  mx::array next() {
+  tk::array next() {
     if (idx_ >= x_.shape(0)) {
       throw nb::stop_iteration();
     }
 
     if (idx_ >= 0 && idx_ < splits_.size()) {
-      return mx::squeeze(splits_[idx_++], 0);
+      return tk::squeeze(splits_[idx_++], 0);
     }
 
     return *(x_.begin() + idx_++);
@@ -98,13 +98,13 @@ class ArrayPythonIterator {
 
  private:
   int idx_;
-  mx::array x_;
-  std::vector<mx::array> splits_;
+  tk::array x_;
+  std::vector<tk::array> splits_;
 };
 
 void init_array(nb::module_& m) {
   // Types
-  nb::class_<mx::Dtype>(
+  nb::class_<tk::Dtype>(
       m,
       "Dtype",
       R"pbdoc(
@@ -114,122 +114,122 @@ void init_array(nb::module_& m) {
       on available data types.
       )pbdoc")
       .def_prop_ro(
-          "size", &mx::Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
+          "size", &tk::Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
       .def(
           "__repr__",
-          [](const mx::Dtype& t) {
+          [](const tk::Dtype& t) {
             std::ostringstream os;
-            os << "mlx.core.";
+            os << "tiki.";
             os << t;
             return os.str();
           })
       .def(
           "__eq__",
-          [](const mx::Dtype& t, const nb::object& other) {
-            return nb::isinstance<mx::Dtype>(other) &&
-                t == nb::cast<mx::Dtype>(other);
+          [](const tk::Dtype& t, const nb::object& other) {
+            return nb::isinstance<tk::Dtype>(other) &&
+                t == nb::cast<tk::Dtype>(other);
           })
-      .def("__hash__", [](const mx::Dtype& t) {
+      .def("__hash__", [](const tk::Dtype& t) {
         return static_cast<int64_t>(t.val());
       });
 
-  m.attr("bool_") = nb::cast(mx::bool_);
-  m.attr("uint8") = nb::cast(mx::uint8);
-  m.attr("uint16") = nb::cast(mx::uint16);
-  m.attr("uint32") = nb::cast(mx::uint32);
-  m.attr("uint64") = nb::cast(mx::uint64);
-  m.attr("int8") = nb::cast(mx::int8);
-  m.attr("int16") = nb::cast(mx::int16);
-  m.attr("int32") = nb::cast(mx::int32);
-  m.attr("int64") = nb::cast(mx::int64);
-  m.attr("float16") = nb::cast(mx::float16);
-  m.attr("float32") = nb::cast(mx::float32);
-  m.attr("float64") = nb::cast(mx::float64);
-  m.attr("bfloat16") = nb::cast(mx::bfloat16);
-  m.attr("complex64") = nb::cast(mx::complex64);
-  nb::enum_<mx::Dtype::Category>(
+  m.attr("bool_") = nb::cast(tk::bool_);
+  m.attr("uint8") = nb::cast(tk::uint8);
+  m.attr("uint16") = nb::cast(tk::uint16);
+  m.attr("uint32") = nb::cast(tk::uint32);
+  m.attr("uint64") = nb::cast(tk::uint64);
+  m.attr("int8") = nb::cast(tk::int8);
+  m.attr("int16") = nb::cast(tk::int16);
+  m.attr("int32") = nb::cast(tk::int32);
+  m.attr("int64") = nb::cast(tk::int64);
+  m.attr("float16") = nb::cast(tk::float16);
+  m.attr("float32") = nb::cast(tk::float32);
+  m.attr("float64") = nb::cast(tk::float64);
+  m.attr("bfloat16") = nb::cast(tk::bfloat16);
+  m.attr("complex64") = nb::cast(tk::complex64);
+  nb::enum_<tk::Dtype::Category>(
       m,
       "DtypeCategory",
       R"pbdoc(
       Type to hold categories of :class:`dtypes <Dtype>`.
 
-      * :attr:`~mlx.core.generic`
+      * :attr:`~tiki.generic`
 
         * :ref:`bool_ <data_types>`
-        * :attr:`~mlx.core.number`
+        * :attr:`~tiki.number`
 
-          * :attr:`~mlx.core.integer`
+          * :attr:`~tiki.integer`
 
-            * :attr:`~mlx.core.unsignedinteger`
+            * :attr:`~tiki.unsignedinteger`
 
               * :ref:`uint8 <data_types>`
               * :ref:`uint16 <data_types>`
               * :ref:`uint32 <data_types>`
               * :ref:`uint64 <data_types>`
 
-            * :attr:`~mlx.core.signedinteger`
+            * :attr:`~tiki.signedinteger`
 
               * :ref:`int8 <data_types>`
               * :ref:`int32 <data_types>`
               * :ref:`int64 <data_types>`
 
-          * :attr:`~mlx.core.inexact`
+          * :attr:`~tiki.inexact`
 
-            * :attr:`~mlx.core.floating`
+            * :attr:`~tiki.floating`
 
               * :ref:`float16 <data_types>`
               * :ref:`bfloat16 <data_types>`
               * :ref:`float32 <data_types>`
               * :ref:`float64 <data_types>`
 
-            * :attr:`~mlx.core.complexfloating`
+            * :attr:`~tiki.complexfloating`
 
               * :ref:`complex64 <data_types>`
 
-      See also :func:`~mlx.core.issubdtype`.
+      See also :func:`~tiki.issubdtype`.
       )pbdoc")
-      .value("complexfloating", mx::complexfloating)
-      .value("floating", mx::floating)
-      .value("inexact", mx::inexact)
-      .value("signedinteger", mx::signedinteger)
-      .value("unsignedinteger", mx::unsignedinteger)
-      .value("integer", mx::integer)
-      .value("number", mx::number)
-      .value("generic", mx::generic)
+      .value("complexfloating", tk::complexfloating)
+      .value("floating", tk::floating)
+      .value("inexact", tk::inexact)
+      .value("signedinteger", tk::signedinteger)
+      .value("unsignedinteger", tk::unsignedinteger)
+      .value("integer", tk::integer)
+      .value("number", tk::number)
+      .value("generic", tk::generic)
       .export_values();
 
-  nb::class_<mx::finfo>(
+  nb::class_<tk::finfo>(
       m,
       "finfo",
       R"pbdoc(
       Get information on floating-point types.
       )pbdoc")
-      .def(nb::init<mx::Dtype>())
+      .def(nb::init<tk::Dtype>())
       .def_ro(
           "bits",
-          &mx::finfo::bits,
+          &tk::finfo::bits,
           R"pbdoc(The number of bits occupied by the type.)pbdoc")
       .def_ro(
           "min",
-          &mx::finfo::min,
+          &tk::finfo::min,
           R"pbdoc(The smallest representable number.)pbdoc")
       .def_ro(
           "max",
-          &mx::finfo::max,
+          &tk::finfo::max,
           R"pbdoc(The largest representable number.)pbdoc")
       .def_ro(
           "eps",
-          &mx::finfo::eps,
+          &tk::finfo::eps,
           R"pbdoc(
             The difference between 1.0 and the next smallest
             representable number larger than 1.0.
           )pbdoc")
       .def_ro(
           "smallest_normal",
-          &mx::finfo::smallest_normal,
+          &tk::finfo::smallest_normal,
           R"pbdoc(The smallest positive normal number.)pbdoc")
-      .def_ro("dtype", &mx::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::finfo& f) {
+      .def_ro("dtype", &tk::finfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
+      .def("__repr__", [](const tk::finfo& f) {
         std::ostringstream os;
         os << "finfo("
            << "min=" << f.min << ", max=" << f.max << ", dtype=" << f.dtype
@@ -237,23 +237,23 @@ void init_array(nb::module_& m) {
         return os.str();
       });
 
-  nb::class_<mx::iinfo>(
+  nb::class_<tk::iinfo>(
       m,
       "iinfo",
       R"pbdoc(
       Get information on integer types.
       )pbdoc")
-      .def(nb::init<mx::Dtype>())
+      .def(nb::init<tk::Dtype>())
       .def_ro(
           "min",
-          &mx::iinfo::min,
+          &tk::iinfo::min,
           R"pbdoc(The smallest representable number.)pbdoc")
       .def_ro(
           "max",
-          &mx::iinfo::max,
+          &tk::iinfo::max,
           R"pbdoc(The largest representable number.)pbdoc")
-      .def_ro("dtype", &mx::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
-      .def("__repr__", [](const mx::iinfo& i) {
+      .def_ro("dtype", &tk::iinfo::dtype, R"pbdoc(The :obj:`Dtype`.)pbdoc")
+      .def("__repr__", [](const tk::iinfo& i) {
         std::ostringstream os;
         os << "iinfo("
            << "min=" << i.min << ", max=" << i.max << ", dtype=" << i.dtype
@@ -280,7 +280,7 @@ void init_array(nb::module_& m) {
       m,
       "ArrayLike",
       R"pbdoc(
-        Any Python object which has an ``__mlx__array__`` method that
+        Any Python object which has an ``__tiki__array__`` method that
         returns an :obj:`array`.
       )pbdoc")
       .def(nb::init_implicit<nb::object>());
@@ -300,7 +300,7 @@ void init_array(nb::module_& m) {
       {Py_bf_releasebuffer, (void*)releasebuffer},
       {0, nullptr}};
 
-  nb::class_<mx::array>(
+  nb::class_<tk::array>(
       m,
       "array",
       R"pbdoc(An N-dimensional array object.)pbdoc",
@@ -309,8 +309,8 @@ void init_array(nb::module_& m) {
       nb::pooled(/* capacity = */ 128))
       .def(
           "__init__",
-          [](mx::array* aptr, nb::object v, std::optional<mx::Dtype> t) {
-            new (aptr) mx::array(create_array(v, t, true));
+          [](tk::array* aptr, nb::object v, std::optional<tk::Dtype> t) {
+            new (aptr) tk::array(create_array(v, t, true));
           },
           "val"_a,
           "dtype"_a = nb::none(),
@@ -318,21 +318,21 @@ void init_array(nb::module_& m) {
               "def __init__(self: array, val: scalar | list | tuple | DLPackCompatible | array, dtype: Dtype | None = None)"))
       .def_prop_ro(
           "size",
-          &mx::array::size,
+          &tk::array::size,
           R"pbdoc(Number of elements in the array.)pbdoc")
       .def_prop_ro(
-          "ndim", &mx::array::ndim, R"pbdoc(The array's dimension.)pbdoc")
+          "ndim", &tk::array::ndim, R"pbdoc(The array's dimension.)pbdoc")
       .def_prop_ro(
           "itemsize",
-          &mx::array::itemsize,
+          &tk::array::itemsize,
           R"pbdoc(The size of the array's datatype in bytes.)pbdoc")
       .def_prop_ro(
           "nbytes",
-          &mx::array::nbytes,
+          &tk::array::nbytes,
           R"pbdoc(The number of bytes in the array.)pbdoc")
       .def_prop_ro(
           "shape",
-          [](const mx::array& a) { return nb::cast(a.shape()); },
+          [](const tk::array& a) { return nb::cast(a.shape()); },
           nb::sig("def shape(self) -> tuple[int, ...]"),
           R"pbdoc(
           The shape of the array as a Python tuple.
@@ -342,13 +342,13 @@ void init_array(nb::module_& m) {
         )pbdoc")
       .def_prop_ro(
           "dtype",
-          &mx::array::dtype,
+          &tk::array::dtype,
           R"pbdoc(
             The array's :class:`Dtype`.
           )pbdoc")
       .def_prop_ro(
           "strides",
-          [](mx::array& a) {
+          [](tk::array& a) {
             a.eval();
             return nb::cast(a.strides());
           },
@@ -361,7 +361,7 @@ void init_array(nb::module_& m) {
         )pbdoc")
       .def_prop_ro(
           "offset",
-          [](mx::array& a) {
+          [](tk::array& a) {
             a.eval();
             return a.offset() / static_cast<int64_t>(a.itemsize());
           },
@@ -371,13 +371,13 @@ void init_array(nb::module_& m) {
         )pbdoc")
       .def_prop_ro(
           "real",
-          [](const mx::array& a) { return mx::real(a); },
+          [](const tk::array& a) { return tk::real(a); },
           R"pbdoc(
             The real part of a complex array.
           )pbdoc")
       .def_prop_ro(
           "imag",
-          [](const mx::array& a) { return mx::imag(a); },
+          [](const tk::array& a) { return tk::imag(a); },
           R"pbdoc(
             The imaginary part of a complex array.
           )pbdoc")
@@ -411,8 +411,8 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "astype",
-          [](const mx::array& a, mx::Dtype dtype, mx::StreamOrDevice s) {
-            return mx::astype(a, dtype, s);
+          [](const tk::array& a, tk::Dtype dtype, tk::StreamOrDevice s) {
+            return tk::astype(a, dtype, s);
           },
           "dtype"_a,
           "stream"_a = nb::none(),
@@ -428,13 +428,13 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "__array_namespace__",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const std::optional<std::string>& api_version) {
             if (api_version) {
               throw std::invalid_argument(
                   "Explicitly specifying api_version is not yet implemented.");
             }
-            return nb::module_::import_("mlx.core");
+            return nb::module_::import_("tiki");
           },
           "api_version"_a = nb::none(),
           R"pbdoc(
@@ -450,11 +450,11 @@ void init_array(nb::module_& m) {
             Returns:
                 out (Any): An object representing the array API namespace.
           )pbdoc")
-      .def("__getitem__", mlx_get_item, nb::arg().none())
-      .def("__setitem__", mlx_set_item, nb::arg().none(), nb::arg())
+      .def("__getitem__", tiki_get_item, nb::arg().none())
+      .def("__setitem__", tiki_set_item, nb::arg().none(), nb::arg())
       .def_prop_ro(
           "at",
-          [](const mx::array& a) { return ArrayAt(a); },
+          [](const tk::array& a) { return ArrayAt(a); },
           R"pbdoc(
             Used to apply updates at the given indices.
 
@@ -479,71 +479,71 @@ void init_array(nb::module_& m) {
                * - ``x = x.at[idx].divide(y)``
                  - ``x[idx] /= y``
                * - ``x = x.at[idx].maximum(y)``
-                 - ``x[idx] = mx.maximum(x[idx], y)``
+                 - ``x[idx] = tk.maximum(x[idx], y)``
                * - ``x = x.at[idx].minimum(y)``
-                 - ``x[idx] = mx.minimum(x[idx], y)``
+                 - ``x[idx] = tk.minimum(x[idx], y)``
 
             Example:
-                >>> a = mx.array([0, 0])
-                >>> idx = mx.array([0, 1, 0, 1])
+                >>> a = tk.array([0, 0])
+                >>> idx = tk.array([0, 1, 0, 1])
                 >>> a[idx] += 1
                 >>> a
                 array([1, 1], dtype=int32)
                 >>>
-                >>> a = mx.array([0, 0])
+                >>> a = tk.array([0, 0])
                 >>> a.at[idx].add(1)
                 array([2, 2], dtype=int32)
           )pbdoc")
       .def(
           "__len__",
-          [](const mx::array& a) {
+          [](const tk::array& a) {
             if (a.ndim() == 0) {
               throw nb::type_error("len() 0-dimensional array.");
             }
             return a.shape(0);
           })
       .def(
-          "__iter__", [](const mx::array& a) { return ArrayPythonIterator(a); })
+          "__iter__", [](const tk::array& a) { return ArrayPythonIterator(a); })
       .def(
           "__getstate__",
-          [](const mx::array& a) {
-            auto nd = (a.dtype() == mx::bfloat16)
-                ? mlx_to_np_array(mx::view(a, mx::uint16))
-                : mlx_to_np_array(a);
+          [](const tk::array& a) {
+            auto nd = (a.dtype() == tk::bfloat16)
+                ? tiki_to_np_array(tk::view(a, tk::uint16))
+                : tiki_to_np_array(a);
             return nb::make_tuple(nd, static_cast<uint8_t>(a.dtype().val()));
           })
       .def(
           "__setstate__",
-          [](mx::array& arr, const nb::tuple& state) {
+          [](tk::array& arr, const nb::tuple& state) {
             if (nb::len(state) != 2) {
               throw std::invalid_argument(
                   "Invalid pickle state: expected (ndarray, Dtype::Val)");
             }
             using ND = nb::ndarray<nb::ro>;
             ND nd = nb::cast<ND>(state[0]);
-            auto val = static_cast<mx::Dtype::Val>(nb::cast<uint8_t>(state[1]));
-            if (val == mx::Dtype::Val::bfloat16) {
+            auto val = static_cast<tk::Dtype::Val>(nb::cast<uint8_t>(state[1]));
+            if (val == tk::Dtype::Val::bfloat16) {
               auto owner = nb::handle(state[0].ptr());
-              new (&arr) mx::array(nd_array_to_mlx(
+              new (&arr) tk::array(nd_array_to_tiki(
                   ND(nd.data(),
                      nd.ndim(),
                      reinterpret_cast<const size_t*>(nd.shape_ptr()),
                      owner,
                      nullptr,
-                     nb::dtype<mx::bfloat16_t>()),
-                  mx::bfloat16));
+                     nb::dtype<tk::bfloat16_t>()),
+                  tk::bfloat16));
             } else {
-              new (&arr) mx::array(nd_array_to_mlx(nd, std::nullopt));
+              new (&arr) tk::array(nd_array_to_tiki(nd, std::nullopt));
             }
           })
       .def(
           "__dlpack__",
-          [](const mx::array& a,
+          [](const tk::array& a,
              nb::object,
              nb::object,
              std::optional<std::tuple<int, int>> dl_device,
              std::optional<bool> copy) {
-            return mlx_to_dlpack(a, copy.value_or(false), dl_device);
+            return tiki_to_dlpack(a, copy.value_or(false), dl_device);
           },
           nb::kw_only(),
           "stream"_a = nb::none(),
@@ -552,10 +552,10 @@ void init_array(nb::module_& m) {
           "copy"_a = nb::none())
       .def(
           "__dlpack_device__",
-          [](const mx::array& a) {
+          [](const tk::array& a) {
             // See
             // https://github.com/dmlc/dlpack/blob/5c210da409e7f1e51ddf445134a4376fdbd70d7d/include/dlpack/dlpack.h#L74
-            if (mx::metal::is_available()) {
+            if (tk::metal::is_available()) {
               return nb::make_tuple(8, 0);
             } else {
               // CPU device
@@ -564,120 +564,120 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__array__",
-          [](const mx::array& self, nb::object dtype, nb::object copy) {
-            return mlx_to_np_array(self);
+          [](const tk::array& self, nb::object dtype, nb::object copy) {
+            return tiki_to_np_array(self);
           },
           "dtype"_a = nb::none(),
           "copy"_a = nb::none())
-      .def("__copy__", [](const mx::array& self) { return mx::array(self); })
+      .def("__copy__", [](const tk::array& self) { return tk::array(self); })
       .def(
           "__deepcopy__",
-          [](const mx::array& self, nb::dict) { return mx::array(self); },
+          [](const tk::array& self, nb::dict) { return tk::array(self); },
           "memo"_a)
       .def(
           "__add__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("addition", v);
             }
             auto b = to_array(v, a.dtype());
-            return mx::add(a, b);
+            return tk::add(a, b);
           },
           "other"_a)
       .def(
           "__iadd__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace addition", v);
             }
-            a.overwrite_descriptor(mx::add(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::add(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__radd__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("addition", v);
             }
-            return mx::add(a, to_array(v, a.dtype()));
+            return tk::add(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__sub__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("subtraction", v);
             }
-            return mx::subtract(a, to_array(v, a.dtype()));
+            return tk::subtract(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__isub__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace subtraction", v);
             }
-            a.overwrite_descriptor(mx::subtract(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::subtract(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__rsub__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("subtraction", v);
             }
-            return mx::subtract(to_array(v, a.dtype()), a);
+            return tk::subtract(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__mul__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("multiplication", v);
             }
-            return mx::multiply(a, to_array(v, a.dtype()));
+            return tk::multiply(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__imul__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace multiplication", v);
             }
-            a.overwrite_descriptor(mx::multiply(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::multiply(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__rmul__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("multiplication", v);
             }
-            return mx::multiply(a, to_array(v, a.dtype()));
+            return tk::multiply(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__truediv__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("division", v);
             }
-            return mx::divide(a, to_array(v, a.dtype()));
+            return tk::divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__itruediv__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace division", v);
             }
-            if (!mx::issubdtype(a.dtype(), mx::inexact)) {
+            if (!tk::issubdtype(a.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "In place division cannot cast to non-floating point type.");
             }
@@ -688,151 +688,151 @@ void init_array(nb::module_& m) {
           nb::rv_policy::none)
       .def(
           "__rtruediv__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("division", v);
             }
-            return mx::divide(to_array(v, a.dtype()), a);
+            return tk::divide(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__div__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("division", v);
             }
-            return mx::divide(a, to_array(v, a.dtype()));
+            return tk::divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__rdiv__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("division", v);
             }
-            return mx::divide(to_array(v, a.dtype()), a);
+            return tk::divide(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__floordiv__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("floor division", v);
             }
-            return mx::floor_divide(a, to_array(v, a.dtype()));
+            return tk::floor_divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ifloordiv__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace floor division", v);
             }
-            a.overwrite_descriptor(mx::floor_divide(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::floor_divide(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__rfloordiv__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("floor division", v);
             }
             auto b = to_array(v, a.dtype());
-            return mx::floor_divide(b, a);
+            return tk::floor_divide(b, a);
           },
           "other"_a)
       .def(
           "__mod__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("modulus", v);
             }
-            return mx::remainder(a, to_array(v, a.dtype()));
+            return tk::remainder(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__imod__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace modulus", v);
             }
-            a.overwrite_descriptor(mx::remainder(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::remainder(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__rmod__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("modulus", v);
             }
-            return mx::remainder(to_array(v, a.dtype()), a);
+            return tk::remainder(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__eq__",
-          [](const mx::array& a,
-             const ScalarOrArray& v) -> std::variant<mx::array, bool> {
+          [](const tk::array& a,
+             const ScalarOrArray& v) -> std::variant<tk::array, bool> {
             if (!is_comparable_with_array(v)) {
               return false;
             }
-            return mx::equal(a, to_array(v, a.dtype()));
+            return tk::equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__lt__",
-          [](const mx::array& a, const ScalarOrArray v) -> mx::array {
+          [](const tk::array& a, const ScalarOrArray v) -> tk::array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("less than", v);
             }
-            return mx::less(a, to_array(v, a.dtype()));
+            return tk::less(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__le__",
-          [](const mx::array& a, const ScalarOrArray v) -> mx::array {
+          [](const tk::array& a, const ScalarOrArray v) -> tk::array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("less than or equal", v);
             }
-            return mx::less_equal(a, to_array(v, a.dtype()));
+            return tk::less_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__gt__",
-          [](const mx::array& a, const ScalarOrArray v) -> mx::array {
+          [](const tk::array& a, const ScalarOrArray v) -> tk::array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("greater than", v);
             }
-            return mx::greater(a, to_array(v, a.dtype()));
+            return tk::greater(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ge__",
-          [](const mx::array& a, const ScalarOrArray v) -> mx::array {
+          [](const tk::array& a, const ScalarOrArray v) -> tk::array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("greater than or equal", v);
             }
-            return mx::greater_equal(a, to_array(v, a.dtype()));
+            return tk::greater_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ne__",
-          [](const mx::array& a,
-             const ScalarOrArray v) -> std::variant<mx::array, bool> {
+          [](const tk::array& a,
+             const ScalarOrArray v) -> std::variant<tk::array, bool> {
             if (!is_comparable_with_array(v)) {
               return true;
             }
-            return mx::not_equal(a, to_array(v, a.dtype()));
+            return tk::not_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
-      .def("__neg__", [](const mx::array& a) { return -a; })
-      .def("__bool__", [](mx::array& a) { return nb::bool_(to_scalar(a)); })
+      .def("__neg__", [](const tk::array& a) { return -a; })
+      .def("__bool__", [](tk::array& a) { return nb::bool_(to_scalar(a)); })
       .def(
           "__repr__",
-          [](mx::array& a) {
+          [](tk::array& a) {
             nb::gil_scoped_release nogil;
             std::ostringstream os;
             os << a;
@@ -840,230 +840,230 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__matmul__",
-          [](const mx::array& a, mx::array& other) {
-            return mx::matmul(a, other);
+          [](const tk::array& a, tk::array& other) {
+            return tk::matmul(a, other);
           },
           "other"_a)
       .def(
           "__imatmul__",
-          [](mx::array& a, mx::array& other) -> mx::array& {
-            a.overwrite_descriptor(mx::matmul(a, other));
+          [](tk::array& a, tk::array& other) -> tk::array& {
+            a.overwrite_descriptor(tk::matmul(a, other));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__pow__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("power", v);
             }
-            return mx::power(a, to_array(v, a.dtype()));
+            return tk::power(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__rpow__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("power", v);
             }
-            return mx::power(to_array(v, a.dtype()), a);
+            return tk::power(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__ipow__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace power", v);
             }
-            a.overwrite_descriptor(mx::power(a, to_array(v, a.dtype())));
+            a.overwrite_descriptor(tk::power(a, to_array(v, a.dtype())));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__invert__",
-          [](const mx::array& a) {
-            if (mx::issubdtype(a.dtype(), mx::inexact)) {
+          [](const tk::array& a) {
+            if (tk::issubdtype(a.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise inversion.");
             }
-            if (a.dtype() == mx::bool_) {
-              return mx::logical_not(a);
+            if (a.dtype() == tk::bool_) {
+              return tk::logical_not(a);
             }
-            return mx::bitwise_invert(a);
+            return tk::bitwise_invert(a);
           })
       .def(
           "__and__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("bitwise and", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
-            return mx::bitwise_and(a, b);
+            return tk::bitwise_and(a, b);
           },
           "other"_a)
       .def(
           "__iand__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace bitwise and", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
-            a.overwrite_descriptor(mx::bitwise_and(a, b));
+            a.overwrite_descriptor(tk::bitwise_and(a, b));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__or__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("bitwise or", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise or.");
             }
-            return mx::bitwise_or(a, b);
+            return tk::bitwise_or(a, b);
           },
           "other"_a)
       .def(
           "__ior__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace bitwise or", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise or.");
             }
-            a.overwrite_descriptor(mx::bitwise_or(a, b));
+            a.overwrite_descriptor(tk::bitwise_or(a, b));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__lshift__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("left shift", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with left shift.");
             }
-            return mx::left_shift(a, b);
+            return tk::left_shift(a, b);
           },
           "other"_a)
       .def(
           "__ilshift__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace left shift", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with left shift.");
             }
-            a.overwrite_descriptor(mx::left_shift(a, b));
+            a.overwrite_descriptor(tk::left_shift(a, b));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__rshift__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("right shift", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with right shift.");
             }
-            return mx::right_shift(a, b);
+            return tk::right_shift(a, b);
           },
           "other"_a)
       .def(
           "__irshift__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace right shift", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with right shift.");
             }
-            a.overwrite_descriptor(mx::right_shift(a, b));
+            a.overwrite_descriptor(tk::right_shift(a, b));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
       .def(
           "__xor__",
-          [](const mx::array& a, const ScalarOrArray v) {
+          [](const tk::array& a, const ScalarOrArray v) {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("bitwise xor", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise xor.");
             }
-            return mx::bitwise_xor(a, b);
+            return tk::bitwise_xor(a, b);
           },
           "other"_a)
       .def(
           "__ixor__",
-          [](mx::array& a, const ScalarOrArray v) -> mx::array& {
+          [](tk::array& a, const ScalarOrArray v) -> tk::array& {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("inplace bitwise xor", v);
             }
             auto b = to_array(v, a.dtype());
-            if (mx::issubdtype(a.dtype(), mx::inexact) ||
-                mx::issubdtype(b.dtype(), mx::inexact)) {
+            if (tk::issubdtype(a.dtype(), tk::inexact) ||
+                tk::issubdtype(b.dtype(), tk::inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed bitwise xor.");
             }
-            a.overwrite_descriptor(mx::bitwise_xor(a, b));
+            a.overwrite_descriptor(tk::bitwise_xor(a, b));
             return a;
           },
           "other"_a,
           nb::rv_policy::none)
-      .def("__int__", [](mx::array& a) { return nb::int_(to_scalar(a)); })
-      .def("__float__", [](mx::array& a) { return nb::float_(to_scalar(a)); })
+      .def("__int__", [](tk::array& a) { return nb::int_(to_scalar(a)); })
+      .def("__float__", [](tk::array& a) { return nb::float_(to_scalar(a)); })
       .def(
           "__complex__",
-          [](mx::array& a) {
+          [](tk::array& a) {
             return nb::cast<std::complex<double>>(to_scalar(a));
           })
       .def(
           "__index__",
-          [](mx::array& a) {
-            if (!mx::issubdtype(a.dtype(), mx::integer) || a.ndim() != 0) {
+          [](tk::array& a) {
+            if (!tk::issubdtype(a.dtype(), tk::integer) || a.ndim() != 0) {
               throw nb::type_error(
                   "Only 0-dimensional integer arrays can be converted to an index.");
             }
@@ -1071,17 +1071,17 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__bytes__",
-          [](mx::array& a) {
+          [](tk::array& a) {
             a.eval();
             return nb::bytes(
                 reinterpret_cast<const char*>(a.data<void>()), a.nbytes());
           })
       .def(
           "__format__",
-          [](mx::array& a, nb::object format_spec) {
+          [](tk::array& a, nb::object format_spec) {
             if (nb::len(nb::str(format_spec)) > 0 && a.ndim() > 0) {
               throw nb::type_error(
-                  "unsupported format string passed to mx.array.__format__");
+                  "unsupported format string passed to tk.array.__format__");
             } else if (a.ndim() == 0) {
               auto obj = to_scalar(a);
               return nb::cast<std::string>(
@@ -1095,11 +1095,11 @@ void init_array(nb::module_& m) {
           })
       .def(
           "flatten",
-          [](const mx::array& a,
+          [](const tk::array& a,
              int start_axis,
              int end_axis,
-             const mx::StreamOrDevice& s) {
-            return mx::flatten(a, start_axis, end_axis, s);
+             const tk::StreamOrDevice& s) {
+            return tk::flatten(a, start_axis, end_axis, s);
           },
           "start_axis"_a = 0,
           "end_axis"_a = -1,
@@ -1110,14 +1110,14 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "reshape",
-          [](const mx::array& a, nb::args shape_, mx::StreamOrDevice s) {
-            mx::Shape shape;
+          [](const tk::array& a, nb::args shape_, tk::StreamOrDevice s) {
+            tk::Shape shape;
             if (!nb::isinstance<int>(shape_[0])) {
-              shape = nb::cast<mx::Shape>(shape_[0]);
+              shape = nb::cast<tk::Shape>(shape_[0]);
             } else {
-              shape = nb::cast<mx::Shape>(shape_);
+              shape = nb::cast<tk::Shape>(shape_);
             }
-            return mx::reshape(a, std::move(shape), s);
+            return tk::reshape(a, std::move(shape), s);
           },
           "shape"_a,
           "stream"_a = nb::none(),
@@ -1129,15 +1129,15 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "squeeze",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& v,
-             const mx::StreamOrDevice& s) {
+             const tk::StreamOrDevice& s) {
             if (std::holds_alternative<std::monostate>(v)) {
-              return mx::squeeze(a, s);
+              return tk::squeeze(a, s);
             } else if (auto pv = std::get_if<int>(&v); pv) {
-              return mx::squeeze(a, *pv, s);
+              return tk::squeeze(a, *pv, s);
             } else {
-              return mx::squeeze(a, std::get<std::vector<int>>(v), s);
+              return tk::squeeze(a, std::get<std::vector<int>>(v), s);
             }
           },
           "axis"_a = nb::none(),
@@ -1148,87 +1148,87 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "abs",
-          &mx::abs,
+          &tk::abs,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`abs`.")
       .def(
           "__abs__",
-          [](const mx::array& a) { return mx::abs(a); },
+          [](const tk::array& a) { return tk::abs(a); },
           "See :func:`abs`.")
       .def(
           "square",
-          &mx::square,
+          &tk::square,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`square`.")
       .def(
           "sqrt",
-          &mx::sqrt,
+          &tk::sqrt,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`sqrt`.")
       .def(
           "rsqrt",
-          &mx::rsqrt,
+          &tk::rsqrt,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`rsqrt`.")
       .def(
           "reciprocal",
-          &mx::reciprocal,
+          &tk::reciprocal,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`reciprocal`.")
       .def(
           "exp",
-          &mx::exp,
+          &tk::exp,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`exp`.")
       .def(
           "log",
-          &mx::log,
+          &tk::log,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`log`.")
       .def(
           "log2",
-          &mx::log2,
+          &tk::log2,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`log2`.")
       .def(
           "log10",
-          &mx::log10,
+          &tk::log10,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`log10`.")
       .def(
           "sin",
-          &mx::sin,
+          &tk::sin,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`sin`.")
       .def(
           "cos",
-          &mx::cos,
+          &tk::cos,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`cos`.")
       .def(
           "log1p",
-          &mx::log1p,
+          &tk::log1p,
           nb::kw_only(),
           "stream"_a = nb::none(),
           "See :func:`log1p`.")
       .def(
           "all",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::all(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::all(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1237,11 +1237,11 @@ void init_array(nb::module_& m) {
           "See :func:`all`.")
       .def(
           "any",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::any(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::any(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1250,7 +1250,7 @@ void init_array(nb::module_& m) {
           "See :func:`any`.")
       .def(
           "moveaxis",
-          &mx::moveaxis,
+          &tk::moveaxis,
           "source"_a,
           "destination"_a,
           nb::kw_only(),
@@ -1258,7 +1258,7 @@ void init_array(nb::module_& m) {
           "See :func:`moveaxis`.")
       .def(
           "swapaxes",
-          &mx::swapaxes,
+          &tk::swapaxes,
           "axis1"_a,
           "axis2"_a,
           nb::kw_only(),
@@ -1266,9 +1266,9 @@ void init_array(nb::module_& m) {
           "See :func:`swapaxes`.")
       .def(
           "transpose",
-          [](const mx::array& a, nb::args axes_, mx::StreamOrDevice s) {
+          [](const tk::array& a, nb::args axes_, tk::StreamOrDevice s) {
             if (axes_.size() == 0) {
-              return mx::transpose(a, s);
+              return tk::transpose(a, s);
             }
             std::vector<int> axes;
             if (!nb::isinstance<int>(axes_[0])) {
@@ -1276,7 +1276,7 @@ void init_array(nb::module_& m) {
             } else {
               axes = nb::cast<std::vector<int>>(axes_);
             }
-            return mx::transpose(a, axes, s);
+            return tk::transpose(a, axes, s);
           },
           "axes"_a,
           "stream"_a = nb::none(),
@@ -1288,15 +1288,15 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def_prop_ro(
           "T",
-          [](const mx::array& a) { return mx::transpose(a); },
+          [](const tk::array& a) { return tk::transpose(a); },
           "Equivalent to calling ``self.transpose()`` with no arguments.")
       .def(
           "sum",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::sum(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::sum(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1305,11 +1305,11 @@ void init_array(nb::module_& m) {
           "See :func:`sum`.")
       .def(
           "prod",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::prod(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::prod(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1318,11 +1318,11 @@ void init_array(nb::module_& m) {
           "See :func:`prod`.")
       .def(
           "min",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::min(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::min(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1331,11 +1331,11 @@ void init_array(nb::module_& m) {
           "See :func:`min`.")
       .def(
           "max",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::max(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::max(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1344,15 +1344,15 @@ void init_array(nb::module_& m) {
           "See :func:`max`.")
       .def(
           "logcumsumexp",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool reverse,
              bool inclusive,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::logcumsumexp(a, *axis, reverse, inclusive, s);
+              return tk::logcumsumexp(a, *axis, reverse, inclusive, s);
             } else {
-              return mx::logcumsumexp(a, reverse, inclusive, s);
+              return tk::logcumsumexp(a, reverse, inclusive, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1363,11 +1363,11 @@ void init_array(nb::module_& m) {
           "See :func:`logcumsumexp`.")
       .def(
           "logsumexp",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::logsumexp(
+             tk::StreamOrDevice s) {
+            return tk::logsumexp(
                 a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
@@ -1377,11 +1377,11 @@ void init_array(nb::module_& m) {
           "See :func:`logsumexp`.")
       .def(
           "mean",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
-            return mx::mean(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
+             tk::StreamOrDevice s) {
+            return tk::mean(a, get_reduce_axes(axis, a.ndim()), keepdims, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
@@ -1390,14 +1390,14 @@ void init_array(nb::module_& m) {
           "See :func:`mean`.")
       .def(
           "std",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
              std::optional<int> correction,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             ddof = correction.value_or(ddof);
-            return mx::std(
+            return tk::std(
                 a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
           },
           "axis"_a = nb::none(),
@@ -1409,14 +1409,14 @@ void init_array(nb::module_& m) {
           "See :func:`std`.")
       .def(
           "var",
-          [](const mx::array& a,
+          [](const tk::array& a,
              const IntOrVec& axis,
              bool keepdims,
              int ddof,
              std::optional<int> correction,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             ddof = correction.value_or(ddof);
-            return mx::var(
+            return tk::var(
                 a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
           },
           "axis"_a = nb::none(),
@@ -1428,15 +1428,15 @@ void init_array(nb::module_& m) {
           "See :func:`var`.")
       .def(
           "split",
-          [](const mx::array& a,
-             const std::variant<int, mx::Shape>& indices_or_sections,
+          [](const tk::array& a,
+             const std::variant<int, tk::Shape>& indices_or_sections,
              int axis,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (auto pv = std::get_if<int>(&indices_or_sections); pv) {
-              return mx::split(a, *pv, axis, s);
+              return tk::split(a, *pv, axis, s);
             } else {
-              return mx::split(
-                  a, std::get<mx::Shape>(indices_or_sections), axis, s);
+              return tk::split(
+                  a, std::get<tk::Shape>(indices_or_sections), axis, s);
             }
           },
           "indices_or_sections"_a,
@@ -1446,14 +1446,14 @@ void init_array(nb::module_& m) {
           "See :func:`split`.")
       .def(
           "argmin",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::argmin(a, *axis, keepdims, s);
+              return tk::argmin(a, *axis, keepdims, s);
             } else {
-              return mx::argmin(a, keepdims, s);
+              return tk::argmin(a, keepdims, s);
             }
           },
           "axis"_a = std::nullopt,
@@ -1463,14 +1463,14 @@ void init_array(nb::module_& m) {
           "See :func:`argmin`.")
       .def(
           "argmax",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool keepdims,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::argmax(a, *axis, keepdims, s);
+              return tk::argmax(a, *axis, keepdims, s);
             } else {
-              return mx::argmax(a, keepdims, s);
+              return tk::argmax(a, keepdims, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1480,15 +1480,15 @@ void init_array(nb::module_& m) {
           "See :func:`argmax`.")
       .def(
           "cumsum",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool reverse,
              bool inclusive,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::cumsum(a, *axis, reverse, inclusive, s);
+              return tk::cumsum(a, *axis, reverse, inclusive, s);
             } else {
-              return mx::cumsum(a, reverse, inclusive, s);
+              return tk::cumsum(a, reverse, inclusive, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1499,15 +1499,15 @@ void init_array(nb::module_& m) {
           "See :func:`cumsum`.")
       .def(
           "cumprod",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool reverse,
              bool inclusive,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::cumprod(a, *axis, reverse, inclusive, s);
+              return tk::cumprod(a, *axis, reverse, inclusive, s);
             } else {
-              return mx::cumprod(a, reverse, inclusive, s);
+              return tk::cumprod(a, reverse, inclusive, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1518,15 +1518,15 @@ void init_array(nb::module_& m) {
           "See :func:`cumprod`.")
       .def(
           "cummax",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool reverse,
              bool inclusive,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::cummax(a, *axis, reverse, inclusive, s);
+              return tk::cummax(a, *axis, reverse, inclusive, s);
             } else {
-              return mx::cummax(a, reverse, inclusive, s);
+              return tk::cummax(a, reverse, inclusive, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1537,15 +1537,15 @@ void init_array(nb::module_& m) {
           "See :func:`cummax`.")
       .def(
           "cummin",
-          [](const mx::array& a,
+          [](const tk::array& a,
              std::optional<int> axis,
              bool reverse,
              bool inclusive,
-             mx::StreamOrDevice s) {
+             tk::StreamOrDevice s) {
             if (axis) {
-              return mx::cummin(a, *axis, reverse, inclusive, s);
+              return tk::cummin(a, *axis, reverse, inclusive, s);
             } else {
-              return mx::cummin(a, reverse, inclusive, s);
+              return tk::cummin(a, reverse, inclusive, s);
             }
           },
           "axis"_a = nb::none(),
@@ -1556,8 +1556,8 @@ void init_array(nb::module_& m) {
           "See :func:`cummin`.")
       .def(
           "round",
-          [](const mx::array& a, int decimals, mx::StreamOrDevice s) {
-            return mx::round(a, decimals, s);
+          [](const tk::array& a, int decimals, tk::StreamOrDevice s) {
+            return tk::round(a, decimals, s);
           },
           "decimals"_a = 0,
           nb::kw_only(),
@@ -1565,12 +1565,12 @@ void init_array(nb::module_& m) {
           "See :func:`round`.")
       .def(
           "diagonal",
-          [](const mx::array& a,
+          [](const tk::array& a,
              int offset,
              int axis1,
              int axis2,
-             mx::StreamOrDevice s) {
-            return mx::diagonal(a, offset, axis1, axis2, s);
+             tk::StreamOrDevice s) {
+            return tk::diagonal(a, offset, axis1, axis2, s);
           },
           "offset"_a = 0,
           "axis1"_a = 0,
@@ -1579,8 +1579,8 @@ void init_array(nb::module_& m) {
           "See :func:`diagonal`.")
       .def(
           "diag",
-          [](const mx::array& a, int k, mx::StreamOrDevice s) {
-            return mx::diag(a, k, s);
+          [](const tk::array& a, int k, tk::StreamOrDevice s) {
+            return tk::diag(a, k, s);
           },
           "k"_a = 0,
           nb::kw_only(),
@@ -1590,8 +1590,8 @@ void init_array(nb::module_& m) {
         )pbdoc")
       .def(
           "conj",
-          [](const mx::array& a, mx::StreamOrDevice s) {
-            return mx::conjugate(to_array(a), s);
+          [](const tk::array& a, tk::StreamOrDevice s) {
+            return tk::conjugate(to_array(a), s);
           },
           nb::kw_only(),
           "stream"_a = nb::none(),
@@ -1599,8 +1599,8 @@ void init_array(nb::module_& m) {
       .def(
           "view",
           [](const ScalarOrArray& a,
-             const mx::Dtype& dtype,
-             mx::StreamOrDevice s) { return mx::view(to_array(a), dtype, s); },
+             const tk::Dtype& dtype,
+             tk::StreamOrDevice s) { return tk::view(to_array(a), dtype, s); },
           "dtype"_a,
           nb::kw_only(),
           "stream"_a = nb::none(),

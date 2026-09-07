@@ -2,7 +2,7 @@ import argparse
 import math
 import time
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 import torch
 
@@ -26,11 +26,11 @@ def make_mx_conv_transpose_2D(strides=(1, 1), padding=(0, 0), groups=1):
     def mx_conv_transpose_2D(a, b):
         ys = []
         for i in range(N_iter_func):
-            y = mx.conv_transpose2d(
-                a, b, stride=strides, padding=padding, groups=groups, stream=mx.cpu
+            y = tk.conv_transpose2d(
+                a, b, stride=strides, padding=padding, groups=groups, stream=tk.cpu
             )
             ys.append(y)
-        mx.eval(ys)
+        tk.eval(ys)
         return ys
 
     return mx_conv_transpose_2D
@@ -57,8 +57,8 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
         np_dtype
     )
 
-    a_mx = mx.array(a_np)
-    b_mx = mx.array(b_np)
+    a_mx = tk.array(a_np)
+    b_mx = tk.array(b_np)
 
     a_pt = torch.from_numpy(a_np.transpose((0, 3, 1, 2))).to("cpu")
     b_pt = torch.from_numpy(b_np.transpose((3, 0, 1, 2))).to("cpu")
@@ -67,10 +67,10 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
     f_pt = make_pt_conv_transpose_2D(strides, padding, groups)
 
     time_torch = bench(f_pt, a_pt, b_pt)
-    time_mlx = bench(f_mx, a_mx, b_mx)
+    time_tiki = bench(f_mx, a_mx, b_mx)
 
-    out_mx = mx.conv_transpose2d(
-        a_mx, b_mx, stride=strides, padding=padding, groups=groups, stream=mx.cpu
+    out_mx = tk.conv_transpose2d(
+        a_mx, b_mx, stride=strides, padding=padding, groups=groups, stream=tk.cpu
     )
     out_pt = torch.conv_transpose2d(
         a_pt.to("cpu"), b_pt.to("cpu"), stride=strides, padding=padding, groups=groups
@@ -85,7 +85,7 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
             f"Failed at {(N, H, W, C)}, {(O, kH, kW, C)} [strides = {strides}, padding = {padding}, groups = {groups}] with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
         )
 
-    return time_mlx, time_torch
+    return time_tiki, time_torch
 
 
 if __name__ == "__main__":
@@ -117,13 +117,13 @@ if __name__ == "__main__":
         )
         for N, H, W, C, kH, kW, O, strides, padding, groups in shapes:
             np_dtype = getattr(np, dtype)
-            time_mlx, time_torch = bench_shape(
+            time_tiki, time_torch = bench_shape(
                 N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype
             )
-            diff = time_torch / time_mlx - 1.0
+            diff = time_torch / time_tiki - 1.0
 
             print(
                 f"({N}, {H:3d}, {W:3d}, {C:3d}), ({O:3d}, {kH:2d}, {kW:2d}, {C:3d}), {dtype}, {strides}, {padding}, {groups:7d}, {100. * diff:+5.2f}%"
             )
-            if time_mlx >= 2.0 * time_torch:
+            if time_tiki >= 2.0 * time_torch:
                 print("ATTENTION ^^^^^^^")

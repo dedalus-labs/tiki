@@ -2,16 +2,16 @@
 
 import unittest
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 
 from scan import associative_scan
 
-HAS_CUDA = mx.cuda.is_available()
+HAS_CUDA = tk.cuda.is_available()
 if HAS_CUDA:
     from affine_scan import ScanContractError, affine_scan
 
-Pair = tuple[mx.array, mx.array]
+Pair = tuple[tk.array, tk.array]
 LENGTHS = (1, 2, 3, 7, 31, 129, 1024, 2048)
 
 
@@ -21,19 +21,19 @@ def affine(left: Pair, right: Pair) -> Pair:
     return ar * al, ar * bl + br
 
 
-def tree_scan(a: mx.array, b: mx.array) -> Pair:
+def tree_scan(a: tk.array, b: tk.array) -> Pair:
     return associative_scan(affine, (a, b), axis=1)
 
 
-def rows(batch: int, time: int, seed: int) -> mx.array:
-    return mx.array(
+def rows(batch: int, time: int, seed: int) -> tk.array:
+    return tk.array(
         np.random.default_rng(seed).normal(size=(batch, time)).astype(np.float32)
     )
 
 
 def assert_close(actual: Pair, expected: Pair, name: str) -> None:
-    mx.eval(actual, expected)
-    mx.synchronize()
+    tk.eval(actual, expected)
+    tk.synchronize()
     for actual_leaf, expected_leaf in zip(actual, expected):
         np.testing.assert_allclose(
             np.asarray(actual_leaf),
@@ -49,24 +49,24 @@ class TestAffineScan(unittest.TestCase):
     def test_first_offset_does_not_depend_on_the_first_coefficient(self) -> None:
         for time in (1, 3, 8):
             for coefficient in (float("inf"), -float("inf"), float("nan")):
-                a = mx.ones((1, time))
+                a = tk.ones((1, time))
                 a[0, 0] = coefficient
-                b = mx.arange(1, time + 1, dtype=mx.float32)[None]
+                b = tk.arange(1, time + 1, dtype=tk.float32)[None]
                 _, offsets = affine_scan(a, b)
-                mx.eval(offsets)
-                mx.synchronize()
+                tk.eval(offsets)
+                tk.synchronize()
                 np.testing.assert_array_equal(
-                    np.asarray(offsets), np.asarray(mx.cumsum(b, axis=1))
+                    np.asarray(offsets), np.asarray(tk.cumsum(b, axis=1))
                 )
 
     def test_first_coefficient_has_no_offset_cotangent(self) -> None:
-        a = mx.ones((1, 3))
-        b = mx.ones_like(a)
-        gp = mx.zeros_like(a)
-        gh = mx.array([[float("inf"), 0.0, 0.0]])
-        da, _ = mx.vjp(affine_scan, (a, b), (gp, gh))[1]
-        mx.eval(da)
-        mx.synchronize()
+        a = tk.ones((1, 3))
+        b = tk.ones_like(a)
+        gp = tk.zeros_like(a)
+        gh = tk.array([[float("inf"), 0.0, 0.0]])
+        da, _ = tk.vjp(affine_scan, (a, b), (gp, gh))[1]
+        tk.eval(da)
+        tk.synchronize()
         self.assertEqual(da[0, 0].item(), 0.0)
 
     # Invariant: the kernel's forward equals the generic tree at every
@@ -79,7 +79,7 @@ class TestAffineScan(unittest.TestCase):
             b = rows(5, time, time + 1)
             assert_close(affine_scan(a, b), tree_scan(a, b), f"time={time}")
 
-    # Invariant: the registered VJP equals MLX's differentiation of the
+    # Invariant: the registered VJP equals Tiki's differentiation of the
     # generic tree for arbitrary cotangents on both outputs (JAX's method for
     # validating a kernel gradient against the tree).
     # Witness: random cotangents at every contract length.
@@ -87,20 +87,20 @@ class TestAffineScan(unittest.TestCase):
         for time in LENGTHS:
             a, b, gp, gh = (rows(5, time, time + k) for k in range(4))
             a[0, time // 2] = 0.0
-            kernel_grads = mx.vjp(affine_scan, (a, b), (gp, gh))[1]
-            tree_grads = mx.vjp(tree_scan, (a, b), (gp, gh))[1]
+            kernel_grads = tk.vjp(affine_scan, (a, b), (gp, gh))[1]
+            tree_grads = tk.vjp(tree_scan, (a, b), (gp, gh))[1]
             assert_close(kernel_grads, tree_grads, f"time={time}")
 
-    # Invariant: the registered VJP survives mx.compile.
+    # Invariant: the registered VJP survives tk.compile.
     # Witness: a compiled VJP at time 129 against the tree.
     def test_compiled_vjp(self) -> None:
         a, b, gp, gh = (rows(3, 129, 10 + k) for k in range(4))
-        compiled = mx.compile(
-            lambda a, b, gp, gh: mx.vjp(affine_scan, (a, b), (gp, gh))[1]
+        compiled = tk.compile(
+            lambda a, b, gp, gh: tk.vjp(affine_scan, (a, b), (gp, gh))[1]
         )
         assert_close(
             compiled(a, b, gp, gh),
-            mx.vjp(tree_scan, (a, b), (gp, gh))[1],
+            tk.vjp(tree_scan, (a, b), (gp, gh))[1],
             "compiled vjp",
         )
 
@@ -110,10 +110,10 @@ class TestAffineScan(unittest.TestCase):
     def test_contract(self) -> None:
         good = rows(2, 8, 0)
         for a, b in [
-            (mx.zeros((2, 0)), mx.zeros((2, 0))),
-            (mx.zeros((2, 2049)), mx.zeros((2, 2049))),
-            (mx.zeros((8,)), mx.zeros((8,))),
-            (good.astype(mx.float16), good.astype(mx.float16)),
+            (tk.zeros((2, 0)), tk.zeros((2, 0))),
+            (tk.zeros((2, 2049)), tk.zeros((2, 2049))),
+            (tk.zeros((8,)), tk.zeros((8,))),
+            (good.astype(tk.float16), good.astype(tk.float16)),
             (good, rows(2, 9, 1)),
         ]:
             with self.assertRaises(ScanContractError):

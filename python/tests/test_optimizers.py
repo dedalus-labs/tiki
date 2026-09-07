@@ -5,13 +5,13 @@ import math
 import unittest
 from functools import partial
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx.optimizers as opt
-import mlx.utils
-import mlx_tests
+import tiki as tk
+import tiki.nn as nn
+import tiki.optimizers as opt
+import tiki.utils
+import tiki_tests
 import numpy as np
-from mlx.utils import tree_flatten, tree_map, tree_unflatten
+from tiki.utils import tree_flatten, tree_map, tree_unflatten
 
 try:
     import torch
@@ -42,7 +42,7 @@ optimizers_dict = get_all_optimizers()
 del optimizers_dict["MultiOptimizer"]
 
 
-class TestOptimizers(mlx_tests.MLXTestCase):
+class TestOptimizers(tiki_tests.TIKITestCase):
     def test_optimizer_state(self):
         optim = opt.SGD(0.1)
         optim.state["hello"] = "world"
@@ -53,40 +53,40 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
     def test_optimizers(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         for optim_class in optimizers_dict.values():
             optim = optim_class(0.1)
             update = optim.apply_gradients(grads, params)
-            mx.eval(update)
+            tk.eval(update)
             equal_shape = tree_map(lambda x, y: x.shape == y.shape, params, update)
-            all_equal = all(v for _, v in mlx.utils.tree_flatten(equal_shape))
+            all_equal = all(v for _, v in tiki.utils.tree_flatten(equal_shape))
             self.assertTrue(all_equal)
 
     def test_types_conserved(self):
-        params = {"w": mx.ones((5, 5), mx.float16)}
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        params = {"w": tk.ones((5, 5), tk.float16)}
+        grads = tree_map(lambda x: tk.ones_like(x), params)
         for optim_class in optimizers_dict.values():
             optim = optim_class(0.1)
             update = optim.apply_gradients(grads, params)
-            self.assertEqual(update["w"].dtype, mx.float16)
+            self.assertEqual(update["w"].dtype, tk.float16)
 
     def test_sgd(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.SGD(learning_rate=1e-2, momentum=0.9)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
@@ -96,22 +96,22 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         optim = opt.SGD(learning_rate=1e-2, momentum=0.9)
         optim.apply_gradients(grads, params)
         self.assertTrue(
-            tree_equal(lambda g, s: mx.array_equal(s["v"], g), grads, optim.state)
+            tree_equal(lambda g, s: tk.array_equal(s["v"], g), grads, optim.state)
         )
 
     def test_rmsprop(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.RMSprop(learning_rate=1e-2)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
@@ -123,23 +123,23 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         optim.apply_gradients(grads, params)
         self.assertTrue(
             tree_equal(
-                lambda g, s: mx.allclose(s["v"], (1 - alpha) * g), grads, optim.state
+                lambda g, s: tk.allclose(s["v"], (1 - alpha) * g), grads, optim.state
             )
         )
 
     def test_adagrad(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.Adagrad(learning_rate=1e-2)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
@@ -147,24 +147,24 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
     def test_adadelta(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.AdaDelta(learning_rate=1e-2)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
         )
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["u"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["u"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
@@ -182,10 +182,10 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
     def test_adam(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         for optimizer in [opt.Adam, opt.AdamW, opt.Adamax]:
@@ -193,29 +193,29 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             optim.init(params)
             self.assertTrue(
                 tree_equal(
-                    lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                    lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                     params,
                     optim.state,
                 )
             )
             self.assertTrue(
                 tree_equal(
-                    lambda p, s: mx.array_equal(s["m"], mx.zeros_like(p)),
+                    lambda p, s: tk.array_equal(s["m"], tk.zeros_like(p)),
                     params,
                     optim.state,
                 )
             )
 
         # Test for correct gradient type propagation
-        params = tree_map(lambda x: x.astype(mx.float16), params)
-        grads = tree_map(lambda x: x.astype(mx.float16), grads)
+        params = tree_map(lambda x: x.astype(tk.float16), params)
+        grads = tree_map(lambda x: x.astype(tk.float16), grads)
         optim = opt.Adam(1e-2, bias_correction=True)
         new_params = optim.apply_gradients(grads, params)
-        self.assertTrue(tree_equal(lambda p: p.dtype == mx.float16, new_params))
+        self.assertTrue(tree_equal(lambda p: p.dtype == tk.float16, new_params))
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_adamw_matches_pytorch(self):
-        mx.random.seed(0)
+        tk.random.seed(0)
         np.random.seed(0)
 
         model = nn.Linear(3, 1)
@@ -231,7 +231,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
         optimizer = opt.AdamW(learning_rate=3e-4, bias_correction=True)
         loss_and_grad_fn = nn.value_and_grad(model, loss_fn)
-        loss, grads = loss_and_grad_fn(model, mx.array(x), mx.array(y))
+        loss, grads = loss_and_grad_fn(model, tk.array(x), tk.array(y))
         optimizer.update(model, grads)
 
         # Equivalent torch code
@@ -249,46 +249,46 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         torch_optimizer.step()
 
         for name, param in torch_model.named_parameters():
-            mlx_grad = np.array(grads[name])
+            tiki_grad = np.array(grads[name])
             torch_grad = param.grad.detach().numpy()
-            self.assertTrue(np.allclose(torch_grad, mlx_grad))
+            self.assertTrue(np.allclose(torch_grad, tiki_grad))
 
         for name, param in torch_model.named_parameters():
-            mlx_param = np.array(model[name])
+            tiki_param = np.array(model[name])
             torch_param = param.data.detach().numpy()
-            self.assertTrue(np.allclose(torch_param, mlx_param))
+            self.assertTrue(np.allclose(torch_param, tiki_param))
 
     def test_lion(self):
         params = {
-            "first": [mx.zeros((10,)), mx.zeros((1,))],
-            "second": mx.zeros((1,)),
+            "first": [tk.zeros((10,)), tk.zeros((1,))],
+            "second": tk.zeros((1,)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.Lion(learning_rate=1e-2)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["m"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["m"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
         )
 
     def test_adafactor(self):
-        x = mx.zeros((5, 5))
+        x = tk.zeros((5, 5))
         params = {"x": x}
-        grad = {"x": mx.ones_like(x)}
+        grad = {"x": tk.ones_like(x)}
         optimizer = opt.Adafactor()
         for _ in range(2):
             xp = optimizer.apply_gradients(grad, params)
             self.assertEqual(xp["x"].dtype, x.dtype)
             self.assertEqual(xp["x"].shape, x.shape)
 
-        x = mx.zeros((5, 5), mx.float16)
+        x = tk.zeros((5, 5), tk.float16)
         params = {"x": x}
-        grad = {"x": mx.ones_like(x)}
+        grad = {"x": tk.ones_like(x)}
         optimizer = opt.Adafactor()
         for _ in range(2):
             xp = optimizer.apply_gradients(grad, params)
@@ -297,19 +297,19 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertEqual(optimizer.state["step"], 2)
 
         # Parameters with more than 2 dimensions also use the factored update
-        x = mx.zeros((2, 3, 4))
+        x = tk.zeros((2, 3, 4))
         params = {"x": x}
-        grad = {"x": mx.ones_like(x)}
+        grad = {"x": tk.ones_like(x)}
         optimizer = opt.Adafactor()
         for _ in range(2):
             xp = optimizer.apply_gradients(grad, params)
             self.assertEqual(xp["x"].shape, x.shape)
-            self.assertTrue(mx.isfinite(xp["x"]).all())
+            self.assertTrue(tk.isfinite(xp["x"]).all())
             params = xp
 
         # The factored estimate is a per-batch separable outer product
-        row = mx.array([[1.0, 4.0, 9.0], [16.0, 25.0, 36.0]])
-        col = mx.array([[1.0, 4.0, 9.0, 16.0], [25.0, 36.0, 49.0, 64.0]])
+        row = tk.array([[1.0, 4.0, 9.0], [16.0, 25.0, 36.0]])
+        col = tk.array([[1.0, 4.0, 9.0, 16.0], [25.0, 36.0, 49.0, 64.0]])
         got = np.array(opt.Adafactor()._approximate_exp_moving_avg(row, col))
         row_np, col_np = np.array(row), np.array(col)
         r = 1.0 / np.sqrt(row_np / row_np.mean(axis=-1, keepdims=True))
@@ -319,18 +319,18 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
     def test_muon(self):
         params = {
-            "first": [mx.zeros((10, 5)), mx.zeros((1,))],
-            "second": mx.zeros((3, 3)),
-            "conv": mx.zeros((16, 8, 3, 3)),
+            "first": [tk.zeros((10, 5)), tk.zeros((1,))],
+            "second": tk.zeros((3, 3)),
+            "conv": tk.zeros((16, 8, 3, 3)),
         }
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        grads = tree_map(lambda x: tk.ones_like(x), params)
 
         # Explicit init
         optim = opt.Muon(learning_rate=1e-2, momentum=0.95, nesterov=True)
         optim.init(params)
         self.assertTrue(
             tree_equal(
-                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                lambda p, s: tk.array_equal(s["v"], tk.zeros_like(p)),
                 params,
                 optim.state,
             )
@@ -351,7 +351,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         # Check that parameters actually changed
         self.assertFalse(
             tree_equal(
-                lambda p, u: mx.array_equal(p, u),
+                lambda p, u: tk.array_equal(p, u),
                 params,
                 updated_params,
             )
@@ -367,29 +367,29 @@ class TestOptimizers(mlx_tests.MLXTestCase):
     def test_weight_decay_keeps_inputs_unchanged(self):
         # Weight decay must not write into the gradients or the parameters
         # that the caller passed in.
-        params = {"w": mx.ones((3, 3))}
-        grads = {"w": mx.full((3, 3), 2.0)}
+        params = {"w": tk.ones((3, 3))}
+        grads = {"w": tk.full((3, 3), 2.0)}
 
         optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
         optimizer.apply_gradients(grads, params)
-        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
-        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+        self.assertTrue(tk.array_equal(grads["w"], tk.full((3, 3), 2.0)))
+        self.assertTrue(tk.array_equal(params["w"], tk.ones((3, 3))))
 
         optimizer = opt.Adafactor(learning_rate=1e-2, weight_decay=0.1)
         optimizer.apply_gradients(grads, params)
-        self.assertTrue(mx.array_equal(grads["w"], mx.full((3, 3), 2.0)))
-        self.assertTrue(mx.array_equal(params["w"], mx.ones((3, 3))))
+        self.assertTrue(tk.array_equal(grads["w"], tk.full((3, 3), 2.0)))
+        self.assertTrue(tk.array_equal(params["w"], tk.ones((3, 3))))
 
         # The same gradients applied twice give the same update
         optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
         first = optimizer.apply_gradients(grads, params)
         optimizer = opt.SGD(learning_rate=1e-2, weight_decay=0.1)
         second = optimizer.apply_gradients(grads, params)
-        self.assertTrue(mx.array_equal(first["w"], second["w"]))
+        self.assertTrue(tk.array_equal(first["w"], second["w"]))
 
     def test_compiled_optimizer(self):
         model = nn.Linear(10, 10)
-        x = mx.random.uniform(shape=(2, 10))
+        x = tk.random.uniform(shape=(2, 10))
         optim = opt.SGD(learning_rate=1e-2, momentum=0.9)
 
         orig_params = model.parameters()
@@ -413,17 +413,17 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         model.update(orig_params)
         optim = opt.SGD(learning_rate=1e-2, momentum=0.9)
 
-        @mx.compile
+        @tk.compile
         def step(params, opt_state, x):
-            grad = mx.grad(loss)(params, x)
+            grad = tk.grad(loss)(params, x)
             optim.state = opt_state
             params = optim.apply_gradients(grad, params)
             return params, optim.state
 
         optim.init(model.parameters())
         pure_params, _ = step(model.parameters(), optim.state, x)
-        self.assertTrue(mx.allclose(pure_params["weight"], uncompiled_params["weight"]))
-        self.assertTrue(mx.allclose(pure_params["bias"], uncompiled_params["bias"]))
+        self.assertTrue(tk.allclose(pure_params["weight"], uncompiled_params["weight"]))
+        self.assertTrue(tk.allclose(pure_params["bias"], uncompiled_params["bias"]))
 
         # Impure version
         def loss(model, x):
@@ -433,7 +433,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         optim = opt.SGD(learning_rate=1e-2, momentum=0.9)
         state = [model.state, optim.state]
 
-        @partial(mx.compile, inputs=state, outputs=state)
+        @partial(tk.compile, inputs=state, outputs=state)
         def step(x):
             _, grad = nn.value_and_grad(model, loss)(model, x)
             optim.update(model, grad)
@@ -441,34 +441,34 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         step(x)
         impure_params = model.parameters()
         self.assertTrue(
-            mx.allclose(impure_params["weight"], uncompiled_params["weight"])
+            tk.allclose(impure_params["weight"], uncompiled_params["weight"])
         )
-        self.assertTrue(mx.allclose(impure_params["bias"], uncompiled_params["bias"]))
+        self.assertTrue(tk.allclose(impure_params["bias"], uncompiled_params["bias"]))
 
     def test_update_lr_compiled(self):
-        params = {"w": mx.ones((5, 5))}
-        grads = tree_map(lambda x: mx.ones_like(x), params)
+        params = {"w": tk.ones((5, 5))}
+        grads = tree_map(lambda x: tk.ones_like(x), params)
         optim = opt.SGD(-1.0)
 
-        @partial(mx.compile, inputs=optim.state)
+        @partial(tk.compile, inputs=optim.state)
         def update(grads):
             return optim.apply_gradients(grads, params)
 
         result = update(grads)
-        self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 2.0)))
+        self.assertTrue(tk.allclose(result["w"], tk.full((5, 5), 2.0)))
         optim.learning_rate = -2.0
         result = update(grads)
-        self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 3.0)))
+        self.assertTrue(tk.allclose(result["w"], tk.full((5, 5), 3.0)))
 
 
-class TestSchedulers(mlx_tests.MLXTestCase):
+class TestSchedulers(tiki_tests.TIKITestCase):
     def test_decay_lr(self):
         for optim_class in optimizers_dict.values():
             lr_schedule = opt.step_decay(1e-1, 0.9, 1)
             optimizer = optim_class(learning_rate=lr_schedule)
 
-            params = {"w": mx.ones((5, 5))}
-            grads = tree_map(lambda x: mx.ones_like(x), params)
+            params = {"w": tk.ones((5, 5))}
+            grads = tree_map(lambda x: tk.ones_like(x), params)
 
             for it in range(10):
                 optimizer.apply_gradients(grads, params)
@@ -535,7 +535,7 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         lr_schedule = opt.exponential_decay(1e-1, 0.9)
         optimizer = opt.SGD(learning_rate=lr_schedule)
 
-        @partial(mx.compile, inputs=optimizer.state, outputs=optimizer.state)
+        @partial(tk.compile, inputs=optimizer.state, outputs=optimizer.state)
         def update():
             optimizer.update({}, {})
 
@@ -546,27 +546,27 @@ class TestSchedulers(mlx_tests.MLXTestCase):
     def test_clip_grad_norm(self):
         # Test with small gradients that do not require clipping
         small_grads = {
-            "first": [mx.array([0.1, 0.2]), mx.array([0.1])],
-            "second": mx.array([0.3]),
+            "first": [tk.array([0.1, 0.2]), tk.array([0.1])],
+            "second": tk.array([0.3]),
         }
         max_norm = 10.0  # A large max_norm that shouldn't trigger clipping
         clipped_grads, total_norm = opt.clip_grad_norm(small_grads, max_norm)
         self.assertTrue(
-            tree_equal(lambda x, y: mx.array_equal(x, y), small_grads, clipped_grads),
+            tree_equal(lambda x, y: tk.array_equal(x, y), small_grads, clipped_grads),
             "Gradients should not be modified when clipping is not necessary.",
         )
 
         # Test with large gradients that require clipping
         large_grads = {
-            "first": [mx.array([10, 20]), mx.array([10])],
-            "second": mx.array([30]),
+            "first": [tk.array([10, 20]), tk.array([10])],
+            "second": tk.array([30]),
         }
         max_norm = 1.0  # A small max_norm that should trigger clipping
         clipped_grads, total_norm = opt.clip_grad_norm(large_grads, max_norm)
         # Correctly extract only the gradient values for norm calculation
         clipped_values = [value for _, value in tree_flatten(clipped_grads)]
-        norm_of_clipped = mx.sqrt(
-            sum(mx.square(g).sum() for g in clipped_values)
+        norm_of_clipped = tk.sqrt(
+            sum(tk.square(g).sum() for g in clipped_values)
         ).item()
         self.assertAlmostEqual(
             norm_of_clipped,
@@ -580,7 +580,7 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         expected_grads = tree_map(lambda g: g * scale, large_grads)
         self.assertTrue(
             tree_equal(
-                lambda x, y: mx.allclose(x, y, atol=1e-6), expected_grads, clipped_grads
+                lambda x, y: tk.allclose(x, y, atol=1e-6), expected_grads, clipped_grads
             ),
             "Gradients were not scaled correctly during clipping.",
         )
@@ -637,10 +637,10 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         self.assertFalse(any("weight" in k for k, v in sgd_states))
 
     def test_multi_optimizer_with_parameterless_layers(self):
-        mx.random.seed(0)
+        tk.random.seed(0)
         # test a sequential that has a no parameter module like ReLU
         model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
-        mx.eval(model.parameters())
+        tk.eval(model.parameters())
 
         optimizer = opt.MultiOptimizer(
             [opt.Muon(learning_rate=0.01), opt.AdamW(learning_rate=0.01)],
@@ -648,15 +648,15 @@ class TestSchedulers(mlx_tests.MLXTestCase):
         )
 
         loss_and_grad = nn.value_and_grad(model, lambda m, x: m(x).sum())
-        _, grads = loss_and_grad(model, mx.ones((1, 4)))
+        _, grads = loss_and_grad(model, tk.ones((1, 4)))
         optimizer.update(model, grads)
 
         w, b = model.layers[0].weight, model.layers[0].bias
         optimizer.update(model, grads)
-        mx.eval(model.parameters())
-        self.assertFalse(mx.array_equal(w, model.layers[0].weight))
-        self.assertFalse(mx.array_equal(b, model.layers[0].bias))
+        tk.eval(model.parameters())
+        self.assertFalse(tk.array_equal(w, model.layers[0].weight))
+        self.assertFalse(tk.array_equal(b, model.layers[0].bias))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

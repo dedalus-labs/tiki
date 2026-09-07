@@ -1,7 +1,7 @@
-# MLX guide
+# Tiki guide
 
-Tiki keeps MLX's array model, transformations, and runtime. These pages are
-the MLX documentation, maintained upstream and carried here unchanged.
+The array model, transformations, and runtime that every Tiki kernel
+stands on. These pages come from upstream MLX and are carried here as they are.
 
 ```{toctree}
 :caption: Install

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from subprocess import run
 
-BENCH_MLX = Path(__file__).parent / "bench_mlx.py"
+BENCH_TIKI = Path(__file__).parent / "bench_tiki.py"
 BENCH_TORCH = Path(__file__).parent / "bench_torch.py"
 
 
@@ -23,17 +23,17 @@ def run_or_raise(*args, **kwargs):
 
 
 def compare(args):
-    t_mlx = run_or_raise([sys.executable, BENCH_MLX] + args)
+    t_tiki = run_or_raise([sys.executable, BENCH_TIKI] + args)
     t_torch = run_or_raise([sys.executable, BENCH_TORCH] + args)
 
-    print((t_torch - t_mlx) / t_torch, " ".join(args), sep="\t")
+    print((t_torch - t_tiki) / t_torch, " ".join(args), sep="\t")
 
 
-def compare_mlx_dtypes(args, dt1, dt2):
-    t_mlx_dt1 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt1])
-    t_mlx_dt2 = run_or_raise([sys.executable, BENCH_MLX] + args + ["--dtype", dt2])
+def compare_tiki_dtypes(args, dt1, dt2):
+    t_tiki_dt1 = run_or_raise([sys.executable, BENCH_TIKI] + args + ["--dtype", dt1])
+    t_tiki_dt2 = run_or_raise([sys.executable, BENCH_TIKI] + args + ["--dtype", dt2])
 
-    print((t_mlx_dt2 - t_mlx_dt1) / t_mlx_dt2, " ".join(args), sep="\t")
+    print((t_tiki_dt2 - t_tiki_dt1) / t_tiki_dt2, " ".join(args), sep="\t")
 
 
 def make_regex_search(regexes):
@@ -73,18 +73,18 @@ if __name__ == "__main__":
         "--negative_filter", "-n", help="Regex filter to remove benchmarks", nargs="+"
     )
     parser.add_argument(
-        "--mlx_dtypes",
+        "--tiki_dtypes",
         "-d",
-        help="Compare mlx benchmarks between the 2 provided data types",
+        help="Compare tiki benchmarks between the 2 provided data types",
         nargs=2,
     )
     args, rest = parser.parse_known_args()
 
     _filter = make_predicate(args.filter, args.negative_filter)
 
-    if args.mlx_dtypes:
+    if args.tiki_dtypes:
         compare_filtered = lambda x: (
-            compare_mlx_dtypes(x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1])
+            compare_tiki_dtypes(x.split() + rest, args.tiki_dtypes[0], args.tiki_dtypes[1])
             if _filter(x)
             else None
         )

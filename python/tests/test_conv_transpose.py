@@ -5,8 +5,8 @@ import os
 import unittest
 from itertools import permutations
 
-import mlx.core as mx
-import mlx_tests
+import tiki as tk
+import tiki_tests
 import numpy as np
 
 try:
@@ -18,7 +18,7 @@ except ImportError as e:
     has_torch = False
 
 
-class TestConvTranspose(mlx_tests.MLXTestCase):
+class TestConvTranspose(tiki_tests.TIKITestCase):
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_transpose_1D(self):
         def run_conv_transpose_1D(
@@ -54,11 +54,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 2, 1))
                 wt_pt = torch.from_numpy(wt_np.transpose(2, 0, 1))
 
-                out_mx = mx.conv_transpose1d(
+                out_mx = tk.conv_transpose1d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -114,10 +114,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / 16, (16, 16, 16)).astype(np.float32)
                 wt_np = np.random.normal(0, 1.0 / 16, (16, 16, 16)).astype(np.float32)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
-                in_mx_t = mx.transpose(in_mx, tpose_in)
-                wt_mx_t = mx.transpose(wt_mx, tpose_wt)
-                out_mx = mx.conv_transpose1d(in_mx_t, wt_mx_t)
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
+                in_mx_t = tk.transpose(in_mx, tpose_in)
+                wt_mx_t = tk.transpose(wt_mx, tpose_wt)
+                out_mx = tk.conv_transpose1d(in_mx_t, wt_mx_t)
 
                 in_pt = torch.from_numpy(in_np.transpose(tpose_in).transpose(0, 2, 1))
                 wt_pt = torch.from_numpy(wt_np.transpose(tpose_wt).transpose(2, 0, 1))
@@ -162,7 +162,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
                 wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 2, 1)).requires_grad_(True)
                 wt_pt = torch.from_numpy(wt_np.transpose(2, 0, 1)).requires_grad_(True)
 
@@ -177,10 +177,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 pt_grad_in = in_pt.grad.permute(0, 2, 1).numpy()
                 pt_grad_wt = wt_pt.grad.permute(1, 2, 0).numpy()
 
-                ct_mx = mx.array(out_pt.grad.numpy().transpose(0, 2, 1))
+                ct_mx = tk.array(out_pt.grad.numpy().transpose(0, 2, 1))
 
                 def f(a, b):
-                    return mx.conv_transpose1d(
+                    return tk.conv_transpose1d(
                         a,
                         b,
                         stride=stride,
@@ -189,7 +189,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [
                         in_mx,
@@ -263,11 +263,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).to("cpu")
                 wt_pt = torch.from_numpy(wt_np.transpose(3, 0, 1, 2)).to("cpu")
 
-                out_mx = mx.conv_transpose2d(
+                out_mx = tk.conv_transpose2d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -352,7 +352,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C)).astype(np_dtype)
                 wt_np = np.random.normal(0.0, scale, (O, kH, kW, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).requires_grad_(
                     True
                 )
@@ -371,10 +371,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 pt_grad_in = in_pt.grad.permute(0, 2, 3, 1).numpy()
                 pt_grad_wt = wt_pt.grad.permute(1, 2, 3, 0).numpy()
 
-                ct_mx = mx.array(out_pt.grad.numpy().transpose(0, 2, 3, 1))
+                ct_mx = tk.array(out_pt.grad.numpy().transpose(0, 2, 3, 1))
 
                 def f(a, b):
-                    return mx.conv_transpose2d(
+                    return tk.conv_transpose2d(
                         a,
                         b,
                         stride=stride,
@@ -383,7 +383,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [in_mx, wt_mx],
                     [ct_mx],
@@ -450,11 +450,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 )
                 wt_np = np.random.normal(0.0, 1.0, (O, kD, kH, kW, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 4, 1, 2, 3))
                 wt_pt = torch.from_numpy(wt_np.transpose(4, 0, 1, 2, 3))
 
-                out_mx = mx.conv_transpose3d(
+                out_mx = tk.conv_transpose3d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -533,7 +533,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 4, 1, 2, 3)).requires_grad_(
                     True
                 )
@@ -557,10 +557,10 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 pt_grad_in = in_pt.grad.permute(0, 2, 3, 4, 1).numpy()
                 pt_grad_wt = wt_pt.grad.permute(1, 2, 3, 4, 0).numpy()
 
-                ct_mx = mx.array(out_pt.grad.numpy().transpose(0, 2, 3, 4, 1))
+                ct_mx = tk.array(out_pt.grad.numpy().transpose(0, 2, 3, 4, 1))
 
                 def f(a, b):
-                    return mx.conv_transpose3d(
+                    return tk.conv_transpose3d(
                         a,
                         b,
                         stride=stride,
@@ -569,7 +569,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [in_mx, wt_mx],
                     [ct_mx],
@@ -620,11 +620,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, C)).astype(np_dtype)
                 wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 2, 1))
                 wt_pt = torch.from_numpy(wt_np.transpose(2, 0, 1))
 
-                out_mx = mx.conv_transpose1d(
+                out_mx = tk.conv_transpose1d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -687,11 +687,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / C, (N, iH, iW, C)).astype(np_dtype)
                 wt_np = np.random.normal(0, 1.0 / C, (O, kH, kW, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2))
                 wt_pt = torch.from_numpy(wt_np.transpose(3, 0, 1, 2))
 
-                out_mx = mx.conv_transpose2d(
+                out_mx = tk.conv_transpose2d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -766,11 +766,11 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt = torch.from_numpy(in_np.transpose(0, 4, 1, 2, 3))
                 wt_pt = torch.from_numpy(wt_np.transpose(4, 0, 1, 2, 3))
 
-                out_mx = mx.conv_transpose3d(
+                out_mx = tk.conv_transpose3d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -808,18 +808,18 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         dtype=dtype,
                     )
 
-    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    @unittest.skipIf(not tk.metal.is_available(), "requires Metal")
     def test_conv_transpose_unfold_tiling(self):
         # The explicit-GEMM conv path unfolds into one buffer that can exceed
         # maxBufferLength for large outputs; it unfolds and runs the gemm in row
         # tiles instead (issue #3082).
-        key = "MLX_CONV_UNFOLD_TILE_ROWS"
+        key = "TIKI_CONV_UNFOLD_TILE_ROWS"
         prev = os.environ.get(key)
         cases = (
-            (mx.conv_transpose1d, (2, 9, 4), (5, 3, 4), {"stride": 2}),
-            (mx.conv_transpose2d, (2, 5, 5, 4), (5, 3, 3, 4), {"stride": 2}),
-            (mx.conv_transpose3d, (1, 4, 4, 4, 2), (3, 2, 2, 2, 2), {"stride": 2}),
-            (mx.conv_transpose1d, (2, 9, 4), (6, 3, 2), {"stride": 2, "groups": 2}),
+            (tk.conv_transpose1d, (2, 9, 4), (5, 3, 4), {"stride": 2}),
+            (tk.conv_transpose2d, (2, 5, 5, 4), (5, 3, 3, 4), {"stride": 2}),
+            (tk.conv_transpose3d, (1, 4, 4, 4, 2), (3, 2, 2, 2, 2), {"stride": 2}),
+            (tk.conv_transpose1d, (2, 9, 4), (6, 3, 2), {"stride": 2, "groups": 2}),
         )
         try:
             # tile_rows=1 forces uniform tiles; 7 does not divide any output, so
@@ -830,14 +830,14 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                         conv=conv.__name__, tile_rows=tile_rows, **kwargs
                     ):
                         np.random.seed(0)
-                        x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
-                        w = mx.array(np.random.normal(size=wt_shape).astype(np.float32))
+                        x = tk.array(np.random.normal(size=in_shape).astype(np.float32))
+                        w = tk.array(np.random.normal(size=wt_shape).astype(np.float32))
                         os.environ.pop(key, None)
                         untiled = conv(x, w, **kwargs)
-                        mx.eval(untiled)
+                        tk.eval(untiled)
                         os.environ[key] = str(tile_rows)
                         tiled = conv(x, w, **kwargs)
-                        mx.eval(tiled)
+                        tk.eval(tiled)
                         self.assertTrue(np.allclose(untiled, tiled, atol=1e-4))
         finally:
             if prev is None:
@@ -847,4 +847,4 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

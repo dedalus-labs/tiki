@@ -2,7 +2,7 @@
 
 import time
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 
 
@@ -18,15 +18,15 @@ def timeit(fn, its=100, args=[]):
 
 def time_little_einsum_path():
     subscripts = "ik,kj->ij"
-    x = mx.ones((32, 32))
-    y = mx.ones((32, 32))
-    mx_time = timeit(mx.einsum_path, args=(subscripts, x, y))
+    x = tk.ones((32, 32))
+    y = tk.ones((32, 32))
+    mx_time = timeit(tk.einsum_path, args=(subscripts, x, y))
 
     x = np.array(x)
     y = np.array(y)
     np_time = timeit(np.einsum_path, args=(subscripts, x, y))
     print("Timing little einsum path...")
-    print(f"MLX ... {mx_time:.3f} ms")
+    print(f"Tiki ... {mx_time:.3f} ms")
     print(f"NumPy... {np_time:.3f} ms")
 
 
@@ -45,10 +45,10 @@ def time_big_einsum_path():
 
     np_time = timeit(np.einsum_path, args=(subscripts, *inputs))
 
-    inputs = [mx.array(x) for x in inputs]
-    mx_time = timeit(mx.einsum_path, args=(subscripts, *inputs))
+    inputs = [tk.array(x) for x in inputs]
+    mx_time = timeit(tk.einsum_path, args=(subscripts, *inputs))
     print("Timing big einsum path...")
-    print(f"MLX ... {mx_time:.3f} ms")
+    print(f"Tiki ... {mx_time:.3f} ms")
     print(f"NumPy... {np_time:.3f} ms")
 
 
@@ -57,19 +57,19 @@ def time_attention():
         # shape [batch, sequence, num_heads, head_dim]
         queries, keys, values = x, x, x
         scores = queries.transpose(0, 2, 1, 3) @ keys.transpose(0, 2, 3, 1)
-        scores = mx.softmax(scores, axis=-1)
+        scores = tk.softmax(scores, axis=-1)
         output = (scores @ values.transpose(0, 2, 1, 3)).swapaxes(1, 2)
-        mx.eval(output)
+        tk.eval(output)
 
     def einsum_attention(x):
         # shape [batch, sequence, num_heads, head_dim]
         queries, keys, values = x, x, x
-        scores = mx.einsum("itjk,iujk->ijtu", queries, keys)
-        scores = mx.softmax(scores, axis=-1)
-        output = mx.einsum("ijtu,iujk->itjk", scores, values)
-        mx.eval(output)
+        scores = tk.einsum("itjk,iujk->ijtu", queries, keys)
+        scores = tk.softmax(scores, axis=-1)
+        output = tk.einsum("ijtu,iujk->itjk", scores, values)
+        tk.eval(output)
 
-    x = mx.random.uniform(shape=(8, 512, 32, 128))
+    x = tk.random.uniform(shape=(8, 512, 32, 128))
 
     regular_time = timeit(regular_attention, args=(x,))
     ein_time = timeit(einsum_attention, args=(x,))

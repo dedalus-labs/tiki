@@ -1,7 +1,7 @@
 import argparse
 
 import matplotlib
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 from time_utils import measure_runtime
 
@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 
 
 def had(x):
-    y = mx.hadamard_transform(x)
-    mx.eval(y)
+    y = tk.hadamard_transform(x)
+    tk.eval(y)
 
 
 def copy(x):
     y = x + 1.0
-    mx.eval(y)
+    tk.eval(y)
 
 
 def run(dtype):
@@ -36,7 +36,7 @@ def run(dtype):
                 if n > 2**15:
                     continue
                 x_np = np.random.normal(size=(system_size // n, n)).astype(dtype)
-                x = mx.array(x_np)
+                x = tk.array(x_np)
                 runtime_ms = measure_runtime(test_fn, x=x)
                 bytes_per_gb = 1e9
                 ms_per_s = 1e3
@@ -54,7 +54,7 @@ def run(dtype):
     }
     for key, output in outputs.items():
         plt.scatter(output.keys(), output.values(), color=colors[key], label=key)
-    plt.title(f"MLX Hadamard Benchmark -- {dtype.__name__}")
+    plt.title(f"Tiki Hadamard Benchmark -- {dtype.__name__}")
     plt.xlabel("N")
     plt.ylabel("Bandwidth (GB/s)")
     plt.legend()

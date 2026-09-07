@@ -10,17 +10,17 @@
 
 #include <fstream>
 
-#include "mlx/array.h"
-#include "mlx/export.h"
-#include "mlx/graph_utils.h"
+#include "tiki/array.h"
+#include "tiki/export.h"
+#include "tiki/graph_utils.h"
 #include "python/src/small_vector.h"
 #include "python/src/trees.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
-std::pair<mx::Args, mx::Kwargs> validate_and_extract_inputs(
+std::pair<tk::Args, tk::Kwargs> validate_and_extract_inputs(
     const nb::args& args,
     const nb::kwargs& kwargs,
     const std::string& prefix) {
@@ -33,12 +33,12 @@ std::pair<mx::Args, mx::Kwargs> validate_and_extract_inputs(
           "and/or dictionary of arrays.");
     }
   };
-  mx::Args args_;
-  mx::Kwargs kwargs_;
+  tk::Args args_;
+  tk::Kwargs kwargs_;
   if (args.size() == 0) {
     // No args so kwargs must be keyword arrays
     maybe_throw(nb::try_cast(kwargs, kwargs_));
-  } else if (args.size() > 0 && nb::isinstance<mx::array>(args[0])) {
+  } else if (args.size() > 0 && nb::isinstance<tk::array>(args[0])) {
     // Args are positional arrays and kwargs are keyword arrays
     maybe_throw(nb::try_cast(args, args_));
     maybe_throw(nb::try_cast(kwargs, kwargs_));
@@ -70,7 +70,7 @@ int py_function_exporter_tp_traverse(
 
 class PyFunctionExporter {
  public:
-  PyFunctionExporter(mx::FunctionExporter exporter, nb::handle dep)
+  PyFunctionExporter(tk::FunctionExporter exporter, nb::handle dep)
       : exporter_(std::move(exporter)), dep_(dep) {}
   ~PyFunctionExporter() {
     nb::gil_scoped_acquire gil;
@@ -84,14 +84,14 @@ class PyFunctionExporter {
   void close() {
     exporter_.close();
   }
-  void operator()(const mx::Args& args, const mx::Kwargs& kwargs) {
+  void operator()(const tk::Args& args, const tk::Kwargs& kwargs) {
     exporter_(args, kwargs);
   }
 
   friend int py_function_exporter_tp_traverse(PyObject*, visitproc, void*);
 
  private:
-  mx::FunctionExporter exporter_;
+  tk::FunctionExporter exporter_;
   nb::handle dep_;
 };
 
@@ -114,14 +114,14 @@ PyType_Slot py_function_exporter_slots[] = {
 
 auto wrap_export_function(nb::callable fun) {
   return
-      [fun = std::move(fun)](const mx::Args& args_, const mx::Kwargs& kwargs_) {
+      [fun = std::move(fun)](const tk::Args& args_, const tk::Kwargs& kwargs_) {
         auto kwargs = nb::dict();
         kwargs.update(nb::cast(kwargs_));
         auto args = nb::tuple(nb::cast(args_));
         auto outputs = fun(*args, **kwargs);
-        std::vector<mx::array> outputs_;
-        if (nb::isinstance<mx::array>(outputs)) {
-          outputs_.push_back(nb::cast<mx::array>(outputs));
+        std::vector<tk::array> outputs_;
+        if (nb::isinstance<tk::array>(outputs)) {
+          outputs_.push_back(nb::cast<tk::array>(outputs));
         } else if (!nb::try_cast(outputs, outputs_)) {
           throw std::invalid_argument(
               "[export_function] Outputs can be either a single array, "
@@ -143,7 +143,7 @@ void init_export(nb::module_& m) {
         auto [args_, kwargs_] =
             validate_and_extract_inputs(args, kwargs, "[export_function]");
         if (nb::isinstance<nb::str>(file_or_callback)) {
-          mx::export_function(
+          tk::export_function(
               nb::cast<std::string>(file_or_callback),
               wrap_export_function(fun),
               args_,
@@ -158,10 +158,10 @@ void init_export(nb::module_& m) {
           }
           auto callback = nb::cast<nb::callable>(file_or_callback);
           auto wrapped_callback =
-              [callback](const mx::ExportCallbackInput& input) {
+              [callback](const tk::ExportCallbackInput& input) {
                 return callback(input);
               };
-          mx::export_function(
+          tk::export_function(
               callback, wrap_export_function(fun), args_, kwargs_, shapeless);
         }
       },
@@ -175,7 +175,7 @@ void init_export(nb::module_& m) {
       nb::sig(
           "def export_function(file_or_callback: str | Callable, fun: Callable, *args, shapeless: bool = False, metadata: str | None = None, **kwargs) -> None"),
       R"pbdoc(
-        Export an MLX function.
+        Export an Tiki function.
 
         Example input arrays must be provided to export a function. The example
         inputs can be variable ``*args`` and ``**kwargs`` or a tuple of arrays
@@ -184,8 +184,8 @@ void init_export(nb::module_& m) {
         .. warning::
 
           This is part of an experimental API which is likely to
-          change in future versions of MLX. Functions exported with older
-          versions of MLX may not be compatible with future versions.
+          change in future versions of Tiki. Functions exported with older
+          versions of Tiki may not be compatible with future versions.
 
         Args:
             file_or_callback (str or Callable): Either a file path to export
@@ -212,14 +212,14 @@ void init_export(nb::module_& m) {
             def fun(x, y):
                 return x + y
 
-            x = mx.array(1)
-            y = mx.array([1, 2, 3])
-            mx.export_function("fun.mlxfn", fun, x, y=y)
+            x = tk.array(1)
+            y = tk.array([1, 2, 3])
+            tk.export_function("fun.tkfn", fun, x, y=y)
       )pbdoc");
   m.def(
       "import_function",
       [](const std::string& file, bool return_metadata) -> nb::object {
-        auto imported = mx::import_function(file);
+        auto imported = tk::import_function(file);
         auto metadata = imported.metadata();
         auto fn = nb::cpp_function(
             [imported = std::move(imported)](
@@ -248,8 +248,8 @@ void init_export(nb::module_& m) {
         .. warning::
 
           This is part of an experimental API which is likely to
-          change in future versions of MLX. Functions exported with older
-          versions of MLX may not be compatible with future versions.
+          change in future versions of Tiki. Functions exported with older
+          versions of Tiki may not be compatible with future versions.
 
         Args:
             file (str): The file path to import the function from.
@@ -263,7 +263,7 @@ void init_export(nb::module_& m) {
                 returned instead.
 
         Example:
-          >>> fn = mx.import_function("function.mlxfn")
+          >>> fn = tk.import_function("function.tkfn")
           >>> out = fn(a, b, x=x, y=y)[0]
           >>>
           >>> out = fn((a, b), {"x": x, "y": y})[0]
@@ -277,7 +277,7 @@ void init_export(nb::module_& m) {
        A context managing class for exporting multiple traces of the same
        function to a file.
 
-       Make an instance of this class by calling :func:`mx.exporter`.
+       Make an instance of this class by calling :func:`tk.exporter`.
       )pbdoc")
       .def("close", &PyFunctionExporter::close)
       .def("__enter__", [](PyFunctionExporter& exporter) { return &exporter; })
@@ -307,7 +307,7 @@ void init_export(nb::module_& m) {
          bool shapeless,
          const std::optional<std::string>& metadata) {
         return PyFunctionExporter{
-            mx::exporter(
+            tk::exporter(
                 file,
                 wrap_export_function(fun),
                 shapeless,
@@ -325,8 +325,8 @@ void init_export(nb::module_& m) {
         .. warning::
 
           This is part of an experimental API which is likely to
-          change in future versions of MLX. Functions exported with older
-          versions of MLX may not be compatible with future versions.
+          change in future versions of Tiki. Functions exported with older
+          versions of Tiki may not be compatible with future versions.
 
         Args:
             file (str): File path to export the function to.
@@ -343,27 +343,27 @@ void init_export(nb::module_& m) {
             def fun(*args):
                 return sum(args)
 
-            with mx.exporter("fun.mlxfn", fun) as exporter:
-                exporter(mx.array(1))
-                exporter(mx.array(1), mx.array(2))
-                exporter(mx.array(1), mx.array(2), mx.array(3))
+            with tk.exporter("fun.tkfn", fun) as exporter:
+                exporter(tk.array(1))
+                exporter(tk.array(1), tk.array(2))
+                exporter(tk.array(1), tk.array(2), tk.array(3))
       )pbdoc");
   m.def(
       "export_to_dot",
       [](nb::object file, const nb::args& args, const nb::kwargs& kwargs) {
-        std::vector<mx::array> arrays =
+        std::vector<tk::array> arrays =
             tree_flatten(nb::make_tuple(args, kwargs));
-        mx::NodeNamer namer;
+        tk::NodeNamer namer;
         for (const auto& n : kwargs) {
           namer.set_name(
-              nb::cast<mx::array>(n.second), nb::cast<std::string>(n.first));
+              nb::cast<tk::array>(n.second), nb::cast<std::string>(n.first));
         }
         if (nb::isinstance<nb::str>(file)) {
           std::ofstream out(nb::cast<std::string>(file));
-          mx::export_to_dot(out, std::move(namer), arrays);
+          tk::export_to_dot(out, std::move(namer), arrays);
         } else if (nb::hasattr(file, "write")) {
           std::ostringstream out;
-          mx::export_to_dot(out, std::move(namer), arrays);
+          tk::export_to_dot(out, std::move(namer), arrays);
           auto write = file.attr("write");
           write(out.str());
         } else {
@@ -389,10 +389,10 @@ void init_export(nb::module_& m) {
               graph to make the result easier to parse.
 
         Example:
-          >>> a = mx.array(1) + mx.array(2)
-          >>> mx.export_to_dot("graph.dot", a)
-          >>> x = mx.array(1)
-          >>> y = mx.array(2)
-          >>> mx.export_to_dot("graph.dot", x + y, x=x, y=y)
+          >>> a = tk.array(1) + tk.array(2)
+          >>> tk.export_to_dot("graph.dot", a)
+          >>> x = tk.array(1)
+          >>> y = tk.array(2)
+          >>> tk.export_to_dot("graph.dot", x + y, x=x, y=y)
       )pbdoc");
 }

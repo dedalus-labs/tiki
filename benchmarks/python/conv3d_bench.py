@@ -1,7 +1,7 @@
 import math
 import time
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 import torch
 
@@ -26,9 +26,9 @@ def make_mx_conv_3D(strides=(1, 1, 1), padding=(0, 0, 0), groups=1):
     def mx_conv_3D(a, b, b_prime):
         y = a
         for i in range(N_iter_func):
-            y = mx.conv3d(y, b, stride=strides, padding=padding, groups=groups)
-            y = mx.conv3d(y, b_prime, stride=strides, padding=padding, groups=groups)
-        mx.eval(y)
+            y = tk.conv3d(y, b, stride=strides, padding=padding, groups=groups)
+            y = tk.conv3d(y, b_prime, stride=strides, padding=padding, groups=groups)
+        tk.eval(y)
         return y
 
     return mx_conv_3D
@@ -54,7 +54,7 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
     b_prime_np = np.random.uniform(-scale, scale, (C, kD, kH, kW, int(O / groups)))
 
     a_np, b_np, b_prime_np = map(lambda x: x.astype(np_dtype), (a_np, b_np, b_prime_np))
-    a_mx, b_mx, b_prime_mx = map(lambda x: mx.array(x), (a_np, b_np, b_prime_np))
+    a_mx, b_mx, b_prime_mx = map(lambda x: tk.array(x), (a_np, b_np, b_prime_np))
     a_pt, b_pt, b_prime_pt = map(
         lambda x: torch.from_numpy(x.transpose(0, 4, 1, 2, 3)).to("mps"),
         (a_np, b_np, b_prime_np),
@@ -66,15 +66,15 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
     f_pt = make_pt_conv_3D(strides, padding, groups)
 
     time_torch = bench(f_pt, a_pt, b_pt, b_prime_pt)
-    time_mlx = bench(f_mx, a_mx, b_mx, b_prime_mx)
+    time_tiki = bench(f_mx, a_mx, b_mx, b_prime_mx)
 
-    # Measure MLX memory
-    mx.clear_cache()
-    mx.reset_peak_memory()
-    y = mx.conv3d(a_mx, b_mx, stride=strides, padding=padding, groups=groups)
-    mx.eval(y)
-    mlx_peak_mb = mx.get_peak_memory() / 1024**2
-    mlx_active_mb = mx.get_active_memory() / 1024**2
+    # Measure Tiki memory
+    tk.clear_cache()
+    tk.reset_peak_memory()
+    y = tk.conv3d(a_mx, b_mx, stride=strides, padding=padding, groups=groups)
+    tk.eval(y)
+    tiki_peak_mb = tk.get_peak_memory() / 1024**2
+    tiki_active_mb = tk.get_active_memory() / 1024**2
     del y
 
     # Measure PyTorch MPS memory
@@ -86,7 +86,7 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
     pt_driver_mb = torch.mps.driver_allocated_memory() / 1024**2
     del y
 
-    out_mx = mx.conv3d(a_mx, b_mx, stride=strides, padding=padding, groups=groups)
+    out_mx = tk.conv3d(a_mx, b_mx, stride=strides, padding=padding, groups=groups)
     out_pt = torch.conv3d(
         a_pt.to("cpu"), b_pt.to("cpu"), stride=strides, padding=padding, groups=groups
     )
@@ -102,7 +102,7 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
             f"with max(|a - b|) = {np.max(np.abs(out_pt - out_mx))}"
         )
 
-    return time_mlx, time_torch, mlx_peak_mb, mlx_active_mb, pt_current_mb, pt_driver_mb
+    return time_tiki, time_torch, tiki_peak_mb, tiki_active_mb, pt_current_mb, pt_driver_mb
 
 
 if __name__ == "__main__":
@@ -135,18 +135,18 @@ if __name__ == "__main__":
             f"{'(N,   D,   H,   W,   C)':<26s} {'(  O, kD, kH, kW,   C)':<24s} "
             f"{'stride':<12s} {'pads':<12s} {'groups':>6s} "
             f"{'diff%':>7s}  "
-            f"{'MLX peak':>9s} {'MLX act':>8s} {'PT cur':>8s} {'PT drv':>8s}"
+            f"{'Tiki peak':>9s} {'Tiki act':>8s} {'PT cur':>8s} {'PT drv':>8s}"
         )
         for N, D, H, W, C, kD, kH, kW, O, strides, padding, groups in shapes:
             np_dtype = getattr(np, dtype)
-            time_mlx, time_torch, mlx_peak, mlx_act, pt_cur, pt_drv = bench_shape(
+            time_tiki, time_torch, tiki_peak, tiki_act, pt_cur, pt_drv = bench_shape(
                 N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
             )
-            diff = time_torch / time_mlx - 1.0
+            diff = time_torch / time_tiki - 1.0
 
             print(
                 f"({N}, {D:3d}, {H:3d}, {W:3d}, {C:3d}), ({O:3d}, {kD:2d}, {kH:2d}, {kW:2d}, {C:3d}), "
                 f"{strides}, {padding}, {groups:6d}, "
                 f"{100. * diff:+6.1f}%  "
-                f"{mlx_peak:8.1f}  {mlx_act:7.1f}  {pt_cur:7.1f}  {pt_drv:7.1f}"
+                f"{tiki_peak:8.1f}  {tiki_act:7.1f}  {pt_cur:7.1f}  {pt_drv:7.1f}"
             )

@@ -5,14 +5,14 @@
 import os
 import subprocess
 
-import mlx.core as mx
+import tiki as tk
 
 # -- Project information -----------------------------------------------------
 
 project = "Tiki"
-copyright = "2026 Dedalus Labs, Inc.; 2023 Apple Inc. for the MLX reference"
+copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc."
 author = "Dedalus Labs"
-version = ".".join(mx.__version__.split(".")[:3])
+version = ".".join(tk.__version__.split(".")[:3])
 release = version
 
 # -- General configuration ---------------------------------------------------
@@ -30,11 +30,11 @@ extensions = [
 ]
 
 python_use_unqualified_type_names = True
-autodoc_type_aliases = {"Coordinate": "mlx.tiki.composed.Coordinate"}
+autodoc_type_aliases = {"Coordinate": "tiki.layout.composed.Coordinate"}
 autosummary_generate = True
 autosummary_filename_map = {
-    "mlx.core.Stream": "stream_class",
-    "mlx.core.PrintOptions": "printoptions_class",
+    "tiki.Stream": "stream_class",
+    "tiki.PrintOptions": "printoptions_class",
 }
 
 intersphinx_mapping = {
@@ -42,8 +42,8 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
-breathe_projects = {"mlx": "../build/xml"}
-breathe_default_project = "mlx"
+breathe_projects = {"tiki": "../build/xml"}
+breathe_default_project = "tiki"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]
@@ -92,7 +92,7 @@ html_context = {
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
-htmlhelp_basename = "mlx_doc"
+htmlhelp_basename = "tiki_doc"
 
 
 def setup(app):
@@ -111,7 +111,7 @@ def setup(app):
 
 # -- Options for LaTeX output ------------------------------------------------
 
-latex_documents = [(main_doc, "MLX.tex", "MLX Documentation", author, "manual")]
+latex_documents = [(main_doc, "Tiki.tex", "Tiki Documentation", author, "manual")]
 latex_elements = {
     "preamble": r"""
     \usepackage{enumitem}

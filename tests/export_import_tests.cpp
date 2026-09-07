@@ -6,10 +6,10 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/export.h"
-#include "mlx/mlx.h"
+#include "tiki/export.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 namespace {
 std::string get_temp_file(const std::string& name) {
@@ -18,7 +18,7 @@ std::string get_temp_file(const std::string& name) {
 } // namespace
 
 TEST_CASE("test export basic functions") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](std::vector<array> x) -> std::vector<array> {
     return {negative(exp(x[0]))};
@@ -48,7 +48,7 @@ TEST_CASE("test export function with no inputs") {
     return {zeros({2, 2})};
   };
 
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   export_function(file_path, fun, {});
 
@@ -60,7 +60,7 @@ TEST_CASE("test export function with no inputs") {
 }
 
 TEST_CASE("test export multi output primitives") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](std::vector<array> x) -> std::vector<array> {
     return {divmod(x[0], x[1])};
@@ -78,7 +78,7 @@ TEST_CASE("test export multi output primitives") {
 }
 
 TEST_CASE("test export primitives with state") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](std::vector<array> x) -> std::vector<array> {
     return {argpartition(x[0], 2, 0)};
@@ -95,7 +95,7 @@ TEST_CASE("test export primitives with state") {
 }
 
 TEST_CASE("test export functions with kwargs") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](const Kwargs& kwargs) -> std::vector<array> {
     return {kwargs.at("x") + kwargs.at("y")};
@@ -121,7 +121,7 @@ TEST_CASE("test export functions with kwargs") {
 }
 
 TEST_CASE("test export function with variable inputs") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](const std::vector<array>& args) -> std::vector<array> {
     auto out = array({1, 1, 1, 1});
@@ -150,7 +150,7 @@ TEST_CASE("test export function with variable inputs") {
 }
 
 TEST_CASE("test export function on different stream") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](const std::vector<array>& args) -> std::vector<array> {
     return {abs(args[0], Stream(1000, Device::cpu))};
@@ -163,7 +163,7 @@ TEST_CASE("test export function on different stream") {
 }
 
 TEST_CASE("test export import with metadata") {
-  std::string file_path = get_temp_file("model.mlxfn");
+  std::string file_path = get_temp_file("model.tkfn");
 
   auto fun = [](const std::vector<array>& args) -> std::vector<array> {
     return {abs(args[0])};

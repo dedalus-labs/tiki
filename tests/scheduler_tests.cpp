@@ -2,10 +2,10 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
-#include "mlx/scheduler.h"
+#include "tiki/tiki.h"
+#include "tiki/scheduler.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test stream management") {
   auto s1 = default_stream(default_device());

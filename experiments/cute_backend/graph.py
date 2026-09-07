@@ -1,11 +1,11 @@
-"""Capture a supported MLX graph through its native export callback."""
+"""Capture a supported Tiki graph through its native export callback."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from math import prod
 from typing import TypedDict
 
-import mlx.core as mx
+import tiki as tk
 
 from operations import Operation, UnsupportedGraphError
 
@@ -16,12 +16,12 @@ Profile = tuple[Shape, Strides]
 
 
 def dense_strides(shape: Shape) -> Strides:
-    """Right-major strides, the layout of every MLX output and of a fresh array."""
+    """Right-major strides, the layout of every Tiki output and of a fresh array."""
     return tuple(prod(shape[axis + 1 :]) for axis in range(len(shape)))
 
 
-Descriptor = tuple[str, Shape, mx.Dtype]
-ArrayResult = mx.array | tuple[mx.array, ...]
+Descriptor = tuple[str, Shape, tk.Dtype]
+ArrayResult = tk.array | tuple[tk.array, ...]
 ArrayFunction = Callable[..., ArrayResult]
 
 
@@ -30,7 +30,7 @@ class ExportEvent(TypedDict, total=False):
     inputs: list[Descriptor]
     outputs: list[Descriptor]
     name: str
-    constants: list[tuple[str, mx.array]]
+    constants: list[tuple[str, tk.array]]
     keywords: list[tuple[str, str]]
     arguments: list[bool | int | list[int] | tuple[int, ...]]
 
@@ -81,11 +81,11 @@ class Graph:
         return self.outputs[0].shape
 
 
-def replay(graph: Graph, inputs: tuple[mx.array, ...]) -> tuple[mx.array, ...]:
+def replay(graph: Graph, inputs: tuple[tk.array, ...]) -> tuple[tk.array, ...]:
     """Differentiate the captured program with its frozen constants and branches."""
     values = {value.name: array for value, array in zip(graph.inputs, inputs)}
     values.update(
-        {name: mx.array(value, dtype=mx.float32) for name, value in graph.constants}
+        {name: tk.array(value, dtype=tk.float32) for name, value in graph.constants}
     )
     for node in graph.nodes:
         args = tuple(values[name] for name in node.inputs)
@@ -97,7 +97,7 @@ def replay(graph: Graph, inputs: tuple[mx.array, ...]) -> tuple[mx.array, ...]:
 
 def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
     name, shape, dtype = raw
-    if dtype != mx.float32:
+    if dtype != tk.float32:
         raise UnsupportedGraphError(f"expected float32, got {dtype} at {name}")
     return Value(name, tuple(shape), strides)
 
@@ -109,8 +109,8 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     each input, so tracing stays on dense placeholders.
     """
     events: list[ExportEvent] = []
-    placeholders = [mx.zeros(shape, dtype=mx.float32) for shape, _ in profiles]
-    mx.export_function(events.append, function, *placeholders)
+    placeholders = [tk.zeros(shape, dtype=tk.float32) for shape, _ in profiles]
+    tk.export_function(events.append, function, *placeholders)
     headers = {event["type"]: event for event in events if event["type"] != "primitive"}
     raw_inputs = headers["inputs"]["inputs"]
     if len(raw_inputs) != len(profiles):
@@ -125,7 +125,7 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
         raise UnsupportedGraphError("at least one array output is required")
     constants = []
     for name, value in headers["constants"]["constants"]:
-        if value.ndim != 0 or value.dtype != mx.float32:
+        if value.ndim != 0 or value.dtype != tk.float32:
             raise UnsupportedGraphError("captured constants must be float32 scalars")
         constants.append((name, float(value.item())))
     nodes = tuple(parse_node(event) for event in events if event["type"] == "primitive")

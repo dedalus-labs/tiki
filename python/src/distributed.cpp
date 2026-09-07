@@ -7,35 +7,35 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/distributed/distributed.h"
-#include "mlx/distributed/ops.h"
+#include "tiki/distributed/distributed.h"
+#include "tiki/distributed/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
 
 #include <cstring>
 #include <sstream>
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 void init_distributed(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
-      "distributed", "mlx.core.distributed: Communication operations");
+      "distributed", "tiki.distributed: Communication operations");
 
-  nb::class_<mx::distributed::Group>(
+  nb::class_<tk::distributed::Group>(
       m,
       "Group",
       R"pbcopy(
-        An :class:`mlx.core.distributed.Group` represents a group of independent mlx
+        An :class:`tiki.distributed.Group` represents a group of independent tiki
         processes that can communicate.
       )pbcopy")
       .def(
-          "rank", &mx::distributed::Group::rank, "Get the rank of this process")
-      .def("size", &mx::distributed::Group::size, "Get the size of the group")
+          "rank", &tk::distributed::Group::rank, "Get the rank of this process")
+      .def("size", &tk::distributed::Group::size, "Get the size of the group")
       .def(
           "split",
-          &mx::distributed::Group::split,
+          &tk::distributed::Group::split,
           "color"_a,
           "key"_a = -1,
           nb::sig("def split(self, color: int, key: int = -1) -> Group"),
@@ -56,14 +56,14 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "is_available",
       [](const std::string& backend) {
-        return mx::distributed::is_available(backend);
+        return tk::distributed::is_available(backend);
       },
       "backend"_a = "any",
       nb::sig("def is_available(backend: str = 'any') -> bool"),
       R"pbdoc(
       Check if a communication backend is available.
 
-      Note, this function returns whether MLX has the capability of
+      Note, this function returns whether Tiki has the capability of
       instantiating that distributed backend not whether it is possible to
       create a communication group. For that purpose one should use
       ``init(strict=True)``.
@@ -81,9 +81,9 @@ void init_distributed(nb::module_& parent_module) {
       [](bool strict,
          const std::string& backend,
          std::optional<nb::callable> all_gather_factory)
-          -> mx::distributed::Group {
+          -> tk::distributed::Group {
         if (!all_gather_factory.has_value()) {
-          return mx::distributed::init(strict, backend);
+          return tk::distributed::init(strict, backend);
         }
 
         if (backend != "jaccl") {
@@ -94,7 +94,7 @@ void init_distributed(nb::module_& parent_module) {
         auto py_factory = std::move(*all_gather_factory);
         auto cpp_factory = [py_factory = std::move(py_factory)](
                                int rank,
-                               int size) -> mx::distributed::AllGatherFn {
+                               int size) -> tk::distributed::AllGatherFn {
           nb::gil_scoped_acquire gil;
           nb::object py_inner = py_factory(rank, size);
           if (!PyCallable_Check(py_inner.ptr())) {
@@ -118,7 +118,7 @@ void init_distributed(nb::module_& parent_module) {
           };
         };
 
-        return mx::distributed::init(strict, backend, std::move(cpp_factory));
+        return tk::distributed::init(strict, backend, std::move(cpp_factory));
       },
       "strict"_a = false,
       "backend"_a = "any",
@@ -133,13 +133,13 @@ void init_distributed(nb::module_& parent_module) {
 
           .. code:: python
 
-            import mlx.core as mx
+            import tiki as tk
 
-            group = mx.distributed.init(backend="ring")
+            group = tk.distributed.init(backend="ring")
 
         Args:
           strict (bool, optional): If set to False it returns a singleton group
-            in case ``mx.distributed.is_available()`` returns False otherwise
+            in case ``tk.distributed.is_available()`` returns False otherwise
             it throws a runtime error. Default: ``False``
           backend (str, optional): Which distributed backend to initialize.
             Possible values ``mpi``, ``ring``, ``nccl``, ``jaccl``, ``any``. If
@@ -161,9 +161,9 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "all_sum",
       [](const ScalarOrArray& x,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::all_sum(to_array(x), group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::all_sum(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
@@ -190,9 +190,9 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "all_max",
       [](const ScalarOrArray& x,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::all_max(to_array(x), group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::all_max(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
@@ -219,9 +219,9 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "all_min",
       [](const ScalarOrArray& x,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::all_min(to_array(x), group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::all_min(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
@@ -248,9 +248,9 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "all_gather",
       [](const ScalarOrArray& x,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::all_gather(to_array(x), group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::all_gather(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
@@ -280,9 +280,9 @@ void init_distributed(nb::module_& parent_module) {
       "send",
       [](const ScalarOrArray& x,
          int dst,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::send(to_array(x), dst, group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::send(to_array(x), dst, group, s);
       },
       "x"_a,
       "dst"_a,
@@ -310,7 +310,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "recv",
-      &mx::distributed::recv,
+      &tk::distributed::recv,
       "shape"_a,
       "dtype"_a,
       "src"_a,
@@ -341,9 +341,9 @@ void init_distributed(nb::module_& parent_module) {
       "recv_like",
       [](const ScalarOrArray& x,
          int src,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::recv_like(to_array(x), src, group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::recv_like(to_array(x), src, group, s);
       },
       "x"_a,
       "src"_a,
@@ -356,7 +356,7 @@ void init_distributed(nb::module_& parent_module) {
         Recv an array with shape and type like ``x`` from process with rank
         ``src``.
 
-        It is equivalent to calling ``mx.distributed.recv(x.shape, x.dtype, src)``.
+        It is equivalent to calling ``tk.distributed.recv(x.shape, x.dtype, src)``.
 
         Args:
           x (array): An array defining the shape and dtype of the array we are
@@ -375,9 +375,9 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "sum_scatter",
       [](const ScalarOrArray& x,
-         std::optional<mx::distributed::Group> group,
-         mx::StreamOrDevice s) {
-        return mx::distributed::sum_scatter(to_array(x), group, s);
+         std::optional<tk::distributed::Group> group,
+         tk::StreamOrDevice s) {
+        return tk::distributed::sum_scatter(to_array(x), group, s);
       },
       "x"_a,
       nb::kw_only(),
@@ -408,5 +408,5 @@ void init_distributed(nb::module_& parent_module) {
   // goes away, so that any Python objects held by cached groups are released
   // while Python is still alive.
   auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(nb::cpp_function(&mx::distributed::clear_backends));
+  atexit.attr("register")(nb::cpp_function(&tk::distributed::clear_backends));
 }

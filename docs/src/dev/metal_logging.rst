@@ -1,7 +1,7 @@
 Metal Logging
 =============
 
-In debug builds, MLX compiles Metal kernels with ``os_log`` enabled so shader
+In debug builds, Tiki compiles Metal kernels with ``os_log`` enabled so shader
 warnings and debug messages are visible during development.
 
 .. note::
@@ -14,14 +14,14 @@ To enable logging from kernels, first make sure to build in debug mode:
 
     DEBUG=1 python -m pip install -e .
 
-Then, in the kernel source code include MLX's logging shim and use
-``mlx::os_log``:
+Then, in the kernel source code include Tiki's logging shim and use
+``tiki::os_log``:
 
 .. code-block::
 
-    #include "mlx/backend/metal/kernels/logging.h"
+    #include "tiki/backend/metal/kernels/logging.h"
 
-    constant mlx::os_log logger("mlx", "my_kernel");
+    constant tiki::os_log logger("tiki", "my_kernel");
 
     kernel void my_kernel(/* ... */) {
     // ...

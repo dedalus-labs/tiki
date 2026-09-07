@@ -2,9 +2,9 @@
 
 import unittest
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx_tests
+import tiki as tk
+import tiki.nn as nn
+import tiki_tests
 import numpy as np
 
 try:
@@ -16,7 +16,7 @@ except ImportError as e:
     has_torch = False
 
 
-class TestUpsample(mlx_tests.MLXTestCase):
+class TestUpsample(tiki_tests.TIKITestCase):
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_upsample(self):
         def run_upsample(
@@ -42,7 +42,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
                 iH, iW = idim
                 in_np = np.random.normal(-1.0, 1.0, (N, iH, iW, C)).astype(np_dtype)
 
-                in_mx = mx.array(in_np)
+                in_mx = tk.array(in_np)
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).to("cpu")
 
                 out_mx = nn.Upsample(
@@ -68,7 +68,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
         for dtype in ("float32",):
             for N, C in ((1, 1), (2, 3)):
                 # only test cases in which target sizes are intergers
-                # if not, there will be numerical difference between mlx
+                # if not, there will be numerical difference between tiki
                 # and torch due to different indices selection.
                 for idim, scale_factor in (
                     ((2, 2), (1.0, 1.0)),
@@ -122,7 +122,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
                 iH, iW = idim
                 in_np = np.random.normal(-1.0, 1.0, (N, iH, iW, C)).astype(np_dtype)
 
-                in_mx = mx.array(in_np)
+                in_mx = tk.array(in_np)
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).to("cpu")
 
                 out_mx = nn.Upsample(
@@ -188,7 +188,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
         """For linear mode, antialias has no effect on upscaling."""
         np.random.seed(0)
         in_np = np.random.normal(-1.0, 1.0, (1, 4, 4, 3)).astype(np.float32)
-        in_mx = mx.array(in_np)
+        in_mx = tk.array(in_np)
 
         for scale in (2.0, 3.0):
             with self.subTest(scale=scale):
@@ -214,7 +214,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
         """For cubic mode, antialias changes a from -0.75 to -0.5 even on upscale."""
         np.random.seed(0)
         in_np = np.random.normal(-1.0, 1.0, (1, 8, 8, 3)).astype(np.float32)
-        in_mx = mx.array(in_np)
+        in_mx = tk.array(in_np)
         in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2))
 
         for scale in (2.0, 3.0):
@@ -243,7 +243,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
         """Smoke test for non-integer scale factors (no PyTorch comparison)."""
         np.random.seed(42)
         in_np = np.random.normal(0, 1, (1, 32, 32, 3)).astype(np.float32)
-        in_mx = mx.array(in_np)
+        in_mx = tk.array(in_np)
 
         for scale in (0.3, 0.7, 0.6):
             for mode in ("linear", "cubic"):
@@ -254,7 +254,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
                         align_corners=False,
                         antialias=True,
                     )(in_mx)
-                    mx.eval(out)
+                    tk.eval(out)
                     out_np = np.array(out)
 
                     # Correct shape
@@ -288,7 +288,7 @@ class TestUpsample(mlx_tests.MLXTestCase):
             for mode in ("linear", "cubic"):
                 with self.subTest(length=length, scale=scale, mode=mode):
                     in_np = np.random.normal(0, 1, (1, length, 3)).astype(np.float32)
-                    in_mx = mx.array(in_np)
+                    in_mx = tk.array(in_np)
 
                     out_aa = nn.Upsample(
                         scale_factor=scale,
@@ -302,16 +302,16 @@ class TestUpsample(mlx_tests.MLXTestCase):
                         align_corners=False,
                         antialias=False,
                     )(in_mx)
-                    mx.eval(out_aa, out_no)
+                    tk.eval(out_aa, out_no)
 
                     expected_len = int(length * scale)
                     self.assertEqual(out_aa.shape, (1, expected_len, 3))
                     # AA should differ from non-AA
                     self.assertGreater(
-                        float(mx.abs(out_aa - out_no).max()),
+                        float(tk.abs(out_aa - out_no).max()),
                         1e-6,
                     )
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

@@ -3,9 +3,9 @@
 **Model code that reads like the math. Kernel code that says where every byte
 goes. A compiler we can understand and steer.**
 
-Tiki is Dedalus's experimental machine learning framework, built from MLX.
+Tiki is Dedalus's experimental machine learning framework, built from upstream MLX.
 The ambition is to train and serve our models on NVIDIA GPUs with the precision
-of hand-written CuTe kernels, while keeping MLX's native Apple silicon workflow
+of hand-written CuTe kernels, while keeping Tiki's native Apple silicon workflow
 for local research. We want to own the path from an idea to the instructions
 that execute it.
 
@@ -21,8 +21,8 @@ history remain the foundation; see [UPSTREAM.md](UPSTREAM.md).
 
 ## What works today
 
-The repository contains an MLX checkout plus an isolated compiler experiment.
-MLX still imports as `mlx`. An experimental `tiki.py` module now provides
+The repository contains the framework plus an isolated compiler experiment.
+Tiki still imports as `tiki`. An experimental `tiki.py` module now provides
 `tk.compile` for float32 elementwise graphs, row reductions, and tiled
 transposes; it is not an installed framework package. **The examples under
 “The API we are working toward” remain design targets beyond this subset.**
@@ -33,14 +33,14 @@ On a GH200, with CuTe DSL 4.7.1 and its Multi-Level Intermediate Representation
 - Compiled serialized and textual CuTe MLIR in separate processes, without
   importing the reference kernel source in those compiler processes.
 - Obtained byte-identical 4,416-byte CUDA device binaries from both inputs.
-- Launched the binary compiled from serialized MLIR through MLX-owned buffers
+- Launched the binary compiled from serialized MLIR through Tiki-owned buffers
   and its CUDA stream, with exactly correct results for 4,096 float32 additions.
 
 The [experiment](experiments/cute_backend/README.md) and
 [GH200 evidence](experiments/cute_backend/GH200_PROOF.md) are reproducible.
 That original proof used a reference CuTe-decorated function. The
-[native graph experiment](experiments/cute_backend/README.md#native-mlx-graph-compilation)
-now captures actual MLX primitives through its export callback, emits CuTe MLIR
+[native graph experiment](experiments/cute_backend/README.md#native-tiki-graph-compilation)
+now captures actual Tiki primitives through its export callback, emits CuTe MLIR
 directly, and executes it on the GH200. Its graph and schedule can also be
 inspected on a Mac. The [exemplar audit](experiments/cute_backend/EXEMPLAR_AUDIT.md)
 now includes device-performance comparisons against matched CUDA C++ kernels.
@@ -55,7 +55,7 @@ the sanitizer results.
 
 ## The architecture we want
 
-MLX supplies arrays, lazy evaluation, automatic differentiation, and device
+Tiki supplies arrays, lazy evaluation, automatic differentiation, and device
 execution. Tiki supplies the CUDA scheduling and kernel authoring layer.
 CuTe supplies the layout algebra and NVIDIA compiler machinery.
 
@@ -72,14 +72,14 @@ the ability to specify a legal hardware decision explicitly.
 
 ```mermaid
 flowchart TD
-    model[Model code: MLX arrays and automatic differentiation]
+    model[Model code: Tiki arrays and automatic differentiation]
     regions[Tiki: choose graph regions and explicit CUDA schedules]
     kernels[Kernel code: Tiki primitives inside CuTe decorators]
     ir[CuTe MLIR: typed operations, layouts, memory, synchronization]
     compiler[NVIDIA CuteCompiler]
     binary[PTX assembly to cubin device binary]
-    runtime[MLX CUDA runtime: buffers, streams, launch, lifetime]
-    metal[MLX Metal backend]
+    runtime[Tiki CUDA runtime: buffers, streams, launch, lifetime]
+    metal[Tiki Metal backend]
 
     model --> regions --> ir
     kernels --> ir
@@ -100,7 +100,7 @@ kernels and emit CuTe MLIR directly for graph regions. Both paths should meet at
 the same compiler artifact and launch contract. Generated Python files are not
 part of that contract.
 
-On Apple silicon, we retain MLX's Metal implementation. Model operations can
+On Apple silicon, we retain Tiki's Metal implementation. Model operations can
 have implementations for both devices. A Hopper-specific kernel still requires
 NVIDIA hardware; portability of the model does not imply identical kernel code
 or schedules across Metal and CUDA.
@@ -109,37 +109,37 @@ or schedules across Metal and CUDA.
 
 These examples describe behavior to implement and test. Their spelling can
 change as we learn. The existing monorepo package `tiki` is a PyTorch training
-toolkit with a CuTe library; installing it does not provide this proposed MLX
+toolkit with a CuTe library; installing it does not provide this proposed Tiki
 integration.
 
 ### Compile model code
 
-The proposed `tk.compile` traces MLX array operations, selects supported graph
+The proposed `tk.compile` traces Tiki array operations, selects supported graph
 regions, and specializes them for the requested backend. This example asks for
 a CuTe implementation of root mean square normalization with float32 reduction
 and a float16 result:
 
 ```python
 # Target API; not implemented in this repository.
-import mlx.core as mx
+import tiki as tk
 import tiki as tk
 
 
 @tk.compile(backend="cute")
-def rms_norm(x: mx.array, weight: mx.array) -> mx.array:
-    xf = x.astype(mx.float32)
-    inv_rms = mx.rsqrt(mx.mean(xf * xf, axis=-1, keepdims=True) + 1e-6)
-    return (xf * inv_rms * weight.astype(mx.float32)).astype(x.dtype)
+def rms_norm(x: tk.array, weight: tk.array) -> tk.array:
+    xf = x.astype(tk.float32)
+    inv_rms = tk.rsqrt(tk.mean(xf * xf, axis=-1, keepdims=True) + 1e-6)
+    return (xf * inv_rms * weight.astype(tk.float32)).astype(x.dtype)
 
 
-mx.set_default_device(mx.gpu)
-x = mx.random.normal((32, 4096)).astype(mx.float16)
-weight = mx.ones((4096,), dtype=mx.float16)
-mx.eval(rms_norm(x, weight))
+tk.set_default_device(tk.gpu)
+x = tk.random.normal((32, 4096)).astype(tk.float16)
+weight = tk.ones((4096,), dtype=tk.float16)
+tk.eval(rms_norm(x, weight))
 ```
 
-Acceptance means a CuTe-produced kernel executes through MLX, preserves these
-numerics, and composes with `mx.grad`. Unsupported operations, layouts, or
+Acceptance means a CuTe-produced kernel executes through Tiki, preserves these
+numerics, and composes with `tk.grad`. Unsupported operations, layouts, or
 devices raise a typed error identifying the unsupported contract. Explicit
 backend selection must never quietly run a different implementation.
 
@@ -209,7 +209,7 @@ passing accumulators between fragments must preserve those layouts.
 This is a kernel fragment, not a full attention operator. The milestone includes
 the outer loops, buffer lifetime and reuse barriers, output stores, forward
 online softmax, bounds and causal masks, and an explicit backward registration
-with MLX. A fast forward kernel alone does not make a trainable operator.
+with Tiki. A fast forward kernel alone does not make a trainable operator.
 
 The forward pass should expose the stable online-softmax recurrence rather than
 materialize the full sequence-by-sequence score matrix. For each query row and
@@ -270,12 +270,12 @@ These are completion gates. Gates 0 and 1 have been demonstrated in this repo.
 
 | Gate | Deliverable | Evidence required to mark it complete |
 | --- | --- | --- |
-| **0. Compiler connection — demonstrated** | CuTe MLIR to device binary to MLX CUDA launch. | Recorded GH200 compiler artifacts and exact vector-add results. This does not include an MLX graph emitter. |
-| **1. First native graph region — demonstrated** | `tk.compile` captures an MLX elementwise graph and emits a chosen schedule as CuTe MLIR. | Ten GH200 tests cover arithmetic, scalar broadcasting, empty and partial tiles, input packing, specialization reuse, and unsupported cases. The compiler path consumes direct MLIR; see the native graph experiment. |
-| **2. Kernel library on MLX — in progress** | Float32 RMSNorm and swizzled transpose are demonstrated. Port the smallest `Tensor`/`Load`/`Gemm`/`Warp` subset and expose custom-op differentiation. | Numerical and gradient checks, explicit memory/stream ownership, safe shared-buffer reuse, concurrent compilation without shared mutable staging state, and no PyTorch runtime dependency. |
+| **0. Compiler connection — demonstrated** | CuTe MLIR to device binary to Tiki CUDA launch. | Recorded GH200 compiler artifacts and exact vector-add results. This does not include an Tiki graph emitter. |
+| **1. First native graph region — demonstrated** | `tk.compile` captures an Tiki elementwise graph and emits a chosen schedule as CuTe MLIR. | Ten GH200 tests cover arithmetic, scalar broadcasting, empty and partial tiles, input packing, specialization reuse, and unsupported cases. The compiler path consumes direct MLIR; see the native graph experiment. |
+| **2. Kernel library on Tiki — in progress** | Float32 RMSNorm and swizzled transpose are demonstrated. Port the smallest `Tensor`/`Load`/`Gemm`/`Warp` subset and expose custom-op differentiation. | Numerical and gradient checks, explicit memory/stream ownership, safe shared-buffer reuse, concurrent compilation without shared mutable staging state, and no PyTorch runtime dependency. |
 | **3. FlashAttention that trains** | Implement tiled online-softmax forward and the compact backward target. Start with one fixed non-causal specialization, then expand. | Output and dQ/dK/dV comparisons against independent references; finite-difference checks on small cases; float16/bfloat16, causal and partial tiles; peak-memory evidence that no full score matrix is stored. Validate Ampere mechanics on Ampere and Hopper schedules on Hopper. |
 | **4. Fast compilation and inspectable tuning** | Cache compiled artifacts, expose every lowering stage, and tune legal schedule candidates. | Cold compile, persistent-cache hit, warm launch, and tuning costs measured separately; cache identity covers source/MLIR, compiler version/options, target, shapes/strides, dtype, constants, layout, schedule, and binary calling convention. Invalid candidates fail before benchmarking. |
-| **5. Useful model workloads** | Cached language-model decoding, low-rank adaptation (LoRA) fine-tuning, and a complete single-GPU transformer training step. | Matched checkpoints, precision, sequence lengths, optimizer settings and numerical checks against MLX and PyTorch; latency, tokens/second, peak memory, and compilation costs saved with samples. Apple Metal correctness and performance remain release gates. |
+| **5. Useful model workloads** | Cached language-model decoding, low-rank adaptation (LoRA) fine-tuning, and a complete single-GPU transformer training step. | Matched checkpoints, precision, sequence lengths, optimizer settings and numerical checks against Tiki and PyTorch; latency, tokens/second, peak memory, and compilation costs saved with samples. Apple Metal correctness and performance remain release gates. |
 | **6. A pretraining runtime** | Stream-aware collectives and independent communication groups; then data, tensor, pipeline, and fully sharded training. | Real multi-GPU overlap and correctness tests, shard/checkpoint round trips, restart and failure behavior, and scaling measurements before calling Tiki a pretraining framework. |
 | **7. Internal adoption** | Move the proven compiler/runtime subset into the monorepo and train a model we care about. | Reproducible runs, maintainable upstream merges, measured iteration-time benefit, and an explicit ownership boundary between framework, kernels, and training code. |
 
@@ -319,18 +319,18 @@ architecture decision record includes the September 5, 2026 evaluation and
 version-pinned reproductions supporting the selected design.
 
 Read the [compiler experiment](experiments/cute_backend/README.md), then inspect
-`mlx/backend/cuda/compiled.cpp` for the existing MLX graph compilation route and
-`mlx/backend/cuda/custom_kernel.cpp` for precompiled kernel execution.
-With this checkout built for CUDA and importable as `mlx`:
+`tiki/backend/cuda/compiled.cpp` for the existing Tiki graph compilation route and
+`tiki/backend/cuda/custom_kernel.cpp` for precompiled kernel execution.
+With this checkout built for CUDA and importable as `tiki`:
 
 ```sh
 python -m pip install -r experiments/cute_backend/requirements.txt
 python experiments/cute_backend/probe.py --arch sm_90 --output /tmp/tiki-cute-proof
-python experiments/cute_backend/run_mlx.py --arch sm_90
+python experiments/cute_backend/run_tiki.py --arch sm_90
 ```
 
 Use a fresh output directory for the probe. Source build instructions are in
-[the retained MLX installation guide](docs/src/install.rst).
+[the retained Tiki installation guide](docs/src/install.rst).
 
 The design references in the monorepo are pinned to commit
 `7858ecd1aea016156a5df3eef36d40fbe5791892`:
@@ -345,8 +345,8 @@ These are design inputs, not a claim that all their planned behavior has been
 validated. NVIDIA documents CuTe's staged Python and lowering model in its
 [code generation guide](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/cute_dsl_general/dsl_code_generation.html).
 
-MLX was developed by Apple machine learning research; its code remains under
+Tiki was developed by Apple machine learning research; its code remains under
 the [MIT license](LICENSE). CuTe DSL has its own
 [NVIDIA license terms](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/license.html).
 See the [upstream README](https://github.com/ml-explore/mlx/blob/b6368984b8e02a3fb3ee7986846c0fb85e1fccf7/README.md)
-for MLX's original introduction, acknowledgments, and citation.
+for Tiki's original introduction, acknowledgments, and citation.

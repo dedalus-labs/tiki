@@ -1,7 +1,7 @@
 LLM inference
 ==============
 
-MLX enables efficient inference of large-ish transformers on Apple silicon
+Tiki enables efficient inference of large-ish transformers on Apple silicon
 without compromising on ease of use. In this example we will create an
 inference script for the Llama family of transformer models in which the model
 is defined in less than 200 lines of python.
@@ -9,7 +9,7 @@ is defined in less than 200 lines of python.
 Implementing the model
 ----------------------
 
-We will use the neural network building blocks defined in the :mod:`mlx.nn`
+We will use the neural network building blocks defined in the :mod:`tiki.nn`
 module to concisely define the model architecture. 
 
 Attention layer
@@ -20,13 +20,13 @@ positional encoding. [1]_ In addition, our attention layer will optionally use a
 key/value cache that will be concatenated with the provided keys and values to
 support efficient inference.
 
-Our implementation uses :class:`mlx.nn.Linear` for all the projections and
-:class:`mlx.nn.RoPE` for the positional encoding.
+Our implementation uses :class:`tiki.nn.Linear` for all the projections and
+:class:`tiki.nn.RoPE` for the positional encoding.
 
 .. code-block:: python
 
-    import mlx.core as mx
-    import mlx.nn as nn
+    import tiki as tk
+    import tiki.nn as nn
 
     class LlamaAttention(nn.Module):
         def __init__(self, dims: int, num_heads: int):
@@ -59,8 +59,8 @@ Our implementation uses :class:`mlx.nn.Linear` for all the projections and
                 key_cache, value_cache = cache
                 queries = self.rope(queries, offset=key_cache.shape[2])
                 keys = self.rope(keys, offset=key_cache.shape[2])
-                keys = mx.concatenate([key_cache, keys], axis=2)
-                values = mx.concatenate([value_cache, values], axis=2)
+                keys = tk.concatenate([key_cache, keys], axis=2)
+                values = tk.concatenate([value_cache, values], axis=2)
             else:
                 queries = self.rope(queries)
                 keys = self.rope(keys)
@@ -70,7 +70,7 @@ Our implementation uses :class:`mlx.nn.Linear` for all the projections and
             scores = (queries * scale) @ keys.transpose(0, 1, 3, 2)
             if mask is not None:
                 scores = scores + mask
-            scores = mx.softmax(scores, axis=-1)
+            scores = tk.softmax(scores, axis=-1)
             values_hat = (scores @ values).transpose(0, 2, 1, 3).reshape(B, L, -1)
 
             # Note that we return the keys and values to possibly be used as a cache
@@ -81,7 +81,7 @@ Encoder layer
 
 The other component of the Llama model is the encoder layer which uses RMS
 normalization [2]_ and SwiGLU. [3]_ For RMS normalization we will use
-:class:`mlx.nn.RMSNorm` that is already provided in :mod:`mlx.nn`.
+:class:`tiki.nn.RMSNorm` that is already provided in :mod:`tiki.nn`.
 
 .. code-block:: python
 
@@ -106,7 +106,7 @@ normalization [2]_ and SwiGLU. [3]_ For RMS normalization we will use
             y = self.norm2(x)
             a = self.linear1(y)
             b = self.linear2(y)
-            y = a * mx.sigmoid(a) * b
+            y = a * tk.sigmoid(a) * b
             y = self.linear3(y)
             x = x + y
 
@@ -116,7 +116,7 @@ Full model
 ^^^^^^^^^^
 
 To implement any Llama model we simply have to combine ``LlamaEncoderLayer``
-instances with an :class:`mlx.nn.Embedding` to embed the input tokens.
+instances with an :class:`tiki.nn.Embedding` to embed the input tokens.
 
 .. code-block:: python
 
@@ -177,10 +177,10 @@ prompt and then autoregressively yields tokens one at a time.
             x = self.norm(x)
             y = self.out_proj(x[:, -1])  # <--- we only care about the last logits
                                          #      that generate the next token
-            y = mx.random.categorical(y * (1/temp))
+            y = tk.random.categorical(y * (1/temp))
 
             # y now has size [1]
-            # Since MLX is lazily evaluated nothing is computed yet.
+            # Since Tiki is lazily evaluated nothing is computed yet.
             # Calling y.item() would force the computation to happen at
             # this point but we can also choose not to do that and let the
             # user choose when to start the computation.
@@ -197,12 +197,12 @@ prompt and then autoregressively yields tokens one at a time.
                 x = self.embedding(x)
                 for i in range(len(cache)):
                     # We are overwriting the arrays in the cache list. When
-                    # the computation will happen, MLX will be discarding the
+                    # the computation will happen, Tiki will be discarding the
                     # old cache the moment it is not needed anymore.
                     x, cache[i] = self.layers[i](x, mask=None, cache=cache[i])
                 x = self.norm(x)
                 y = self.out_proj(x[:, -1])
-                y = mx.random.categorical(y * (1/temp))
+                y = tk.random.categorical(y * (1/temp))
 
                 yield y
 
@@ -217,12 +217,12 @@ it. In the following code, we randomly initialize a small Llama model, process
 
     model = Llama(num_layers=12, vocab_size=8192, dims=512, mlp_dims=1024, num_heads=8)
 
-    # Since MLX is lazily evaluated nothing has actually been materialized yet.
+    # Since Tiki is lazily evaluated nothing has actually been materialized yet.
     # We could have set the `dims` to 20_000 on a machine with 8GB of RAM and the
     # code above would still run. Let's actually materialize the model.
-    mx.eval(model.parameters())
+    tk.eval(model.parameters())
 
-    prompt = mx.array([[1, 10, 8, 32, 44, 7]])  # <-- Note the double brackets because we
+    prompt = tk.array([[1, 10, 8, 32, 44, 7]])  # <-- Note the double brackets because we
                                                 #     have a batch dimension even
                                                 #     though it is 1 in this case
 
@@ -235,15 +235,15 @@ it. In the following code, we randomly initialize a small Llama model, process
     # We can evaluate them one at a time, or all together. Concatenate them or
     # print them. They would all result in very similar runtimes and give exactly
     # the same results.
-    mx.eval(generated)
+    tk.eval(generated)
 
 Converting the weights
 ----------------------
 
 This section assumes that you have access to the original Llama weights and the
 SentencePiece model that comes with them. We will write a small script to
-convert the PyTorch weights to MLX compatible ones and write them in a NPZ file
-that can be loaded directly by MLX.
+convert the PyTorch weights to Tiki compatible ones and write them in a NPZ file
+that can be loaded directly by Tiki.
 
 .. code-block:: python
 
@@ -253,7 +253,7 @@ that can be loaded directly by MLX.
     import numpy as np
     import torch
 
-    def map_torch_to_mlx(key, value):
+    def map_torch_to_tiki(key, value):
         if "tok_embedding" in key:
             key = "embedding.weight"
 
@@ -282,7 +282,7 @@ that can be loaded directly by MLX.
 
 
     if __name__ == "__main__":
-        parser = argparse.ArgumentParser(description="Convert Llama weights to MLX")
+        parser = argparse.ArgumentParser(description="Convert Llama weights to Tiki")
         parser.add_argument("torch_weights")
         parser.add_argument("output_file")
         args = parser.parse_args()
@@ -290,7 +290,7 @@ that can be loaded directly by MLX.
         state = torch.load(args.torch_weights)
         np.savez(
             args.output_file,
-            **{k: v for k, v in starmap(map_torch_to_mlx, state.items()) if k is not None}
+            **{k: v for k, v in starmap(map_torch_to_tiki, state.items()) if k is not None}
         )
 
 
@@ -299,18 +299,18 @@ Weight loading and benchmarking
 
 After converting the weights to be compatible to our implementation, all that is
 left is to load them from disk and we can finally use the LLM to generate text.
-We can load numpy format files using the :func:`mlx.core.load` operation.
+We can load numpy format files using the :func:`tiki.load` operation.
 
 To create a parameter dictionary from the key/value representation of NPZ files
-we will use the :func:`mlx.utils.tree_unflatten` helper method as follows:
+we will use the :func:`tiki.utils.tree_unflatten` helper method as follows:
 
 .. code-block:: python
 
-    from mlx.utils import tree_unflatten
+    from tiki.utils import tree_unflatten
 
-    model.update(tree_unflatten(list(mx.load(weight_file).items())))
+    model.update(tree_unflatten(list(tk.load(weight_file).items())))
 
-:meth:`mlx.utils.tree_unflatten` will take keys from the NPZ file that look
+:meth:`tiki.utils.tree_unflatten` will take keys from the NPZ file that look
 like ``layers.2.attention.query_proj.weight`` and will transform them to
 
 .. code-block:: python
@@ -318,8 +318,8 @@ like ``layers.2.attention.query_proj.weight`` and will transform them to
    {"layers": [..., ..., {"attention": {"query_proj": {"weight": ...}}}]}
 
 which can then be used to update the model. Note that the method above incurs
-several unnecessary copies from disk to numpy and then from numpy to MLX. It
-will be replaced in the future with direct loading to MLX.
+several unnecessary copies from disk to numpy and then from numpy to Tiki. It
+will be replaced in the future with direct loading to Tiki.
 
 You can download the full example code in `mlx-examples`_. Assuming, the
 existence of the PyTorch Llama weights in ``llama-7B/`` we can play around

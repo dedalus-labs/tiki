@@ -10,12 +10,12 @@
 #include <vector>
 #include "doctest/doctest.h"
 
-#include "mlx/graph_utils.h"
-#include "mlx/mlx.h"
+#include "tiki/graph_utils.h"
+#include "tiki/tiki.h"
 
-#include "mlx/backend/cuda/cuda.h"
+#include "tiki/backend/cuda/cuda.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 namespace {
 
@@ -438,7 +438,7 @@ TEST_CASE("test op vjps") {
   // Test sqrt
   {
     auto out = vjp(
-        [](array in) { return mlx::core::sqrt(in); }, array(4.0f), array(8.0f));
+        [](array in) { return tiki::core::sqrt(in); }, array(4.0f), array(8.0f));
     CHECK_EQ(out.second.item<float>(), 2.0f);
   }
 
@@ -1131,20 +1131,20 @@ TEST_CASE("test jvp from vjp") {
       return array_equal(vjp_out, jvp_out).item<bool>();
     };
 
-    CHECK(compute_derivs(mlx::core::abs));
-    CHECK(compute_derivs(mlx::core::cos));
-    CHECK(compute_derivs(mlx::core::erf));
-    CHECK(compute_derivs(mlx::core::erfinv));
-    CHECK(compute_derivs(mlx::core::exp));
-    CHECK(compute_derivs(mlx::core::log));
-    CHECK(compute_derivs(mlx::core::log1p));
-    CHECK(compute_derivs(mlx::core::negative));
-    CHECK(compute_derivs(mlx::core::sigmoid));
-    CHECK(compute_derivs(mlx::core::sign));
-    CHECK(compute_derivs(mlx::core::sin));
-    CHECK(compute_derivs(mlx::core::square));
-    CHECK(compute_derivs(mlx::core::sqrt));
-    CHECK(compute_derivs(mlx::core::rsqrt));
+    CHECK(compute_derivs(tiki::core::abs));
+    CHECK(compute_derivs(tiki::core::cos));
+    CHECK(compute_derivs(tiki::core::erf));
+    CHECK(compute_derivs(tiki::core::erfinv));
+    CHECK(compute_derivs(tiki::core::exp));
+    CHECK(compute_derivs(tiki::core::log));
+    CHECK(compute_derivs(tiki::core::log1p));
+    CHECK(compute_derivs(tiki::core::negative));
+    CHECK(compute_derivs(tiki::core::sigmoid));
+    CHECK(compute_derivs(tiki::core::sign));
+    CHECK(compute_derivs(tiki::core::sin));
+    CHECK(compute_derivs(tiki::core::square));
+    CHECK(compute_derivs(tiki::core::sqrt));
+    CHECK(compute_derivs(tiki::core::rsqrt));
   }
 
   // Binary element-wise ops

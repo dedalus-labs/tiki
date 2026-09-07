@@ -5,7 +5,7 @@
 import statistics
 import time
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 
 WARMUP = 5
@@ -19,17 +19,17 @@ def measure_export(elements: int, cache_bytes: int) -> float:
     storage to the next GPU result. GPU production and its allocation are not
     timed; host-storage allocation during export is timed.
     """
-    previous_limit = mx.set_cache_limit(cache_bytes)
+    previous_limit = tk.set_cache_limit(cache_bytes)
     samples: list[int] = []
     try:
-        mx.clear_cache()
-        source = mx.arange(elements, dtype=mx.float32)
-        mx.eval(source)
-        mx.synchronize()
+        tk.clear_cache()
+        source = tk.arange(elements, dtype=tk.float32)
+        tk.eval(source)
+        tk.synchronize()
         for iteration in range(WARMUP + SAMPLES):
             result = source + 1
-            mx.eval(result)
-            mx.synchronize()
+            tk.eval(result)
+            tk.synchronize()
             start = time.perf_counter_ns()
             exported = np.asarray(result)
             elapsed = time.perf_counter_ns() - start
@@ -40,15 +40,15 @@ def measure_export(elements: int, cache_bytes: int) -> float:
             del exported, result
         return statistics.median(samples) / 1_000
     finally:
-        mx.set_cache_limit(previous_limit)
-        mx.clear_cache()
+        tk.set_cache_limit(previous_limit)
+        tk.clear_cache()
 
 
 def main() -> None:
-    if not mx.cuda.is_available():
-        raise RuntimeError("host export benchmark requires MLX CUDA")
-    mx.set_default_device(mx.gpu)
-    print(f"module={mx.__file__}")
+    if not tk.cuda.is_available():
+        raise RuntimeError("host export benchmark requires Tiki CUDA")
+    tk.set_default_device(tk.gpu)
+    print(f"module={tk.__file__}")
     for elements in (262_144, 16_777_216):
         for cache_bytes in (1 << 30, 0, 0, 1 << 30):
             latency_us = measure_export(elements, cache_bytes)

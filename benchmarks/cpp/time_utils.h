@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
 #define milliseconds(x) \
   (std::chrono::duration_cast<std::chrono::nanoseconds>(x).count() / 1e6)

@@ -1,0 +1,5 @@
+if(TIKI_BUILD_CPU)
+  target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/mpi.cpp)
+else()
+  target_sources(tiki PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/no_mpi.cpp)
+endif()

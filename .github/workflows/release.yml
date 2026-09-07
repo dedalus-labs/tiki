@@ -90,7 +90,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
-          path: wheelhouse/mlx-*.whl
+          path: wheelhouse/tiki-*.whl
           if-no-files-found: error
 
   build_backend:
@@ -176,14 +176,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}
-          path: wheelhouse/mlx-*.whl
+          path: wheelhouse/tiki-*.whl
           if-no-files-found: error
       - name: Upload backend packages
         if: matrix.python-version == '3.10'
         uses: actions/upload-artifact@v7
         with:
           name: backend-metal-${{ runner.os }}-${{ runner.arch }}
-          path: wheelhouse/mlx_metal-*.whl
+          path: wheelhouse/tiki_metal-*.whl
           if-no-files-found: error
 
   test_wheel:
@@ -230,14 +230,14 @@ jobs:
           toolkit: ${{ matrix.toolkit }}
 
   pypi-publish-frontend:
-    name: Publish mlx to PyPI
+    name: Publish tiki to PyPI
     runs-on: ubuntu-latest
     needs: [test_wheel]
     permissions:
       id-token: write
     environment:
       name: *pypi-env
-      url: https://pypi.org/p/mlx
+      url: https://pypi.org/p/tiki
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -253,14 +253,14 @@ jobs:
           repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-cuda:
-    name: Publish mlx-cuda to PyPI
+    name: Publish tiki-cuda to PyPI
     runs-on: ubuntu-latest
     needs: [test_wheel]
     permissions:
       id-token: write
     environment:
       name: *pypi-env
-      url: https://pypi.org/p/mlx-cuda
+      url: https://pypi.org/p/tiki-cuda
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -276,14 +276,14 @@ jobs:
           repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-cpu:
-    name: Publish mlx-cpu to PyPI
+    name: Publish tiki-cpu to PyPI
     runs-on: ubuntu-latest
     needs: [test_wheel]
     permissions:
       id-token: write
     environment:
       name: *pypi-env
-      url: https://pypi.org/p/mlx-cpu
+      url: https://pypi.org/p/tiki-cpu
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -299,14 +299,14 @@ jobs:
           repository-url: https://upload.pypi.org/legacy/
 
   pypi-publish-metal:
-    name: Publish mlx-metal to PyPI
+    name: Publish tiki-metal to PyPI
     runs-on: ubuntu-latest
     needs: [test_wheel]
     permissions:
       id-token: write
     environment:
       name: *pypi-env
-      url: https://pypi.org/p/mlx-metal
+      url: https://pypi.org/p/tiki-metal
     steps:
       - uses: actions/download-artifact@v8
         with:

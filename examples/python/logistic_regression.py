@@ -2,7 +2,7 @@
 
 import time
 
-import mlx.core as mx
+import tiki as tk
 
 num_features = 100
 num_examples = 1_000
@@ -10,37 +10,37 @@ num_iters = 10_000
 lr = 0.1
 
 # True parameters
-w_star = mx.random.normal((num_features,))
+w_star = tk.random.normal((num_features,))
 
 # Input examples
-X = mx.random.normal((num_examples, num_features))
+X = tk.random.normal((num_examples, num_features))
 
 # Labels
 y = (X @ w_star) > 0
 
 
 # Initialize random parameters
-w = 1e-2 * mx.random.normal((num_features,))
+w = 1e-2 * tk.random.normal((num_features,))
 
 
 def loss_fn(w):
     logits = X @ w
-    return mx.mean(mx.logaddexp(0.0, logits) - y * logits)
+    return tk.mean(tk.logaddexp(0.0, logits) - y * logits)
 
 
-grad_fn = mx.grad(loss_fn)
+grad_fn = tk.grad(loss_fn)
 
 tic = time.perf_counter()
 for _ in range(num_iters):
     grad = grad_fn(w)
     w = w - lr * grad
-    mx.eval(w)
+    tk.eval(w)
 
 toc = time.perf_counter()
 
 loss = loss_fn(w)
 final_preds = (X @ w) > 0
-acc = mx.mean(final_preds == y)
+acc = tk.mean(final_preds == y)
 
 throughput = num_iters / (toc - tic)
 print(

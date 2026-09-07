@@ -13,22 +13,22 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/array.h"
-#include "mlx/compile.h"
-#include "mlx/compile_impl.h"
-#include "mlx/transforms.h"
-#include "mlx/transforms_impl.h"
-#include "mlx/utils.h"
-#include "python/src/mlx_func.h"
+#include "tiki/array.h"
+#include "tiki/compile.h"
+#include "tiki/compile_impl.h"
+#include "tiki/transforms.h"
+#include "tiki/transforms_impl.h"
+#include "tiki/utils.h"
+#include "python/src/tiki_func.h"
 #include "python/src/small_vector.h"
 #include "python/src/trees.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 // Needed for printing shapes and strides.
-using mx::operator<<;
+using tk::operator<<;
 
 using IntOrVec = std::variant<int, std::vector<int>>;
 using StrOrSet = std::variant<std::string, std::unordered_set<std::string>>;
@@ -123,13 +123,13 @@ auto py_value_and_grad(
     }
 
     // Collect the arrays
-    std::vector<mx::array> arrays;
+    std::vector<tk::array> arrays;
     std::vector<nb::object> array_objects;
     auto flatten_with_objects = [&arrays, &array_objects](
                                     auto tree, bool strict) {
       tree_visit(tree, [&](nb::handle obj) {
-        if (nb::isinstance<mx::array>(obj)) {
-          arrays.push_back(nb::cast<mx::array>(obj));
+        if (nb::isinstance<tk::array>(obj)) {
+          arrays.push_back(nb::cast<tk::array>(obj));
           array_objects.push_back(nb::borrow<nb::object>(obj));
         } else if (strict) {
           throw std::invalid_argument(
@@ -177,14 +177,14 @@ auto py_value_and_grad(
     // value_out will hold the output of the python function in order to be
     // able to reconstruct the python tree of extra return values
     nb::object py_value_out;
-    auto value_and_grads = mx::value_and_grad(
+    auto value_and_grads = tk::value_and_grad(
         [&fun,
          &array_objects,
          &args,
          &kwargs,
          &py_value_out,
          &error_msg_tag,
-         scalar_func_only](const std::vector<mx::array>& a) {
+         scalar_func_only](const std::vector<tk::array>& a) {
           nb::list tree;
           tree.append(args);
           tree.append(kwargs);
@@ -197,7 +197,7 @@ auto py_value_and_grad(
           // locations which were written to during the call to fun
           int index = 0;
           tree_visit_update(tree, [&](nb::handle node) {
-            auto replace_arr = nb::cast<mx::array>(node);
+            auto replace_arr = nb::cast<tk::array>(node);
             if (replace_arr.id() == a[index].id()) {
               return array_objects[index++];
             } else {
@@ -207,7 +207,7 @@ auto py_value_and_grad(
           });
 
           // Validate the return value of the python function
-          if (!nb::isinstance<mx::array>(py_value_out)) {
+          if (!nb::isinstance<tk::array>(py_value_out)) {
             if (scalar_func_only) {
               std::ostringstream msg;
               msg << error_msg_tag << " The return value of the function "
@@ -235,7 +235,7 @@ auto py_value_and_grad(
                   << "we got an empty tuple.";
               throw std::invalid_argument(msg.str());
             }
-            if (!nb::isinstance<mx::array>(ret[0])) {
+            if (!nb::isinstance<tk::array>(ret[0])) {
               std::ostringstream msg;
               msg << error_msg_tag << " The return value of the function "
                   << "whose gradient we want to compute should be either a "
@@ -264,7 +264,7 @@ auto py_value_and_grad(
     // In case 1 we return the original python variable but with the gradients.
     // In case 2 we return a tuple of the above.
     // In case 3 we return a tuple containing a tuple and dict (sth like
-    // (tuple(), dict(x=mx.array(5))) ).
+    // (tuple(), dict(x=tk.array(5))) ).
     nb::object positional_grads;
     nb::object keyword_grads;
     nb::object py_grads;
@@ -320,12 +320,12 @@ auto py_vmap(
           {tree, axes},
           [&flat_axes, &encountered_tuple, output_axes](
               const std::vector<nb::object>& inputs) {
-            if (nb::isinstance<mx::array>(inputs[0])) {
+            if (nb::isinstance<tk::array>(inputs[0])) {
               if (inputs[1].is_none()) {
                 flat_axes.push_back(-1);
               } else if (nb::isinstance<nb::int_>(inputs[1])) {
                 int axis = nb::cast<int>(nb::cast<nb::int_>(inputs[1]));
-                const mx::array& x = nb::cast<mx::array>(inputs[0]);
+                const tk::array& x = nb::cast<tk::array>(inputs[0]);
                 if (axis < 0) {
                   axis += x.ndim() + output_axes;
                 }
@@ -342,7 +342,7 @@ auto py_vmap(
                 auto l = nb::cast<nb::tuple>(inputs[1]);
                 if (l.size() == 1 && nb::isinstance<nb::int_>(l[0])) {
                   int axis = nb::cast<int>(nb::cast<nb::int_>(l[0]));
-                  const mx::array& x = nb::cast<mx::array>(inputs[0]);
+                  const tk::array& x = nb::cast<tk::array>(inputs[0]);
                   if (axis < 0) {
                     axis += x.ndim() + output_axes;
                   }
@@ -368,7 +368,7 @@ auto py_vmap(
                   "[vmap] The arguments should contain only arrays");
             }
           });
-      if (encountered_tuple && !nb::isinstance<mx::array>(tree)) {
+      if (encountered_tuple && !nb::isinstance<tk::array>(tree)) {
         throw std::invalid_argument("[vmap] axis must be int or None.");
       }
       return flat_axes;
@@ -384,7 +384,7 @@ auto py_vmap(
     nb::object py_outputs;
 
     auto vmap_fn =
-        [&fun, &args, &inputs, &py_outputs](const std::vector<mx::array>& a) {
+        [&fun, &args, &inputs, &py_outputs](const std::vector<tk::array>& a) {
           // Call the python function
           py_outputs = fun(*tree_unflatten(args, a));
 
@@ -393,12 +393,12 @@ auto py_vmap(
         };
 
     auto [trace_inputs, trace_outputs] =
-        mx::detail::vmap_trace(vmap_fn, inputs, flat_in_axes);
+        tk::detail::vmap_trace(vmap_fn, inputs, flat_in_axes);
 
     auto flat_out_axes = axes_to_flat_tree(py_outputs, out_axes, true);
 
     // Perform the vmap
-    auto outputs = mx::detail::vmap_replace(
+    auto outputs = tk::detail::vmap_replace(
         inputs, trace_inputs, trace_outputs, flat_in_axes, flat_out_axes);
 
     // Put the outputs back in the container
@@ -412,7 +412,7 @@ struct PyCompiledFun {
   nb::object captured_inputs;
   nb::object captured_outputs;
   bool shapeless;
-  mx::detail::CompileCacheWeakPtr cache;
+  tk::detail::CompileCacheWeakPtr cache;
 
   // Data to attach to the compiled function that contains the python output
   // structure and the number of arrays in said structure.
@@ -454,10 +454,10 @@ struct PyCompiledFun {
   };
 
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
-    cache = mx::detail::compile_cache();
+    cache = tk::detail::compile_cache();
 
     // Flat array inputs
-    std::vector<mx::array> inputs;
+    std::vector<tk::array> inputs;
 
     // Compilation constants which includes the tree structure of the arguments
     std::vector<uint64_t> constants;
@@ -494,8 +494,8 @@ struct PyCompiledFun {
           constants.push_back(nb::cast<int64_t>(r));
           recurse(item.second);
         }
-      } else if (nb::isinstance<mx::array>(obj)) {
-        inputs.push_back(nb::cast<mx::array>(obj));
+      } else if (nb::isinstance<tk::array>(obj)) {
+        inputs.push_back(nb::cast<tk::array>(obj));
         constants.push_back(array_identifier);
       } else if (nb::isinstance<nb::str>(obj)) {
         auto r = obj.attr("__hash__")();
@@ -520,10 +520,10 @@ struct PyCompiledFun {
     int num_args = inputs.size();
     recurse(kwargs);
     auto compile_fun = [this, &args, &kwargs, num_args](
-                           const std::vector<mx::array>& a) {
+                           const std::vector<tk::array>& a) {
       // Put tracers into captured inputs
-      std::vector<mx::array> flat_in_captures;
-      std::vector<mx::array> trace_captures;
+      std::vector<tk::array> flat_in_captures;
+      std::vector<tk::array> trace_captures;
       if (!captured_inputs.is_none()) {
         flat_in_captures = tree_flatten(captured_inputs, false);
         trace_captures.insert(
@@ -551,7 +551,7 @@ struct PyCompiledFun {
       if (!captured_inputs.is_none()) {
         tree_replace(captured_inputs, trace_captures, flat_in_captures);
       }
-      return mx::detail::ArraysAndExtra{outputs, extra_data};
+      return tk::detail::ArraysAndExtra{outputs, extra_data};
     };
 
     if (!captured_inputs.is_none()) {
@@ -564,7 +564,7 @@ struct PyCompiledFun {
 
     // Compile and call
     auto [outputs, extra_data] =
-        mx::detail::compile(compile_fun, fun_id, shapeless, constants)(inputs);
+        tk::detail::compile(compile_fun, fun_id, shapeless, constants)(inputs);
 
     int num_outputs =
         reinterpret_cast<AttachedData*>(extra_data.get())->num_outputs;
@@ -572,7 +572,7 @@ struct PyCompiledFun {
         reinterpret_cast<AttachedData*>(extra_data.get())->output_structure;
 
     if (!captured_outputs.is_none()) {
-      std::vector<mx::array> captures(
+      std::vector<tk::array> captures(
           std::make_move_iterator(outputs.begin() + num_outputs),
           std::make_move_iterator(outputs.end()));
       tree_fill(captured_outputs, captures);
@@ -589,7 +589,7 @@ struct PyCompiledFun {
   ~PyCompiledFun() {
     nb::gil_scoped_acquire gil;
 
-    mx::detail::compile_erase(cache, fun_id);
+    tk::detail::compile_erase(cache, fun_id);
     fun.reset();
     captured_inputs.reset();
     captured_outputs.reset();
@@ -624,7 +624,7 @@ class PyCheckpointedFun {
       args_structure_.reset();
     }
 
-    std::vector<mx::array> operator()(const std::vector<mx::array>& inputs) {
+    std::vector<tk::array> operator()(const std::vector<tk::array>& inputs) {
       auto args = nb::cast<nb::tuple>(
           tree_unflatten_from_structure(args_structure_, inputs));
       auto [outputs, output_structure] =
@@ -642,7 +642,7 @@ class PyCheckpointedFun {
     auto [inputs, args_structure] =
         tree_flatten_with_structure(full_args, false);
 
-    auto outputs = mx::checkpoint(
+    auto outputs = tk::checkpoint(
         InnerFunction(fun_, args_structure, output_structure))(inputs);
 
     return tree_unflatten_from_structure(*output_structure, outputs);
@@ -662,7 +662,7 @@ int py_custom_function_tp_clear(PyObject* self);
 
 /**
  * PyCustomFunction is the class that implements the python decorator
- * `mx.custom_function`.
+ * `tk.custom_function`.
  *
  * It implements a callable that instead of simply calling `fun` it creates a
  * CustomTransforms primitive via the `custom_function` C++ op which allows us
@@ -717,12 +717,12 @@ class PyCustomFunction {
       }
     }
 
-    std::vector<mx::array> operator()(const std::vector<mx::array>& inputs) {
+    std::vector<tk::array> operator()(const std::vector<tk::array>& inputs) {
       nb::gil_scoped_acquire gil;
 
       auto new_inputs = nb::cast<nb::tuple>(
           tree_unflatten_from_structure(input_structure_, inputs));
-      std::vector<mx::array> outputs;
+      std::vector<tk::array> outputs;
       std::tie(outputs, *output_structure_) =
           tree_flatten_with_structure(fun_(*new_inputs[0], **new_inputs[1]));
       return outputs;
@@ -751,10 +751,10 @@ class PyCustomFunction {
       }
     }
 
-    std::vector<mx::array> operator()(
-        const std::vector<mx::array>& primals,
-        const std::vector<mx::array>& cotangents,
-        const std::vector<mx::array>& outputs) {
+    std::vector<tk::array> operator()(
+        const std::vector<tk::array>& primals,
+        const std::vector<tk::array>& cotangents,
+        const std::vector<tk::array>& outputs) {
       nb::gil_scoped_acquire gil;
 
       auto new_inputs = nb::cast<nb::tuple>(
@@ -791,9 +791,9 @@ class PyCustomFunction {
       input_structure_.reset();
     }
 
-    std::vector<mx::array> operator()(
-        const std::vector<mx::array>& primals,
-        const std::vector<mx::array>& tangents,
+    std::vector<tk::array> operator()(
+        const std::vector<tk::array>& primals,
+        const std::vector<tk::array>& tangents,
         const std::vector<int>& argnums) {
       nb::gil_scoped_acquire gil;
 
@@ -816,7 +816,7 @@ class PyCustomFunction {
       int tangent_index = 0;
       auto new_tangents = nb::cast<nb::tuple>(
           tree_map(args, [&](nb::handle element) -> nb::object {
-            if (nb::isinstance<mx::array>(element) &&
+            if (nb::isinstance<tk::array>(element) &&
                 have_tangents[array_index++]) {
               return nb::cast(tangents[tangent_index++]);
             } else {
@@ -846,8 +846,8 @@ class PyCustomFunction {
       input_structure_.reset();
     }
 
-    std::pair<std::vector<mx::array>, std::vector<int>> operator()(
-        const std::vector<mx::array>& inputs,
+    std::pair<std::vector<tk::array>, std::vector<int>> operator()(
+        const std::vector<tk::array>& inputs,
         const std::vector<int>& axes) {
       nb::gil_scoped_acquire gil;
 
@@ -864,7 +864,7 @@ class PyCustomFunction {
       auto new_axes = nb::cast<nb::tuple>(
           tree_map(args, [&](nb::handle element) -> nb::object {
             int axis = axes[arr_index++];
-            if (nb::isinstance<mx::array>(element) && axis >= 0) {
+            if (nb::isinstance<tk::array>(element) && axis >= 0) {
               return nb::cast(axis);
             } else {
               return nb::none();
@@ -888,11 +888,11 @@ class PyCustomFunction {
             "[custom vmap] Vmap function should return a tuple with 2 items.");
       }
 
-      std::vector<mx::array> outputs;
+      std::vector<tk::array> outputs;
       std::vector<int> output_axes;
       tree_visit({result_tuple[0], result_tuple[1]}, [&](auto objects) {
-        if (nb::isinstance<mx::array>(objects[0])) {
-          outputs.push_back(nb::cast<mx::array>(objects[0]));
+        if (nb::isinstance<tk::array>(objects[0])) {
+          outputs.push_back(nb::cast<tk::array>(objects[0]));
           output_axes.push_back(
               objects[1].is_none() ? -1 : nb::cast<int>(objects[1]));
         }
@@ -909,7 +909,7 @@ class PyCustomFunction {
     }
 
     // Extract the inputs and their structure in capturable vars
-    std::vector<mx::array> input_arrays;
+    std::vector<tk::array> input_arrays;
     nb::object input_structure;
     auto full_args = nb::make_tuple(args, kwargs);
     std::tie(input_arrays, input_structure) =
@@ -921,7 +921,7 @@ class PyCustomFunction {
 
     // Make a function that calls fun_ in the forward pass and vjp_ in the
     // backward pass. Then call it immediately and return the results.
-    auto f = mx::custom_function(
+    auto f = tk::custom_function(
         InnerFunction(fun_, input_structure, output_structure),
         make_vjp_function(input_structure, output_structure),
         make_jvp_function(input_structure),
@@ -1050,22 +1050,22 @@ void init_transforms(nb::module_& m) {
 
         .. code-block:: python
 
-            import mlx.core as mx
+            import tiki as tk
 
-            @mx.custom_function
+            @tk.custom_function
             def f(x, y):
-                return mx.sin(x) * y
+                return tk.sin(x) * y
 
             @f.vjp
             def f_vjp(primals, cotangent, output):
                 x, y = primals
-                return cotan * mx.cos(x) * y, cotan * mx.sin(x)
+                return cotan * tk.cos(x) * y, cotan * tk.sin(x)
 
             @f.jvp
             def f_jvp(primals, tangents):
               x, y = primals
               dx, dy = tangents
-              return dx * mx.cos(x) * y + dy * mx.sin(x)
+              return dx * tk.cos(x) * y + dy * tk.sin(x)
 
             @f.vmap
             def f_vmap(inputs, axes):
@@ -1073,7 +1073,7 @@ void init_transforms(nb::module_& m) {
               ax, ay = axes
               if ay != ax and ax is not None:
                   y = y.swapaxes(ay, ax)
-              return mx.sin(x) * y, (ax or ay)
+              return tk.sin(x) * y, (ax or ay)
 
       All ``custom_function`` instances behave as pure functions. Namely, any
       variables captured will be treated as constants and no gradients will be
@@ -1081,10 +1081,10 @@ void init_transforms(nb::module_& m) {
 
         .. code-block:: python
 
-          import mlx.core as mx
+          import tiki as tk
 
           def g(x, y):
-            @mx.custom_function
+            @tk.custom_function
             def f(x):
               return x * y
 
@@ -1095,11 +1095,11 @@ void init_transforms(nb::module_& m) {
 
             return f(x)
 
-          x = mx.array(2.0)
-          y = mx.array(3.0)
+          x = tk.array(2.0)
+          y = tk.array(3.0)
           print(g(x, y))                     # prints 6.0
-          print(mx.grad(g)(x, y))            # Raises exception
-          print(mx.grad(g, argnums=1)(x, y)) # prints 0.0
+          print(tk.grad(g)(x, y))            # Raises exception
+          print(tk.grad(g, argnums=1)(x, y)) # prints 0.0
       )pbdoc")
       .def(
           nb::init<nb::callable>(),
@@ -1175,7 +1175,7 @@ void init_transforms(nb::module_& m) {
   m.def(
       "eval",
       [](const nb::args& args) {
-        std::vector<mx::array> arrays = tree_flatten(args, false);
+        std::vector<tk::array> arrays = tree_flatten(args, false);
         {
           nb::gil_scoped_release nogil;
           eval(arrays);
@@ -1195,7 +1195,7 @@ void init_transforms(nb::module_& m) {
   m.def(
       "async_eval",
       [](const nb::args& args) {
-        std::vector<mx::array> arrays = tree_flatten(args, false);
+        std::vector<tk::array> arrays = tree_flatten(args, false);
         {
           nb::gil_scoped_release nogil;
           async_eval(arrays);
@@ -1217,28 +1217,28 @@ void init_transforms(nb::module_& m) {
               arrays are ignored.
 
         Example:
-            >>> x = mx.array(1.0)
-            >>> y = mx.exp(x)
-            >>> mx.async_eval(y)
+            >>> x = tk.array(1.0)
+            >>> y = tk.exp(x)
+            >>> tk.async_eval(y)
             >>> print(y)
             >>>
-            >>> y = mx.exp(x)
-            >>> mx.async_eval(y)
+            >>> y = tk.exp(x)
+            >>> tk.async_eval(y)
             >>> z = y + 3
-            >>> mx.async_eval(z)
+            >>> tk.async_eval(z)
             >>> print(z)
       )pbdoc");
   m.def(
       "jvp",
       [](const nb::callable& fun,
-         const std::vector<mx::array>& primals,
-         const std::vector<mx::array>& tangents) {
-        auto vfun = [&fun](const std::vector<mx::array>& primals) {
+         const std::vector<tk::array>& primals,
+         const std::vector<tk::array>& tangents) {
+        auto vfun = [&fun](const std::vector<tk::array>& primals) {
           auto out = fun(*nb::cast(primals));
-          if (nb::isinstance<mx::array>(out)) {
-            return std::vector<mx::array>{nb::cast<mx::array>(out)};
+          if (nb::isinstance<tk::array>(out)) {
+            return std::vector<tk::array>{nb::cast<tk::array>(out)};
           } else {
-            return nb::cast<std::vector<mx::array>>(out);
+            return nb::cast<std::vector<tk::array>>(out);
           }
         };
         return jvp(vfun, primals, tangents);
@@ -1272,22 +1272,22 @@ void init_transforms(nb::module_& m) {
 
          .. code-block:: python
 
-             import mlx.core as mx
+             import tiki as tk
 
-             outs, jvps = mx.jvp(mx.sin, (mx.array(1.0),), (mx.array(1.0),))
+             outs, jvps = tk.jvp(tk.sin, (tk.array(1.0),), (tk.array(1.0),))
 
       )pbdoc");
   m.def(
       "vjp",
       [](const nb::callable& fun,
-         const std::vector<mx::array>& primals,
-         const std::vector<mx::array>& cotangents) {
-        auto vfun = [&fun](const std::vector<mx::array>& primals) {
+         const std::vector<tk::array>& primals,
+         const std::vector<tk::array>& cotangents) {
+        auto vfun = [&fun](const std::vector<tk::array>& primals) {
           auto out = fun(*nb::cast(primals));
-          if (nb::isinstance<mx::array>(out)) {
-            return std::vector<mx::array>{nb::cast<mx::array>(out)};
+          if (nb::isinstance<tk::array>(out)) {
+            return std::vector<tk::array>{nb::cast<tk::array>(out)};
           } else {
-            return nb::cast<std::vector<mx::array>>(out);
+            return nb::cast<std::vector<tk::array>>(out);
           }
         };
         return vjp(vfun, primals, cotangents);
@@ -1321,9 +1321,9 @@ void init_transforms(nb::module_& m) {
 
          .. code-block:: python
 
-             import mlx.core as mx
+             import tiki as tk
 
-             outs, vjps = mx.vjp(mx.sin, (mx.array(1.0),), (mx.array(1.0),))
+             outs, vjps = tk.vjp(tk.sin, (tk.array(1.0),), (tk.array(1.0),))
 
       )pbdoc");
   m.def(
@@ -1333,7 +1333,7 @@ void init_transforms(nb::module_& m) {
          const StrOrSet& argnames) {
         auto [argnums_vec, argnames_set] =
             validate_argnums_argnames(argnums, argnames);
-        return mlx_func(
+        return tiki_func(
             py_value_and_grad(
                 fun, argnums_vec, argnames_set, "[value_and_grad]", false),
             fun);
@@ -1352,7 +1352,7 @@ void init_transforms(nb::module_& m) {
 
         .. code-block:: python
 
-            import mlx.core as mx
+            import tiki as tk
 
             def mse(params, inputs, targets):
                 outputs = forward(params, inputs)
@@ -1360,18 +1360,18 @@ void init_transforms(nb::module_& m) {
                 return lvalue
 
             # Returns lvalue, dlvalue/dparams
-            lvalue, grads = mx.value_and_grad(mse)(params, inputs, targets)
+            lvalue, grads = tk.value_and_grad(mse)(params, inputs, targets)
 
             def lasso(params, inputs, targets, a=1.0, b=1.0):
                 outputs = forward(params, inputs)
                 mse = (outputs - targets).square().mean()
-                l1 = mx.abs(outputs - targets).mean()
+                l1 = tk.abs(outputs - targets).mean()
 
                 loss = a*mse + b*l1
 
                 return loss, mse, l1
 
-            (loss, mse, l1), grads = mx.value_and_grad(lasso)(params, inputs, targets)
+            (loss, mse, l1), grads = tk.value_and_grad(lasso)(params, inputs, targets)
 
         Args:
             fun (Callable): A function which takes a variable number of
@@ -1401,7 +1401,7 @@ void init_transforms(nb::module_& m) {
             validate_argnums_argnames(argnums, argnames);
         auto fn =
             py_value_and_grad(fun, argnums_vec, argnames_set, "[grad]", true);
-        return mlx_func(
+        return tiki_func(
             [fn = std::move(fn)](nb::args& args, nb::kwargs& kwargs) {
               return fn(args, kwargs).second;
             },
@@ -1437,7 +1437,7 @@ void init_transforms(nb::module_& m) {
       [](const nb::callable& fun,
          const nb::object& in_axes,
          const nb::object& out_axes) {
-        return mlx_func(
+        return tiki_func(
             py_vmap(fun, in_axes, out_axes), fun, in_axes, out_axes);
       },
       "fun"_a,
@@ -1470,7 +1470,7 @@ void init_transforms(nb::module_& m) {
          const nb::object& inputs,
          const nb::object& outputs,
          bool shapeless) {
-        return mlx_func(
+        return tiki_func(
             nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless}),
             fun,
             inputs,
@@ -1512,21 +1512,21 @@ void init_transforms(nb::module_& m) {
       )pbdoc");
   m.def(
       "disable_compile",
-      &mx::disable_compile,
+      &tk::disable_compile,
       R"pbdoc(
         Globally disable compilation. Setting the environment variable
-        ``MLX_DISABLE_COMPILE`` can also be used to disable compilation.
+        ``TIKI_DISABLE_COMPILE`` can also be used to disable compilation.
       )pbdoc");
   m.def(
       "enable_compile",
-      &mx::enable_compile,
+      &tk::enable_compile,
       R"pbdoc(
         Globally enable compilation. This will override the environment
-        variable ``MLX_DISABLE_COMPILE`` if set.
+        variable ``TIKI_DISABLE_COMPILE`` if set.
       )pbdoc");
   m.def(
       "checkpoint",
-      [](nb::callable fun) { return mlx_func(PyCheckpointedFun{fun}, fun); },
+      [](nb::callable fun) { return tiki_func(PyCheckpointedFun{fun}, fun); },
       "fun"_a,
       nb::sig("def checkpoint(fun: Callable[P, R]) -> Callable[P, R]"),
       R"pbdoc(
@@ -1547,7 +1547,7 @@ void init_transforms(nb::module_& m) {
   // Clean up main thread compile cache before python interpreter shuts down.
   auto atexit = nb::module_::import_("atexit");
   atexit.attr("register")(
-      nb::cpp_function([cache = mx::detail::compile_cache()]() {
-        mx::detail::compile_clear_cache(cache);
+      nb::cpp_function([cache = tk::detail::compile_cache()]() {
+        tk::detail::compile_clear_cache(cache);
       }));
 }

@@ -3,29 +3,29 @@
 #include <cassert>
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 
 int main() {
   // To use Metal debugging and profiling:
-  // 1. Build with the MLX_METAL_DEBUG CMake option (i.e. -DMLX_METAL_DEBUG=ON).
+  // 1. Build with the TIKI_METAL_DEBUG CMake option (i.e. -DTIKI_METAL_DEBUG=ON).
   // 2. Run with MTL_CAPTURE_ENABLED=1.
-  mx::metal::start_capture("mlx_trace.gputrace");
+  tk::metal::start_capture("tiki_trace.gputrace");
 
   // Start at index two because the default GPU and CPU streams have indices
   // zero and one, respectively. This naming matches the label assigned to each
   // stream's command queue.
-  auto s2 = new_stream(mx::Device::gpu);
-  auto s3 = new_stream(mx::Device::gpu);
+  auto s2 = new_stream(tk::Device::gpu);
+  auto s3 = new_stream(tk::Device::gpu);
 
-  auto a = mx::arange(1.f, 10.f, 1.f, mx::float32, s2);
-  auto b = mx::arange(1.f, 10.f, 1.f, mx::float32, s3);
-  auto x = mx::add(a, a, s2);
-  auto y = mx::add(b, b, s3);
+  auto a = tk::arange(1.f, 10.f, 1.f, tk::float32, s2);
+  auto b = tk::arange(1.f, 10.f, 1.f, tk::float32, s3);
+  auto x = tk::add(a, a, s2);
+  auto y = tk::add(b, b, s3);
 
   // The multiply will happen on the default stream.
-  std::cout << mx::multiply(x, y) << std::endl;
+  std::cout << tk::multiply(x, y) << std::endl;
 
-  mx::metal::stop_capture();
+  tk::metal::stop_capture();
 }

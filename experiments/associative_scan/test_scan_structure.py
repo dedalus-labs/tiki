@@ -3,19 +3,19 @@
 import unittest
 from typing import NamedTuple, TypedDict
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 
 from scan import associative_scan
 
 
 class Pair(NamedTuple):
-    a: mx.array
-    b: mx.array
+    a: tk.array
+    b: tk.array
 
 
 LiteralTree = TypedDict(
-    "LiteralTree", {"a.b": mx.array, "a": dict[str, mx.array], "empty": tuple[()]}
+    "LiteralTree", {"a.b": tk.array, "a": dict[str, tk.array], "empty": tuple[()]}
 )
 
 
@@ -24,10 +24,10 @@ class TestScanStructure(unittest.TestCase):
         matrices = (
             np.random.default_rng(5).integers(-1, 2, size=(5, 2, 2)).astype(np.float32)
         )
-        elems = mx.array(matrices.transpose(1, 0, 2))
+        elems = tk.array(matrices.transpose(1, 0, 2))
 
-        def combine(left: mx.array, right: mx.array) -> mx.array:
-            return mx.einsum("itk,ktj->itj", left, right)
+        def combine(left: tk.array, right: tk.array) -> tk.array:
+            return tk.einsum("itk,ktj->itj", left, right)
 
         expected = np.stack(
             [
@@ -43,27 +43,27 @@ class TestScanStructure(unittest.TestCase):
         np.testing.assert_array_equal(np.asarray(actual), expected.transpose(1, 0, 2))
 
     def test_dictionary_order_cannot_reassign_fields(self) -> None:
-        elems = {"a": mx.array([1.0, 2.0, 3.0]), "b": mx.array([10.0, 20.0, 30.0])}
+        elems = {"a": tk.array([1.0, 2.0, 3.0]), "b": tk.array([10.0, 20.0, 30.0])}
 
         def combine(
-            left: dict[str, mx.array], right: dict[str, mx.array]
-        ) -> dict[str, mx.array]:
+            left: dict[str, tk.array], right: dict[str, tk.array]
+        ) -> dict[str, tk.array]:
             return {"b": left["b"] + right["b"], "a": left["a"] + right["a"]}
 
         for reverse in (False, True):
             result = associative_scan(combine, elems, reverse=reverse)
             for key in elems:
                 self.assertTrue(
-                    mx.array_equal(result[key], mx.cumsum(elems[key], reverse=reverse))
+                    tk.array_equal(result[key], tk.cumsum(elems[key], reverse=reverse))
                 )
 
     def test_container_types_and_literal_keys_survive(self) -> None:
-        array = mx.array([1.0, 2.0, 3.0])
+        array = tk.array([1.0, 2.0, 3.0])
         for elems in ((array, array), Pair(array, array)):
 
             def combine(
-                left: tuple[mx.array, mx.array], right: tuple[mx.array, mx.array]
-            ) -> tuple[mx.array, mx.array]:
+                left: tuple[tk.array, tk.array], right: tuple[tk.array, tk.array]
+            ) -> tuple[tk.array, tk.array]:
                 self.assertIs(type(left), type(elems))
                 self.assertIs(type(right), type(elems))
                 values = (left[0] + right[0], left[1] + right[1])
@@ -83,10 +83,10 @@ class TestScanStructure(unittest.TestCase):
         result = associative_scan(combine, elems)
         self.assertEqual(result.keys(), elems.keys())
         self.assertEqual(result["empty"], ())
-        self.assertTrue(mx.array_equal(result["a.b"], mx.cumsum(array)))
+        self.assertTrue(tk.array_equal(result["a.b"], tk.cumsum(array)))
 
     def test_combine_must_preserve_structure_and_leaf_shapes(self) -> None:
-        array = mx.ones((3,))
+        array = tk.ones((3,))
         with self.assertRaises(ValueError):
             associative_scan(lambda left, right: (left[0] + right[0],), (array, array))
         with self.assertRaises(ValueError):

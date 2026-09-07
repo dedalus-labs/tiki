@@ -4,4 +4,4 @@ myst-parser
 sphinx-design
 sphinx-copybutton
 breathe
-mlx
+tiki

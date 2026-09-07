@@ -7,10 +7,10 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/backend/cuda/cuda.h"
-#include "mlx/mlx.h"
+#include "tiki/backend/cuda/cuda.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test copy") {
   array x(1.0);

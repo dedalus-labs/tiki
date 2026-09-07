@@ -7,7 +7,7 @@ html_theme.sidebar_secondary.remove: true
 **Model code that reads like the math. Kernel code that says where every byte
 goes. A compiler we can understand and steer.**
 
-Tiki is Dedalus's machine learning framework, built from MLX. Write ordinary
+Tiki is Dedalus's machine learning framework, built from upstream MLX. Write ordinary
 array code when the computation is ordinary; when performance depends on a
 particular tile, memory layout, or instruction, say so directly in Python.
 The same arrays, automatic differentiation, and runtime surround both.
@@ -25,7 +25,7 @@ Engine paired with a first-class `Layout`.
 :::{grid-item-card} Compile
 :link: tiki/compile
 :link-type: doc
-`tk.compile` lowers MLX graphs to CuTe MLIR with explicit thread schedules,
+`tk.compile` lowers Tiki graphs to CuTe MLIR with explicit thread schedules,
 consuming strided views in place.
 :::
 
@@ -43,7 +43,7 @@ CUDA storage and completion owned by a checked Rust runtime behind a C++
 boundary.
 :::
 
-:::{grid-item-card} MLX guide
+:::{grid-item-card} Tiki guide
 :link: guide/index
 :link-type: doc
 The array framework underneath: lazy evaluation, unified memory, function
@@ -53,7 +53,7 @@ transformations, compilation.
 :::{grid-item-card} API reference
 :link: api/index
 :link-type: doc
-`mlx.tiki`, `mlx.core`, `mlx.nn`, and the C++ operations.
+`tiki.layout`, `tiki`, `tiki.nn`, and the C++ operations.
 :::
 
 ::::

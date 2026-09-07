@@ -8,12 +8,12 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/backend/metal/metal.h"
-#include "mlx/device.h"
-#include "mlx/memory.h"
+#include "tiki/backend/metal/metal.h"
+#include "tiki/device.h"
+#include "tiki/memory.h"
 #include "python/src/small_vector.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -26,57 +26,57 @@ bool DEPRECATE(const char* old_fn, const char* new_fn) {
 #define DEPRECATE(oldfn, newfn) static bool dep = DEPRECATE(oldfn, newfn)
 
 void init_metal(nb::module_& m) {
-  nb::module_ metal = m.def_submodule("metal", "mlx.metal");
+  nb::module_ metal = m.def_submodule("metal", "tiki.metal");
   metal.def(
       "is_available",
-      &mx::metal::is_available,
+      &tk::metal::is_available,
       R"pbdoc(
       Check if the Metal back-end is available.
       )pbdoc");
   metal.def("get_active_memory", []() {
-    DEPRECATE("mx.metal.get_active_memory", "mx.get_active_memory");
-    return mx::get_active_memory();
+    DEPRECATE("tk.metal.get_active_memory", "tk.get_active_memory");
+    return tk::get_active_memory();
   });
   metal.def("get_peak_memory", []() {
-    DEPRECATE("mx.metal.get_peak_memory", "mx.get_peak_memory");
-    return mx::get_peak_memory();
+    DEPRECATE("tk.metal.get_peak_memory", "tk.get_peak_memory");
+    return tk::get_peak_memory();
   });
   metal.def("reset_peak_memory", []() {
-    DEPRECATE("mx.metal.reset_peak_memory", "mx.reset_peak_memory");
-    mx::reset_peak_memory();
+    DEPRECATE("tk.metal.reset_peak_memory", "tk.reset_peak_memory");
+    tk::reset_peak_memory();
   });
   metal.def("get_cache_memory", []() {
-    DEPRECATE("mx.metal.get_cache_memory", "mx.get_cache_memory");
-    return mx::get_cache_memory();
+    DEPRECATE("tk.metal.get_cache_memory", "tk.get_cache_memory");
+    return tk::get_cache_memory();
   });
   metal.def(
       "set_memory_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_memory_limit", "mx.set_memory_limit");
-        return mx::set_memory_limit(limit);
+        DEPRECATE("tk.metal.set_memory_limit", "tk.set_memory_limit");
+        return tk::set_memory_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_cache_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_cache_limit", "mx.set_cache_limit");
-        return mx::set_cache_limit(limit);
+        DEPRECATE("tk.metal.set_cache_limit", "tk.set_cache_limit");
+        return tk::set_cache_limit(limit);
       },
       "limit"_a);
   metal.def(
       "set_wired_limit",
       [](size_t limit) {
-        DEPRECATE("mx.metal.set_wired_limit", "mx.set_wired_limit");
-        return mx::set_wired_limit(limit);
+        DEPRECATE("tk.metal.set_wired_limit", "tk.set_wired_limit");
+        return tk::set_wired_limit(limit);
       },
       "limit"_a);
   metal.def("clear_cache", []() {
-    DEPRECATE("mx.metal.clear_cache", "mx.clear_cache");
-    mx::clear_cache();
+    DEPRECATE("tk.metal.clear_cache", "tk.clear_cache");
+    tk::clear_cache();
   });
   metal.def(
       "start_capture",
-      &mx::metal::start_capture,
+      &tk::metal::start_capture,
       "path"_a,
       R"pbdoc(
       Start a Metal capture.
@@ -87,12 +87,12 @@ void init_metal(nb::module_& m) {
       )pbdoc");
   metal.def(
       "stop_capture",
-      &mx::metal::stop_capture,
+      &tk::metal::stop_capture,
       R"pbdoc(
       Stop a Metal capture.
       )pbdoc");
   metal.def("device_info", []() {
-    DEPRECATE("mx.metal.device_info", "mx.device_info");
-    return mx::device_info(mx::Device(mx::Device::gpu, 0));
+    DEPRECATE("tk.metal.device_info", "tk.device_info");
+    return tk::device_info(tk::Device(tk::Device::gpu, 0));
   });
 }

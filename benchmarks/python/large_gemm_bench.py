@@ -3,7 +3,7 @@
 import math
 import time
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 import torch
 
@@ -11,14 +11,14 @@ N_WARMUP = 5
 N_BENCH = 20
 
 
-def bench_mlx(a, b):
+def bench_tiki(a, b):
     for _ in range(N_WARMUP):
-        mx.eval(a @ b)
+        tk.eval(a @ b)
 
     times = []
     for _ in range(N_BENCH):
         start = time.perf_counter_ns()
-        mx.eval(a @ b)
+        tk.eval(a @ b)
         end = time.perf_counter_ns()
         times.append((end - start) * 1e-9)
 
@@ -58,21 +58,21 @@ def bench_gemm(M, N, K, dtype, rtol):
     a_np = np.random.uniform(0, scale, (M, K)).astype(np.float32)
     b_np = np.random.uniform(0, scale, (K, N)).astype(np.float32)
 
-    a_mx = mx.array(a_np).astype(getattr(mx, dtype))
-    b_mx = mx.array(b_np).astype(getattr(mx, dtype))
+    a_mx = tk.array(a_np).astype(getattr(tk, dtype))
+    b_mx = tk.array(b_np).astype(getattr(tk, dtype))
 
     a_pt = torch.from_numpy(a_np).to(dtype=getattr(torch, dtype), device="mps")
     b_pt = torch.from_numpy(b_np).to(dtype=getattr(torch, dtype), device="mps")
     torch.mps.synchronize()
 
     torch_mean, torch_std = bench_torch(a_pt, b_pt)
-    mlx_mean, mlx_std = bench_mlx(a_mx, b_mx)
+    tiki_mean, tiki_std = bench_tiki(a_mx, b_mx)
 
-    out_mx = (a_mx @ b_mx).astype(mx.float32)
+    out_mx = (a_mx @ b_mx).astype(tk.float32)
     out_pt = (a_pt @ b_pt).to(torch.float32).to("cpu").numpy(force=True)
     check_correctness(out_mx, out_pt, rtol, M, N, K)
 
-    return mlx_mean, mlx_std, torch_mean, torch_std
+    return tiki_mean, tiki_std, torch_mean, torch_std
 
 
 if __name__ == "__main__":
@@ -101,19 +101,19 @@ if __name__ == "__main__":
         print(f"\nPerformance ({dtype}):")
         print(
             f"{'M':>5s} {'N':>5s} {'K':>6s}  "
-            f"{'MLX (ms)':>15s}  {'Torch (ms)':>15s}  {'Speedup':>10s}"
+            f"{'Tiki (ms)':>15s}  {'Torch (ms)':>15s}  {'Speedup':>10s}"
         )
         print("-" * 80)
 
         for M, N, K in shapes:
-            mlx_mean, mlx_std, torch_mean, torch_std = bench_gemm(
+            tiki_mean, tiki_std, torch_mean, torch_std = bench_gemm(
                 M, N, K, dtype, rtols[dtype]
             )
-            speedup = torch_mean / mlx_mean
+            speedup = torch_mean / tiki_mean
 
             print(
                 f"{M:5d} {N:5d} {K:6d}  "
-                f"{mlx_mean*1000:7.2f}±{mlx_std*1000:5.2f}  "
+                f"{tiki_mean*1000:7.2f}±{tiki_std*1000:5.2f}  "
                 f"{torch_mean*1000:7.2f}±{torch_std*1000:5.2f}  "
                 f"{speedup:8.2f}x"
             )

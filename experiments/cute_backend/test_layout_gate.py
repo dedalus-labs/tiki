@@ -1,47 +1,47 @@
 """The first stride-system gate: views consumed in place with correct derivatives.
 
-Each test states its invariant and witness. Execution tests need MLX CUDA on
-sm_90 and an MLX build that exposes array strides.
+Each test states its invariant and witness. Execution tests need Tiki CUDA on
+sm_90 and an Tiki build that exposes array strides.
 """
 
 import unittest
 
-import mlx.core as mx
+import tiki as tk
 import numpy as np
 
-import tiki as tk
+import compiler
 from graph import ArrayFunction, Value, dense_strides
 
-HAS_STRIDES = hasattr(mx.array, "strides")
+HAS_STRIDES = hasattr(tk.array, "strides")
 CAN_EXECUTE = (
     HAS_STRIDES
-    and mx.cuda.is_available()
-    and mx.device_info(mx.gpu)["architecture"] == "sm_90"
+    and tk.cuda.is_available()
+    and tk.device_info(tk.gpu)["architecture"] == "sm_90"
 )
 
 
-def affine(x: mx.array, y: mx.array) -> mx.array:
+def affine(x: tk.array, y: tk.array) -> tk.array:
     return x * y + 2.0 - y
 
 
-def values(array: mx.array) -> np.ndarray:
-    mx.eval(array)
-    mx.synchronize()
+def values(array: tk.array) -> np.ndarray:
+    tk.eval(array)
+    tk.synchronize()
     return np.asarray(array)
 
 
-def peak_growth(function: ArrayFunction, *args: mx.array) -> tuple[mx.array, int]:
+def peak_growth(function: ArrayFunction, *args: tk.array) -> tuple[tk.array, int]:
     """Run ``function`` and report how far peak memory rose above the start."""
     warm = function(*args)
-    mx.eval(warm)
-    mx.synchronize()
-    mx.clear_cache()
-    before = mx.get_active_memory()
-    mx.reset_peak_memory()
+    tk.eval(warm)
+    tk.synchronize()
+    tk.clear_cache()
+    before = tk.get_active_memory()
+    tk.reset_peak_memory()
     result = function(*args)
-    mx.eval(result)
-    mx.synchronize()
-    return result, mx.get_peak_memory() - before
+    tk.eval(result)
+    tk.synchronize()
+    return result, tk.get_peak_memory() - before
 
 
 class TestLoweringWithoutDevice(unittest.TestCase):
@@ -67,7 +67,7 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # Witness: the elementwise demo graph at (513,) contains no logical
     # coordinate and only flat memrefs.
     def test_dense_mlir_is_unchanged(self):
-        lowered = tk.specialize(affine, tk.Schedule(), (((513,), (1,)), ((513,), (1,))))
+        lowered = compiler.specialize(affine, compiler.Schedule(), (((513,), (1,)), ((513,), (1,))))
         self.assertNotIn("%logical", lowered.mlir)
         self.assertIn('"(513):(1)"', lowered.mlir)
         self.assertNotIn(":(1,", lowered.mlir)
@@ -77,8 +77,8 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # flat form.
     # Witness: x transposed, y dense, both (64, 513).
     def test_strided_mlir(self):
-        lowered = tk.specialize(
-            affine, tk.Schedule(), (((64, 513), (1, 64)), ((64, 513), (513, 1)))
+        lowered = compiler.specialize(
+            affine, compiler.Schedule(), (((64, 513), (1, 64)), ((64, 513), (513, 1)))
         )
         self.assertIn("%logical = cute.make_coord(%i0, %i1)", lowered.mlir)
         self.assertIn('"(64,513):(1,64)"', lowered.mlir)
@@ -89,78 +89,78 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # dense one; only the elementwise schedule addresses views in place.
     # Witness: a row schedule over a transposed and over a dense input.
     def test_cooperative_schedules_pack_views(self):
-        def rms(x: mx.array, w: mx.array) -> mx.array:
-            return x * mx.rsqrt(mx.mean(x * x, axis=-1, keepdims=True) + 1e-6) * w
+        def rms(x: tk.array, w: tk.array) -> tk.array:
+            return x * tk.rsqrt(tk.mean(x * x, axis=-1, keepdims=True) + 1e-6) * w
 
-        schedule = tk.RowSchedule(threads_per_row=32, rows_per_block=4)
-        strided = tk.specialize(rms, schedule, (((8, 64), (1, 8)), ((64,), (1,))))
-        dense = tk.specialize(rms, schedule, (((8, 64), (64, 1)), ((64,), (1,))))
+        schedule = compiler.RowSchedule(threads_per_row=32, rows_per_block=4)
+        strided = compiler.specialize(rms, schedule, (((8, 64), (1, 8)), ((64,), (1,))))
+        dense = compiler.specialize(rms, schedule, (((8, 64), (64, 1)), ((64,), (1,))))
         self.assertEqual(strided.mlir, dense.mlir)
-        self.assertTrue(tk.packs_views(schedule))
-        self.assertFalse(tk.packs_views(tk.Schedule()))
+        self.assertTrue(compiler.packs_views(schedule))
+        self.assertFalse(compiler.packs_views(compiler.Schedule()))
 
 
-@unittest.skipUnless(CAN_EXECUTE, "needs MLX CUDA on sm_90 with array strides")
+@unittest.skipUnless(CAN_EXECUTE, "needs Tiki CUDA on sm_90 with array strides")
 class TestGate(unittest.TestCase):
     def setUp(self) -> None:
-        self.compiled = tk.compile()(affine)
+        self.compiled = compiler.compile()(affine)
         rng = np.random.default_rng(7)
-        self.a = mx.array(rng.normal(size=(513, 64)).astype(np.float32))
-        self.y = mx.array(rng.normal(size=(64, 513)).astype(np.float32))
-        mx.eval(self.a, self.y)
+        self.a = tk.array(rng.normal(size=(513, 64)).astype(np.float32))
+        self.y = tk.array(rng.normal(size=(64, 513)).astype(np.float32))
+        tk.eval(self.a, self.y)
 
     def test_derivatives_use_the_frozen_forward_graph(self) -> None:
         coefficient = [2.0]
-        compiled = tk.compile()(lambda x: x * coefficient[0])
-        x = mx.array([1.0, 2.0, 3.0])
-        mx.eval(compiled(x))
+        compiled = compiler.compile()(lambda x: x * coefficient[0])
+        x = tk.array([1.0, 2.0, 3.0])
+        tk.eval(compiled(x))
         coefficient[0] = 3.0
-        outputs, gradients = mx.vjp(compiled, (x,), (mx.ones_like(x),))
+        outputs, gradients = tk.vjp(compiled, (x,), (tk.ones_like(x),))
         np.testing.assert_array_equal(values(outputs[0]), values(2 * x))
         np.testing.assert_array_equal(
-            values(gradients[0]), values(mx.full(x.shape, 2.0))
+            values(gradients[0]), values(tk.full(x.shape, 2.0))
         )
-        tangent = mx.jvp(compiled, (x,), (mx.ones_like(x),))[1][0]
-        np.testing.assert_array_equal(values(tangent), values(mx.full(x.shape, 2.0)))
+        tangent = tk.jvp(compiled, (x,), (tk.ones_like(x),))[1][0]
+        np.testing.assert_array_equal(values(tangent), values(tk.full(x.shape, 2.0)))
 
     def test_derivative_cache_tracks_input_arity(self) -> None:
-        def function(x: mx.array, y: mx.array | None = None) -> mx.array:
+        def function(x: tk.array, y: tk.array | None = None) -> tk.array:
             return x * x if y is None else x * y
 
-        compiled = tk.compile()(function)
-        x, y = mx.array([2.0, 3.0]), mx.array([5.0, 7.0])
-        mx.eval(mx.vjp(compiled, (x,), (mx.ones_like(x),))[1])
-        got = mx.vjp(compiled, (x, y), (mx.ones_like(x),))[1]
+        compiled = compiler.compile()(function)
+        x, y = tk.array([2.0, 3.0]), tk.array([5.0, 7.0])
+        tk.eval(tk.vjp(compiled, (x,), (tk.ones_like(x),))[1])
+        got = tk.vjp(compiled, (x, y), (tk.ones_like(x),))[1]
         for actual, expected in zip(got, (y, x)):
             np.testing.assert_array_equal(values(actual), values(expected))
 
     def test_tape_owns_its_specialization_after_cache_eviction(self) -> None:
         coefficient = [2.0]
-        compiled = tk.compile()(lambda x: x * coefficient[0])
+        compiled = compiler.compile()(lambda x: x * coefficient[0])
 
-        def outer(x: mx.array) -> mx.array:
+        def outer(x: tk.array) -> tk.array:
             output = compiled(x)
-            tk.specialize.cache_clear()
-            tk.differentiable.cache_clear()
+            compiler.specialize.cache_clear()
+            compiler.differentiable.cache_clear()
             coefficient[0] = 3.0
             return output
 
-        x = mx.array([1.0, 2.0])
-        outputs, gradients = mx.vjp(outer, (x,), (mx.ones_like(x),))
+        x = tk.array([1.0, 2.0])
+        outputs, gradients = tk.vjp(outer, (x,), (tk.ones_like(x),))
         np.testing.assert_array_equal(values(outputs[0]), values(2 * x))
         np.testing.assert_array_equal(
-            values(gradients[0]), values(mx.full(x.shape, 2.0))
+            values(gradients[0]), values(tk.full(x.shape, 2.0))
         )
 
     def test_registered_kernels_remain_differentiable(self) -> None:
-        square = tk.compile()(lambda x: x * x)
-        gradient = mx.grad(lambda x: mx.sum(square(x)))
-        x = mx.array([1.0, 2.0, 3.0])
-        second = mx.grad(lambda x: mx.sum(gradient(x)))(x)
-        np.testing.assert_array_equal(values(second), values(mx.full(x.shape, 2.0)))
+        square = compiler.compile()(lambda x: x * x)
+        gradient = tk.grad(lambda x: tk.sum(square(x)))
+        x = tk.array([1.0, 2.0, 3.0])
+        second = tk.grad(lambda x: tk.sum(gradient(x)))(x)
+        np.testing.assert_array_equal(values(second), values(tk.full(x.shape, 2.0)))
 
     # Invariant: a transposed input is consumed in place: the result matches
-    # eager MLX and peak memory rises by no more than the output.
+    # eager Tiki and peak memory rises by no more than the output.
     # Witness: x = a.T of shape (64, 513) with a dense y.
     def test_transposed_input_without_packing(self):
         x = self.a.T
@@ -179,12 +179,12 @@ class TestGate(unittest.TestCase):
     # Invariant: a sliced input with a nonzero offset is consumed in place.
     # Witness: x = big[3:, 5:300] of shape (61, 295) against a dense y.
     def test_sliced_input_without_packing(self):
-        big = mx.array(
+        big = tk.array(
             np.random.default_rng(3).normal(size=(64, 305)).astype(np.float32)
         )
         x = big[3:, 5:300]
-        y = mx.array(np.random.default_rng(4).normal(size=x.shape).astype(np.float32))
-        mx.eval(big, x, y)
+        y = tk.array(np.random.default_rng(4).normal(size=x.shape).astype(np.float32))
+        tk.eval(big, x, y)
         self.assertNotEqual(x.offset, 0)
         dense, dense_growth = peak_growth(self.compiled, y, y)
         result, growth = peak_growth(self.compiled, x, y)
@@ -198,8 +198,8 @@ class TestGate(unittest.TestCase):
         )
 
     def test_allocation_gate_detects_an_input_copy(self) -> None:
-        def packed(x: mx.array, y: mx.array) -> mx.array:
-            return self.compiled(mx.contiguous(x, allow_col_major=False), y)
+        def packed(x: tk.array, y: tk.array) -> tk.array:
+            return self.compiled(tk.contiguous(x, allow_col_major=False), y)
 
         dense, dense_growth = peak_growth(self.compiled, self.y, self.y)
         result, growth = peak_growth(packed, self.a.T, self.y)
@@ -208,46 +208,46 @@ class TestGate(unittest.TestCase):
     # Invariant: equal shapes with different layouts are separate kernels.
     # Witness: the dense y and the transposed view both of shape (64, 513).
     def test_cache_separates_layouts(self):
-        tk.specialize.cache_clear()
-        mx.eval(self.compiled(self.y, self.y))
-        mx.eval(self.compiled(self.a.T, self.y))
-        self.assertEqual(tk.specialize.cache_info().currsize, 2)
+        compiler.specialize.cache_clear()
+        tk.eval(self.compiled(self.y, self.y))
+        tk.eval(self.compiled(self.a.T, self.y))
+        self.assertEqual(compiler.specialize.cache_info().currsize, 2)
 
-    # Invariant: the registered VJP equals MLX's eager VJP for arbitrary
+    # Invariant: the registered VJP equals Tiki's eager VJP for arbitrary
     # cotangents on transposed and sliced inputs.
     # Witness: random cotangents, both inputs.
     def test_vjp_matches_eager(self):
         x = self.a.T
-        cotangent = mx.array(
+        cotangent = tk.array(
             np.random.default_rng(9).normal(size=x.shape).astype(np.float32)
         )
-        mx.eval(cotangent)
-        compiled_grads = mx.vjp(self.compiled, (x, self.y), (cotangent,))[1]
-        eager_grads = mx.vjp(affine, (x, self.y), (cotangent,))[1]
+        tk.eval(cotangent)
+        compiled_grads = tk.vjp(self.compiled, (x, self.y), (cotangent,))[1]
+        eager_grads = tk.vjp(affine, (x, self.y), (cotangent,))[1]
         for got, want in zip(compiled_grads, eager_grads):
             np.testing.assert_allclose(values(got), values(want), rtol=1e-6, atol=1e-6)
 
-    # Invariant: derivatives of a single-input compiled region follow MLX's
+    # Invariant: derivatives of a single-input compiled region follow Tiki's
     # bare-array callback convention.
     # Witness: square of a transposed view, VJP and JVP against eager.
     def test_single_input_derivatives(self):
-        square = tk.compile()(lambda x: x * x)
+        square = compiler.compile()(lambda x: x * x)
         x = self.a.T
-        cotangent = mx.ones_like(x)
-        got = mx.vjp(square, (x,), (cotangent,))[1][0]
-        want = mx.vjp(lambda x: x * x, (x,), (cotangent,))[1][0]
+        cotangent = tk.ones_like(x)
+        got = tk.vjp(square, (x,), (cotangent,))[1][0]
+        want = tk.vjp(lambda x: x * x, (x,), (cotangent,))[1][0]
         np.testing.assert_allclose(values(got), values(want), rtol=1e-6, atol=1e-6)
-        got = mx.jvp(square, (x,), (cotangent,))[1][0]
-        want = mx.jvp(lambda x: x * x, (x,), (cotangent,))[1][0]
+        got = tk.jvp(square, (x,), (cotangent,))[1][0]
+        want = tk.jvp(lambda x: x * x, (x,), (cotangent,))[1][0]
         np.testing.assert_allclose(values(got), values(want), rtol=1e-6, atol=1e-6)
 
-    # Invariant: the registered JVP equals MLX's eager JVP.
+    # Invariant: the registered JVP equals Tiki's eager JVP.
     # Witness: unit tangents on a transposed input.
     def test_jvp_matches_eager(self):
         x = self.a.T
-        tangents = (mx.ones_like(x), mx.ones_like(self.y))
-        got = mx.jvp(self.compiled, (x, self.y), tangents)[1][0]
-        want = mx.jvp(affine, (x, self.y), tangents)[1][0]
+        tangents = (tk.ones_like(x), tk.ones_like(self.y))
+        got = tk.jvp(self.compiled, (x, self.y), tangents)[1][0]
+        want = tk.jvp(affine, (x, self.y), tangents)[1][0]
         np.testing.assert_allclose(values(got), values(want), rtol=1e-6, atol=1e-6)
 
 

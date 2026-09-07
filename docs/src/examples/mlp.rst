@@ -3,26 +3,26 @@
 Multi-Layer Perceptron
 ----------------------
 
-In this example we'll learn to use ``mlx.nn`` by implementing a simple
+In this example we'll learn to use ``tiki.nn`` by implementing a simple
 multi-layer perceptron to classify MNIST.
 
-As a first step import the MLX packages we need:
+As a first step import the Tiki packages we need:
 
 .. code-block:: python
 
-  import mlx.core as mx
-  import mlx.nn as nn
-  import mlx.optimizers as optim
+  import tiki as tk
+  import tiki.nn as nn
+  import tiki.optimizers as optim
 
   import numpy as np
 
 
 The model is defined as the ``MLP`` class which inherits from
-:class:`mlx.nn.Module`. We follow the standard idiom to make a new module:
+:class:`tiki.nn.Module`. We follow the standard idiom to make a new module:
 
 1. Define an ``__init__`` where the parameters and/or submodules are setup. See
    the :ref:`Module class docs<module_class>` for more information on how
-   :class:`mlx.nn.Module` registers parameters.
+   :class:`tiki.nn.Module` registers parameters.
 2. Define a ``__call__`` where the computation is implemented.
 
 .. code-block:: python
@@ -40,18 +40,18 @@ The model is defined as the ``MLP`` class which inherits from
 
       def __call__(self, x):
           for l in self.layers[:-1]:
-              x = mx.maximum(l(x), 0.0)
+              x = tk.maximum(l(x), 0.0)
           return self.layers[-1](x)
 
 
 We define the loss function which takes the mean of the per-example cross
-entropy loss.  The ``mlx.nn.losses`` sub-package has implementations of some
+entropy loss.  The ``tiki.nn.losses`` sub-package has implementations of some
 commonly used loss functions.
 
 .. code-block:: python
 
   def loss_fn(model, X, y):
-      return mx.mean(nn.losses.cross_entropy(model(X), y))
+      return tk.mean(nn.losses.cross_entropy(model(X), y))
 
 We also need a function to compute the accuracy of the model on the validation
 set:
@@ -59,7 +59,7 @@ set:
 .. code-block:: python
 
   def eval_fn(model, X, y):
-      return mx.mean(mx.argmax(model(X), axis=1) == y)
+      return tk.mean(tk.argmax(model(X), axis=1) == y)
 
 Next, setup the problem parameters and load the data. To load the data, you need our
 `mnist data loader
@@ -78,7 +78,7 @@ we will import as ``mnist``.
   # Load the data
   import mnist 
   train_images, train_labels, test_images, test_labels = map(
-      mx.array, mnist.mnist()
+      tk.array, mnist.mnist()
   )
 
 Since we're using SGD, we need an iterator which shuffles and constructs
@@ -87,20 +87,20 @@ minibatches of examples in the training set:
 .. code-block:: python
 
   def batch_iterate(batch_size, X, y):
-      perm = mx.array(np.random.permutation(y.size))
+      perm = tk.array(np.random.permutation(y.size))
       for s in range(0, y.size, batch_size):
           ids = perm[s : s + batch_size]
           yield X[ids], y[ids]
 
 
 Finally, we put it all together by instantiating the model, the
-:class:`mlx.optimizers.SGD` optimizer, and running the training loop:
+:class:`tiki.optimizers.SGD` optimizer, and running the training loop:
 
 .. code-block:: python
 
   # Load the model
   model = MLP(num_layers, train_images.shape[-1], hidden_dim, num_classes)
-  mx.eval(model.parameters())
+  tk.eval(model.parameters())
 
   # Get a function which gives the loss and gradient of the
   # loss with respect to the model's trainable parameters
@@ -118,17 +118,17 @@ Finally, we put it all together by instantiating the model, the
           optimizer.update(model, grads)
 
           # Force a graph evaluation
-          mx.eval(model.parameters(), optimizer.state)
+          tk.eval(model.parameters(), optimizer.state)
 
       accuracy = eval_fn(model, test_images, test_labels)
       print(f"Epoch {e}: Test accuracy {accuracy.item():.3f}")
 
 
 .. note::
-  The :func:`mlx.nn.value_and_grad` function is a convenience function to get
+  The :func:`tiki.nn.value_and_grad` function is a convenience function to get
   the gradient of a loss with respect to the trainable parameters of a model.
-  This should not be confused with :func:`mlx.core.value_and_grad`.
+  This should not be confused with :func:`tiki.value_and_grad`.
 
 The model should train to a decent accuracy (about 95%) after just a few passes
 over the training set. The `full example <https://github.com/ml-explore/mlx-examples/tree/main/mnist>`_
-is available in the MLX GitHub repo.
+is available in the Tiki GitHub repo.
