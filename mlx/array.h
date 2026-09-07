@@ -437,6 +437,10 @@ class MLX_API array {
   // Check if the array is a tracer array
   bool is_tracer() const;
 
+  // Check if the array is derived from a placeholder of a vmap or compile
+  // trace, so it cannot be evaluated
+  bool is_placeholder() const;
+
   void set_data(allocator::Buffer buffer, Deleter d = allocator::free);
 
   void set_data(
