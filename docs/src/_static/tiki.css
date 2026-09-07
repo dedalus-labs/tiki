@@ -1,0 +1,11 @@
+/* The default PyData palette with a tighter reading measure and a calmer
+   monospace, so kernel code and layout strings read as text, not noise. */
+html {
+  --pst-font-family-monospace: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+.bd-article p, .bd-article li {
+  max-width: 72ch;
+}
+.sd-card .sd-card-title {
+  font-weight: 600;
+}
