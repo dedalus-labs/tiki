@@ -53,7 +53,7 @@ html {
 
 /* Primary sidebar: narrow, quiet. The page titles carry the hierarchy; the
    theme's caption and collapse label only add width. */
-.bd-sidebar-primary {
+.bd-sidebar-primary:not(.pst-squeeze) {
   flex: 0 0 15rem;
   max-width: 15rem;
   padding: 1.25rem 0.75rem 2rem 1rem;

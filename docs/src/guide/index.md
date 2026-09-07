@@ -1,7 +1,7 @@
 # Guide
 
-The array model, transformations, and runtime that every Tiki kernel stands
-on. These pages come from upstream MLX and are carried here as they are.
+The array model, the function transformations, and the runtime that every
+Tiki kernel stands on.
 
 ```{toctree}
 :caption: Start

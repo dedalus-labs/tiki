@@ -12,6 +12,7 @@ import tiki as tk
 # Markdown, copied here before Sphinx reads the tree so their relative links
 # resolve as pages. The copies are build products, ignored by git.
 
+import re
 import shutil
 from pathlib import Path
 
@@ -23,20 +24,39 @@ SECTIONS = {
 }
 
 
-def markdown_only(folder: str, names: list[str]) -> list[str]:
-    keep = {name for name in names if name.endswith(".md") or (Path(folder) / name).is_dir()}
-    return [name for name in names if name not in keep or name in ("target", "crubit", "__pycache__")]
+GITHUB = "https://github.com/dedalus-labs/tiki/blob/main"
+
+
+def repository_page(source: Path, target: Path, root: Path, title: str | None = None) -> None:
+    """Copy one repository document as a page; links to other repository files go to GitHub."""
+    text = source.read_text()
+    if title:
+        text = text.replace(text.split("\n", 1)[0], f"# {title}", 1)
+
+    def link(match: re.Match[str]) -> str:
+        label, href = match.group(1), match.group(2)
+        if "://" in href or href.startswith("#") or href.startswith("mailto:"):
+            return match.group(0)
+        path, _, fragment = href.partition("#")
+        resolved = (source.parent / path).resolve()
+        if not resolved.exists() or root not in resolved.parents:
+            return match.group(0)
+        return f"[{label}]({GITHUB}/{resolved.relative_to(root)}{'#' + fragment if fragment else ''})"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, text))
 
 
 for section, directory in SECTIONS.items():
     target = Path(__file__).resolve().parent / "tiki" / section
     shutil.rmtree(target, ignore_errors=True)
-    shutil.copytree(REPOSITORY / directory, target, ignore=markdown_only)
+    repository_page(REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY)
+repository_page(REPOSITORY / "README.md", Path(__file__).resolve().parent / "tiki" / "vision.md", REPOSITORY, title="Vision")
 
 # -- Project information -----------------------------------------------------
 
 project = "Tiki"
-copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc"
+copyright = "2026 Dedalus Labs, Inc"
 author = "Dedalus Labs"
 version = ".".join(tk.__version__.split(".")[:3])
 release = version
