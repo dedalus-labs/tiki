@@ -10,7 +10,7 @@ import mlx.core as mx
 import numpy as np
 
 import tiki as tk
-from graph import Value, dense_strides
+from graph import ArrayFunction, Value, dense_strides
 
 HAS_STRIDES = hasattr(mx.array, "strides")
 CAN_EXECUTE = (
@@ -30,8 +30,10 @@ def values(array: mx.array) -> np.ndarray:
     return np.asarray(array)
 
 
-def peak_growth(function, *args: mx.array) -> tuple[mx.array, int]:
+def peak_growth(function: ArrayFunction, *args: mx.array) -> tuple[mx.array, int]:
     """Run ``function`` and report how far peak memory rose above the start."""
+    warm = function(*args)
+    mx.eval(warm)
     mx.synchronize()
     mx.clear_cache()
     before = mx.get_active_memory()
@@ -107,18 +109,71 @@ class TestGate(unittest.TestCase):
         self.y = mx.array(rng.normal(size=(64, 513)).astype(np.float32))
         mx.eval(self.a, self.y)
 
+    def test_derivatives_use_the_frozen_forward_graph(self) -> None:
+        coefficient = [2.0]
+        compiled = tk.compile()(lambda x: x * coefficient[0])
+        x = mx.array([1.0, 2.0, 3.0])
+        mx.eval(compiled(x))
+        coefficient[0] = 3.0
+        outputs, gradients = mx.vjp(compiled, (x,), (mx.ones_like(x),))
+        np.testing.assert_array_equal(values(outputs[0]), values(2 * x))
+        np.testing.assert_array_equal(
+            values(gradients[0]), values(mx.full(x.shape, 2.0))
+        )
+        tangent = mx.jvp(compiled, (x,), (mx.ones_like(x),))[1][0]
+        np.testing.assert_array_equal(values(tangent), values(mx.full(x.shape, 2.0)))
+
+    def test_derivative_cache_tracks_input_arity(self) -> None:
+        def function(x: mx.array, y: mx.array | None = None) -> mx.array:
+            return x * x if y is None else x * y
+
+        compiled = tk.compile()(function)
+        x, y = mx.array([2.0, 3.0]), mx.array([5.0, 7.0])
+        mx.eval(mx.vjp(compiled, (x,), (mx.ones_like(x),))[1])
+        got = mx.vjp(compiled, (x, y), (mx.ones_like(x),))[1]
+        for actual, expected in zip(got, (y, x)):
+            np.testing.assert_array_equal(values(actual), values(expected))
+
+    def test_tape_owns_its_specialization_after_cache_eviction(self) -> None:
+        coefficient = [2.0]
+        compiled = tk.compile()(lambda x: x * coefficient[0])
+
+        def outer(x: mx.array) -> mx.array:
+            output = compiled(x)
+            tk.specialize.cache_clear()
+            tk.differentiable.cache_clear()
+            coefficient[0] = 3.0
+            return output
+
+        x = mx.array([1.0, 2.0])
+        outputs, gradients = mx.vjp(outer, (x,), (mx.ones_like(x),))
+        np.testing.assert_array_equal(values(outputs[0]), values(2 * x))
+        np.testing.assert_array_equal(
+            values(gradients[0]), values(mx.full(x.shape, 2.0))
+        )
+
+    def test_registered_kernels_remain_differentiable(self) -> None:
+        square = tk.compile()(lambda x: x * x)
+        gradient = mx.grad(lambda x: mx.sum(square(x)))
+        x = mx.array([1.0, 2.0, 3.0])
+        second = mx.grad(lambda x: mx.sum(gradient(x)))(x)
+        np.testing.assert_array_equal(values(second), values(mx.full(x.shape, 2.0)))
+
     # Invariant: a transposed input is consumed in place: the result matches
     # eager MLX and peak memory rises by no more than the output.
     # Witness: x = a.T of shape (64, 513) with a dense y.
     def test_transposed_input_without_packing(self):
         x = self.a.T
         self.assertEqual(x.strides, (1, 64))
+        dense, dense_growth = peak_growth(self.compiled, self.y, self.y)
         result, growth = peak_growth(self.compiled, x, self.y)
         np.testing.assert_allclose(
             values(result), values(affine(x, self.y)), rtol=1e-6, atol=1e-6
         )
         self.assertLessEqual(
-            growth, 2 * result.nbytes, f"packing suspected: peak grew {growth} bytes"
+            growth,
+            dense_growth,
+            f"view grew {growth} bytes, dense control grew {dense_growth}",
         )
 
     # Invariant: a sliced input with a nonzero offset is consumed in place.
@@ -131,13 +186,24 @@ class TestGate(unittest.TestCase):
         y = mx.array(np.random.default_rng(4).normal(size=x.shape).astype(np.float32))
         mx.eval(big, x, y)
         self.assertNotEqual(x.offset, 0)
+        dense, dense_growth = peak_growth(self.compiled, y, y)
         result, growth = peak_growth(self.compiled, x, y)
         np.testing.assert_allclose(
             values(result), values(affine(x, y)), rtol=1e-6, atol=1e-6
         )
         self.assertLessEqual(
-            growth, 2 * result.nbytes, f"packing suspected: peak grew {growth} bytes"
+            growth,
+            dense_growth,
+            f"view grew {growth} bytes, dense control grew {dense_growth}",
         )
+
+    def test_allocation_gate_detects_an_input_copy(self) -> None:
+        def packed(x: mx.array, y: mx.array) -> mx.array:
+            return self.compiled(mx.contiguous(x, allow_col_major=False), y)
+
+        dense, dense_growth = peak_growth(self.compiled, self.y, self.y)
+        result, growth = peak_growth(packed, self.a.T, self.y)
+        self.assertGreater(growth, dense_growth)
 
     # Invariant: equal shapes with different layouts are separate kernels.
     # Witness: the dense y and the transposed view both of shape (64, 513).

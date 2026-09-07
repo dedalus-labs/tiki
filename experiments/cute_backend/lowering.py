@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from math import prod
 
 from graph import Graph, Node, Shape, UnsupportedGraphError, Value
+from operations import Operation
 
 
 class UnsupportedScheduleError(ValueError):
@@ -165,17 +166,9 @@ def logical_coordinate(shape: Shape, index: int) -> list[str]:
 
 
 def expression(node: Node, names: dict[str, str]) -> str:
-    args = [names[name] for name in node.inputs]
-    if node.operation == "Broadcast":
-        return args[0]
-    if node.operation == "Square":
-        return f"arith.mulf {args[0]}, {args[0]} : f32"
-    if node.operation == "Negative":
-        return f"arith.negf {args[0]} : f32"
-    if node.operation == "Rsqrt":
-        return f"math.rsqrt {args[0]} : f32"
-    opcode = {"Add": "addf", "Subtract": "subf", "Multiply": "mulf"}[node.operation]
-    return f"arith.{opcode} {args[0]}, {args[1]} : f32"
+    return Operation.require(node.operation).expression(
+        tuple(names[name] for name in node.inputs)
+    )
 
 
 def element(graph: Graph, index: int) -> list[str]:

@@ -11,11 +11,14 @@ import mlx.core as mx
 
 from graph import (
     ArrayFunction,
+    ArrayResult,
+    Graph,
     Profile,
     Shape,
     UnsupportedGraphError,
     capture,
     dense_strides,
+    replay,
 )
 from lowering import (  # noqa: F401 - Public schedule types.
     Lowered,
@@ -100,10 +103,9 @@ def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
 class Compiled:
     """A specialized array function with registered reverse and forward derivatives.
 
-    Each call specializes on the live layout profile of every input, so a
-    transposed or sliced view gets its own kernel and is consumed in place:
-    nothing is packed. The derivatives are compiled regions of the traced
-    VJP and JVP graphs, one kernel per cotangent, lowered the same way.
+    Elementwise schedules specialize on live input layouts and consume views
+    in place. Cooperative schedules pack inputs explicitly. Derivatives use
+    the captured forward graph and require a supported derivative schedule.
     """
 
     def __init__(
@@ -113,11 +115,6 @@ class Compiled:
     ):
         self.function = function
         self.schedule = schedule
-        self._differentiable = mx.custom_function(self.launch)
-        self._differentiable.vjp(self._vjp)
-        self._differentiable.jvp(self._jvp)
-        self._cotangent_kernels: dict[int, Compiled] = {}
-        self._tangent_kernel: Compiled | None = None
 
     def lower(self, *inputs: mx.array) -> Lowered:
         if not inputs:
@@ -131,74 +128,92 @@ class Compiled:
             self.function, self.schedule, tuple(profile(value) for value in inputs)
         )
 
-    def __call__(self, *inputs: mx.array) -> mx.array:
-        return self._differentiable(*inputs)
+    def __call__(self, *inputs: mx.array) -> ArrayResult:
+        return self.launch(*inputs)
 
-    def launch(self, *inputs: mx.array) -> mx.array:
+    def launch(self, *inputs: mx.array) -> ArrayResult:
         if not mx.cuda.is_available():
             raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
         lowered = self.lower(*inputs)
-        shapes = lowered.output_shapes
         if prod(lowered.graph.shape) == 0:
-            outputs = [
-                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for shape in shapes
-            ]
-        else:
-            outputs = mx.fast.precompiled_cuda_kernel(
-                name="tiki_fused",
-                compiled_source=binary(lowered).cubin,
-                inputs=list(inputs),
-                output_shapes=list(shapes),
-                output_dtypes=[mx.float32] * len(shapes),
-                scalars=[],
-                grid=lowered.grid,
-                threadgroup=(self.schedule.threads, 1, 1),
-                shared_memory=lowered.shared_memory_bytes,
-                ensure_row_contiguous=packs_views(self.schedule),
-                stream=mx.gpu,
+            outputs = tuple(
+                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu)
+                for shape in lowered.output_shapes
             )
+            return outputs[0] if len(outputs) == 1 else outputs
+        return differentiable(lowered)(*inputs)
+
+
+@lru_cache(maxsize=32)
+def differentiable(lowered: Lowered) -> ArrayFunction:
+    """The transform tape owns its specialization even after cache eviction."""
+
+    @mx.custom_function
+    def forward(*inputs: mx.array) -> ArrayResult:
+        shapes = lowered.output_shapes
+        outputs = mx.fast.precompiled_cuda_kernel(
+            name="tiki_fused",
+            compiled_source=binary(lowered).cubin,
+            inputs=list(inputs),
+            output_shapes=list(shapes),
+            output_dtypes=[mx.float32] * len(shapes),
+            scalars=[],
+            grid=lowered.grid,
+            threadgroup=(lowered.schedule.threads, 1, 1),
+            shared_memory=lowered.shared_memory_bytes,
+            ensure_row_contiguous=packs_views(lowered.schedule),
+            stream=mx.gpu,
+        )
         return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
-    def _cotangent_kernel(self, i: int, n: int) -> "Compiled":
-        """The compiled VJP region for input ``i``; traced once per compiled function."""
-        if i not in self._cotangent_kernels:
-
-            def input_cotangent(*args: mx.array) -> mx.array:
-                return mx.vjp(self.function, list(args[:n]), list(args[n:]))[1][i]
-
-            self._cotangent_kernels[i] = Compiled(input_cotangent, self.schedule)
-        return self._cotangent_kernels[i]
-
-    def _vjp(
-        self,
+    @forward.vjp
+    def vjp(
         primals: mx.array | tuple[mx.array, ...],
-        cotangents: mx.array | tuple[mx.array, ...],
-        outputs: mx.array | tuple[mx.array, ...],
+        cotangents: ArrayResult,
+        outputs: ArrayResult,
     ) -> tuple[mx.array, ...]:
-        """MLX passes bare arrays for a single-output function, tuples otherwise."""
+        """MLX passes one cotangent per output, a bare array for one output."""
         primals, cotangents = _arrays(primals), _arrays(cotangents)
-        n = len(primals)
         return tuple(
-            self._cotangent_kernel(i, n).launch(*primals, *cotangents) for i in range(n)
+            derivative(lowered.graph, lowered.schedule, input_index)(
+                *primals, *cotangents
+            )
+            for input_index in range(len(primals))
         )
 
-    def _jvp(
-        self,
+    @forward.jvp
+    def jvp(
         primals: mx.array | tuple[mx.array, ...],
         tangents: mx.array | tuple[mx.array, ...],
-    ) -> mx.array | tuple[mx.array, ...]:
-        """MLX passes (primals, tangents) and expects the output tangents."""
+    ) -> ArrayResult:
+        """MLX expects all output tangents in the forward result convention."""
         primals, tangents = _arrays(primals), _arrays(tangents)
-        n = len(primals)
-        if self._tangent_kernel is None:
+        return derivative(lowered.graph, lowered.schedule, None)(*primals, *tangents)
 
-            def output_tangent(*args: mx.array) -> tuple[mx.array, ...]:
-                return tuple(mx.jvp(self.function, list(args[:n]), list(args[n:]))[1])
+    return forward
 
-            self._tangent_kernel = Compiled(output_tangent, self.schedule)
-        return self._tangent_kernel.launch(*primals, *tangents)
+
+@lru_cache(maxsize=32)
+def derivative(
+    graph: Graph,
+    schedule: Schedule | RowSchedule | TransposeSchedule,
+    index: int | None,
+) -> Compiled:
+    """Cache derivative programs by the exact forward graph, including its arity."""
+    input_count = len(graph.inputs)
+
+    def frozen(*inputs: mx.array) -> tuple[mx.array, ...]:
+        return replay(graph, inputs)
+
+    def differentiate(*args: mx.array) -> ArrayResult:
+        primals, derivatives = args[:input_count], args[input_count:]
+        if index is None:
+            return tuple(mx.jvp(frozen, primals, derivatives)[1])
+        return mx.vjp(frozen, primals, derivatives)[1][index]
+
+    return Compiled(differentiate, schedule)
 
 
 DEFAULT_SCHEDULE = Schedule()
@@ -209,7 +224,7 @@ def compile(
     backend: str = "cute",
     schedule: Schedule | RowSchedule | TransposeSchedule = DEFAULT_SCHEDULE,
 ) -> Callable[[ArrayFunction], Compiled]:
-    """Specialize a pure array function; captured Python values are frozen per shape."""
+    """Specialize a pure array function, freezing captures per layout profile."""
     if backend != "cute":
         raise UnsupportedScheduleError(f"unsupported backend: {backend}")
     return lambda function: Compiled(function, schedule)
