@@ -2,9 +2,9 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test type promotion") {
   for (auto t : {bool_, uint32, int32, int64, float32}) {

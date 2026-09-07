@@ -24,13 +24,13 @@ def cuda_toolkit_major_version():
 
 
 def get_version():
-    with open("mlx/version.h", "r") as fid:
+    with open("tiki/version.h", "r") as fid:
         for l in fid:
-            if "#define MLX_VERSION_MAJOR" in l:
+            if "#define TIKI_VERSION_MAJOR" in l:
                 major = l.split()[-1]
-            if "#define MLX_VERSION_MINOR" in l:
+            if "#define TIKI_VERSION_MINOR" in l:
                 minor = l.split()[-1]
-            if "#define MLX_VERSION_PATCH" in l:
+            if "#define TIKI_VERSION_PATCH" in l:
                 patch = l.split()[-1]
     version = f"{major}.{minor}.{patch}"
     pypi_release = int(os.environ.get("PYPI_RELEASE", 0))
@@ -56,21 +56,21 @@ def get_version():
 # Release builds for PyPi are separated into 2 packages:
 #
 # Frontend package:
-#  - Triggered with `MLX_BUILD_FRONTEND_PACKAGE=1`
-#  - Include everything except backend-specific binaries (e.g. libmlx.so, mlx.metallib, etc)
+#  - Triggered with `TIKI_BUILD_FRONTEND_PACKAGE=1`
+#  - Include everything except backend-specific binaries (e.g. libtiki.so, tiki.metallib, etc)
 #  - Wheel has Python ABI and platform tags
 #  - Wheel should be built for the cross-product of python version and platforms
-#  - Package name is "mlx" and it depends on backend packages (e.g. mlx-metal, mlx-cuda)
+#  - Package name is "tiki" and it depends on backend packages (e.g. tiki-metal, tiki-cuda)
 # Backend package:
-#  - Triggered with `MLX_BUILD_BACKEND_PACKAGE=1`
+#  - Triggered with `TIKI_BUILD_BACKEND_PACKAGE=1`
 #  - Include headers and backend binaries.
 #  - Wheel has only platform tags
 #  - Wheel should be built only for different platforms
-#  - Package name is back-end specific, e.g mlx-metal, mlx-cuda
-build_frontend = int(os.environ.get("MLX_BUILD_FRONTEND_PACKAGE", 0))
-build_backend = int(os.environ.get("MLX_BUILD_BACKEND_PACKAGE", 0))
+#  - Package name is back-end specific, e.g tiki-metal, tiki-cuda
+build_frontend = int(os.environ.get("TIKI_BUILD_FRONTEND_PACKAGE", 0))
+build_backend = int(os.environ.get("TIKI_BUILD_BACKEND_PACKAGE", 0))
 build_macos = platform.system() == "Darwin"
-build_cuda = "MLX_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
+build_cuda = "TIKI_BUILD_CUDA=ON" in os.environ.get("CMAKE_ARGS", "")
 
 
 # A CMakeExtension needs a sourcedir instead of a file list.
@@ -103,13 +103,13 @@ class CMakeBuild(build_ext):
 
         cmake_args = [
             f"-DCMAKE_INSTALL_PREFIX={extdir}",
-            f"-DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}",
+            f"-DTIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY={extdir}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
             f"-DPython_EXECUTABLE={sys.executable}",
-            "-DMLX_BUILD_PYTHON_BINDINGS=ON",
-            "-DMLX_BUILD_TESTS=OFF",
-            "-DMLX_BUILD_BENCHMARKS=OFF",
-            "-DMLX_BUILD_EXAMPLES=OFF",
+            "-DTIKI_BUILD_PYTHON_BINDINGS=ON",
+            "-DTIKI_BUILD_TESTS=OFF",
+            "-DTIKI_BUILD_BENCHMARKS=OFF",
+            "-DTIKI_BUILD_EXAMPLES=OFF",
             "-DBUILD_SHARED_LIBS=ON",
         ]
 
@@ -132,12 +132,12 @@ class CMakeBuild(build_ext):
                     "100a-real",
                     "121a-real",
                 ]
-            cmake_args += [f"-DMLX_CUDA_ARCHITECTURES={';'.join(cuda_archs)}"]
+            cmake_args += [f"-DTIKI_CUDA_ARCHITECTURES={';'.join(cuda_archs)}"]
             # Search CUDA libs from python packages.
-            cmake_args += ["-DMLX_LOAD_CUDA_LIBS_FROM_PYTHON=ON"]
+            cmake_args += ["-DTIKI_LOAD_CUDA_LIBS_FROM_PYTHON=ON"]
 
         # Pass version to C++
-        cmake_args += [f"-DMLX_VERSION={self.distribution.get_version()}"]  # type: ignore[attr-defined]
+        cmake_args += [f"-DTIKI_VERSION={self.distribution.get_version()}"]  # type: ignore[attr-defined]
 
         if build_macos:
             # Cross-compile support for macOS - respect ARCHFLAGS if set
@@ -167,11 +167,11 @@ class CMakeBuild(build_ext):
             check=True,
         )
 
-    # Make sure to copy mlx.metallib for inplace builds
+    # Make sure to copy tiki.metallib for inplace builds
     def run(self):
         super().run()
 
-        ext = next(ext for ext in self.extensions if ext.name == "mlx.core")
+        ext = next(ext for ext in self.extensions if ext.name == "tiki.core")
 
         # Based on https://github.com/pypa/setuptools/blob/main/setuptools/command/build_ext.py#L102
         if self.inplace:
@@ -191,7 +191,7 @@ class CMakeBuild(build_ext):
             check=True,
         )
         # Copy the type stubs to extdir so they are included in wheels.
-        stubs_dir = Path("python/mlx/core")
+        stubs_dir = Path("python/tiki/core")
         if stubs_dir.exists():
             extdir = self._get_ext_dir(ext)
             self.copy_tree(stubs_dir, extdir / "core")
@@ -202,7 +202,7 @@ class CMakeBuild(build_ext):
         return ext_fullpath.parent.resolve()
 
 
-class MLXBdistWheel(bdist_wheel):
+class TIKIBdistWheel(bdist_wheel):
     def get_tag(self) -> tuple[str, str, str]:
         impl, abi, plat_name = super().get_tag()
         if build_backend:
@@ -213,14 +213,14 @@ class MLXBdistWheel(bdist_wheel):
     def write_wheelfile(self, *args, **kwargs) -> None:
         super().write_wheelfile(*args, **kwargs)
 
-        mlx_dir = Path(self.bdist_dir, "mlx")
+        tiki_dir = Path(self.bdist_dir, "tiki")
 
         def is_backend_file(file):
-            if file.is_relative_to(Path(mlx_dir, "lib")):
+            if file.is_relative_to(Path(tiki_dir, "lib")):
                 return True
-            if file.is_relative_to(Path(mlx_dir, "include")):
+            if file.is_relative_to(Path(tiki_dir, "include")):
                 return True
-            if file.is_relative_to(Path(mlx_dir, "share")):
+            if file.is_relative_to(Path(tiki_dir, "share")):
                 return True
             if file.suffix == ".dll":
                 return True
@@ -228,7 +228,7 @@ class MLXBdistWheel(bdist_wheel):
 
         if build_frontend or build_backend:
             for file in Path(self.bdist_dir).rglob("*"):
-                if not file.is_relative_to(mlx_dir) or not file.is_file():
+                if not file.is_relative_to(tiki_dir) or not file.is_file():
                     continue
                 bf = is_backend_file(file)
                 if (build_frontend and bf) or (build_backend and not bf):
@@ -248,11 +248,11 @@ if __name__ == "__main__":
             "src",
             "tests",
             "scripts",
-            "mlx.lib",
-            "mlx.include",
-            "mlx.share",
-            "mlx.share.**",
-            "mlx.include.**",
+            "tiki.lib",
+            "tiki.include",
+            "tiki.share",
+            "tiki.share.**",
+            "tiki.include.**",
         ],
     )
 
@@ -261,8 +261,8 @@ if __name__ == "__main__":
     _setup = partial(
         setup,
         version=version,
-        author="MLX Contributors",
-        author_email="mlx@group.apple.com",
+        author="Tiki Contributors",
+        author_email="tiki@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
@@ -272,14 +272,14 @@ if __name__ == "__main__":
         package_dir=package_dir,
         zip_safe=False,
         python_requires=">=3.10",
-        ext_modules=[CMakeExtension("mlx.core")],
+        ext_modules=[CMakeExtension("tiki.core")],
         cmdclass={
             "build_ext": CMakeBuild,
-            "bdist_wheel": MLXBdistWheel,
+            "bdist_wheel": TIKIBdistWheel,
         },
     )
 
-    package_data = {"mlx.core": ["*.pyi"], "mlx.tiki": ["*.pyi"]}
+    package_data = {"tiki.core": ["*.pyi"], "tiki.layout": ["*.pyi"]}
 
     extras = {
         "dev": [
@@ -292,8 +292,8 @@ if __name__ == "__main__":
     }
     entry_points = {
         "console_scripts": [
-            "mlx.launch = mlx._distributed_utils.launch:main",
-            "mlx.distributed_config = mlx._distributed_utils.config:main",
+            "tiki.launch = tiki._distributed_utils.launch:main",
+            "tiki.distributed_config = tiki._distributed_utils.config:main",
         ]
     }
     install_requires = []
@@ -301,17 +301,17 @@ if __name__ == "__main__":
     if not build_backend:
         if build_frontend:
             install_requires.append(
-                f'mlx-metal=={version}; platform_system == "Darwin"'
+                f'tiki-metal=={version}; platform_system == "Darwin"'
             )
-            extras["cuda"] = [f'mlx-cuda-12=={version}; platform_system == "Linux"']
+            extras["cuda"] = [f'tiki-cuda-12=={version}; platform_system == "Linux"']
             for toolkit in [12, 13]:
                 extras[f"cuda{toolkit}"] = [
-                    f'mlx-cuda-{toolkit}=={version}; platform_system == "Linux"'
+                    f'tiki-cuda-{toolkit}=={version}; platform_system == "Linux"'
                 ]
-            extras["cpu"] = [f'mlx-cpu=={version}; platform_system == "Linux"']
+            extras["cpu"] = [f'tiki-cpu=={version}; platform_system == "Linux"']
 
         _setup(
-            name="mlx",
+            name="tiki",
             packages=packages,
             extras_require=extras,
             entry_points=entry_points,
@@ -320,13 +320,13 @@ if __name__ == "__main__":
         )
     else:
         if build_macos:
-            name = "mlx-metal"
+            name = "tiki-metal"
         elif build_cuda:
             toolkit = cuda_toolkit_major_version()
-            name = f"mlx-cuda-{toolkit}"
+            name = f"tiki-cuda-{toolkit}"
             # Note: update following files when new dependency is added:
             # * .github/actions/build-wheel/action.yml
-            # * mlx/backend/cuda/CMakeLists.txt
+            # * tiki/backend/cuda/CMakeLists.txt
             install_requires += [
                 f"nvidia-cudnn-cu{toolkit}==9.*",
             ]
@@ -353,9 +353,9 @@ if __name__ == "__main__":
                 raise ValueError(f"Unknown toolkit {toolkit}")
 
         else:
-            name = "mlx-cpu"
+            name = "tiki-cpu"
         _setup(
             name=name,
-            packages=["mlx"],
+            packages=["tiki"],
             install_requires=install_requires,
         )

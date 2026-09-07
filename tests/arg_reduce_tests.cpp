@@ -4,10 +4,10 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
-#include "mlx/primitives.h"
+#include "tiki/primitives.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 void test_arg_reduce_small(
     Device d,

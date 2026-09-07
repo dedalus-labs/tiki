@@ -4,15 +4,15 @@ import math
 import unittest
 from itertools import permutations
 
-import mlx.core as mx
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki_tests
 
 # Ignore matmul warnings.
 np.seterr(divide="ignore", over="ignore", invalid="ignore")
 
 
-class TestBlas(mlx_tests.MLXTestCase):
+class TestBlas(tiki_tests.TIKITestCase):
     @property
     def dtypes(self):
         return ["float32", "float16"]
@@ -35,8 +35,8 @@ class TestBlas(mlx_tests.MLXTestCase):
             a_np = np.random.normal(0.0, 1.0 / scale, shape_a).astype(np_dtype)
             b_np = np.random.normal(0.0, 1.0 / scale, shape_b).astype(np_dtype)
 
-            a_mx = mx.array(a_np)
-            b_mx = mx.array(b_np)
+            a_mx = tk.array(a_np)
+            b_mx = tk.array(b_np)
 
             a_np = f_np_a(a_np.astype(np.float32))
             b_np = f_np_b(b_np.astype(np.float32))
@@ -44,13 +44,13 @@ class TestBlas(mlx_tests.MLXTestCase):
             b_mx = f_mx_b(b_mx)
 
             out_npy = a_np @ b_np
-            out_mlx = a_mx @ b_mx
+            out_tiki = a_mx @ b_mx
 
-            self.assertListEqual(list(out_npy.shape), list(out_mlx.shape))
-            self.assertTrue(np.allclose(out_mlx, out_npy.astype(np_dtype), atol=1e-5))
+            self.assertListEqual(list(out_npy.shape), list(out_tiki.shape))
+            self.assertTrue(np.allclose(out_tiki, out_npy.astype(np_dtype), atol=1e-5))
 
     def test_matmul_unaligned(self):
-        if not mx.is_available(mx.gpu):
+        if not tk.is_available(tk.gpu):
             return
 
         for dtype in self.dtypes:
@@ -65,14 +65,14 @@ class TestBlas(mlx_tests.MLXTestCase):
                     self.__gemm_test(shape_a, shape_b, np_dtype)
 
     def test_matvec_unaligned(self):
-        a = mx.random.normal(shape=(4, 128))
-        b = mx.random.normal(shape=(129,))[1:]
+        a = tk.random.normal(shape=(4, 128))
+        b = tk.random.normal(shape=(129,))[1:]
         out = a @ b
         np_out = np.array(a) @ np.array(b)
         self.assertTrue(np.allclose(out, np_out))
 
     def test_matmul_shapes(self):
-        if not mx.is_available(mx.gpu):
+        if not tk.is_available(tk.gpu):
             return
 
         shapes = [
@@ -81,7 +81,7 @@ class TestBlas(mlx_tests.MLXTestCase):
             (3, 23, 457, 3),
         ]
 
-        if mx.default_device() == mx.gpu:
+        if tk.default_device() == tk.gpu:
             shapes += [
                 (16, 768, 768, 128),
                 (1, 64, 64, 4096),
@@ -104,7 +104,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         shape_b,
                         np_dtype,
                         f_np_b=lambda x: np.transpose(x, (0, 2, 1)),
-                        f_mx_b=lambda x: mx.transpose(x, (0, 2, 1)),
+                        f_mx_b=lambda x: tk.transpose(x, (0, 2, 1)),
                     )
 
                 with self.subTest(transpose="tn"):
@@ -115,7 +115,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         shape_b,
                         np_dtype,
                         f_np_a=lambda x: np.transpose(x, (0, 2, 1)),
-                        f_mx_a=lambda x: mx.transpose(x, (0, 2, 1)),
+                        f_mx_a=lambda x: tk.transpose(x, (0, 2, 1)),
                     )
 
                 with self.subTest(transpose="tt"):
@@ -126,21 +126,21 @@ class TestBlas(mlx_tests.MLXTestCase):
                         shape_b,
                         np_dtype,
                         f_np_a=lambda x: np.transpose(x, (0, 2, 1)),
-                        f_mx_a=lambda x: mx.transpose(x, (0, 2, 1)),
+                        f_mx_a=lambda x: tk.transpose(x, (0, 2, 1)),
                         f_np_b=lambda x: np.transpose(x, (0, 2, 1)),
-                        f_mx_b=lambda x: mx.transpose(x, (0, 2, 1)),
+                        f_mx_b=lambda x: tk.transpose(x, (0, 2, 1)),
                     )
 
     def test_matmul(self):
         # Note: so far, matmul only works with floating-point types
-        a = mx.array([[1.0, 2.0], [3.0, 4.0]])
+        a = tk.array([[1.0, 2.0], [3.0, 4.0]])
 
-        b = mx.array([[0.0, -1.0], [-3.0, 3.0]])
+        b = tk.array([[0.0, -1.0], [-3.0, 3.0]])
 
         expected = [[-6.0, 5.0], [-12.0, 9.0]]
 
         self.assertEqual((a @ b).tolist(), expected)
-        self.assertEqual(mx.matmul(a, b).tolist(), expected)
+        self.assertEqual(tk.matmul(a, b).tolist(), expected)
 
         # Transposed matmul
         np.random.seed(0)
@@ -149,16 +149,16 @@ class TestBlas(mlx_tests.MLXTestCase):
         c_npy = a_npy @ np.transpose(b_npy, (1, 0))
         d_npy = np.transpose(a_npy, (1, 0)) @ b_npy
 
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
-        c_mlx = a_mlx @ mx.transpose(b_mlx, (1, 0))
-        d_mlx = mx.transpose(a_mlx, (1, 0)) @ b_mlx
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
+        c_tiki = a_tiki @ tk.transpose(b_tiki, (1, 0))
+        d_tiki = tk.transpose(a_tiki, (1, 0)) @ b_tiki
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
 
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
-        self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-6))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
+        self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-6))
 
     def test_matmul_dtypes(self):
         for dt in self.dtypes:
@@ -168,13 +168,13 @@ class TestBlas(mlx_tests.MLXTestCase):
             b_npy = np.random.normal(0.0, 1.0 / 256, (16, 16, 16)).astype(
                 getattr(np, dt)
             )
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             c_npy = np.matmul(a_npy, b_npy, dtype=getattr(np, dt))
-            c_mlx = a_mlx @ b_mlx
+            c_tiki = a_tiki @ b_tiki
 
-            self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+            self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
     def test_matmul_batched(self):
         np.random.seed(0)
@@ -183,84 +183,84 @@ class TestBlas(mlx_tests.MLXTestCase):
         b_npy = np.random.normal(0.0, 1.0 / 128, (32, 16, 16)).astype(np.float32)
         c_npy = a_npy @ b_npy
 
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
-        c_mlx = a_mlx @ b_mlx
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
+        c_tiki = a_tiki @ b_tiki
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
         # Batched and transposed matmul
         b_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         c_npy = a_npy @ np.transpose(b_npy, (0, 2, 1))
 
-        b_mlx = mx.array(b_npy)
-        c_mlx = a_mlx @ mx.transpose(b_mlx, (0, 2, 1))
+        b_tiki = tk.array(b_npy)
+        c_tiki = a_tiki @ tk.transpose(b_tiki, (0, 2, 1))
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
         # Batched matmul with simple broadcast
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (16, 16)).astype(np.float32)
         c_npy = a_npy @ b_npy
 
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
-        c_mlx = a_mlx @ b_mlx
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
+        c_tiki = a_tiki @ b_tiki
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
         # Both operands broadcasted
         d_npy = np.broadcast_to(b_npy, (5, 16, 16))
-        d_mlx = mx.broadcast_to(b_mlx, (5, 16, 16))
+        d_tiki = tk.broadcast_to(b_tiki, (5, 16, 16))
 
         e_npy = d_npy @ d_npy
-        e_mlx = d_mlx @ d_mlx
+        e_tiki = d_tiki @ d_tiki
 
-        self.assertListEqual(list(e_npy.shape), list(e_mlx.shape))
-        self.assertTrue(np.allclose(e_mlx, e_npy, atol=1e-6))
+        self.assertListEqual(list(e_npy.shape), list(e_tiki.shape))
+        self.assertTrue(np.allclose(e_tiki, e_npy, atol=1e-6))
 
         # Batched and transposed matmul with simple broadcast
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (128, 16)).astype(np.float32)
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
 
         c_npy = a_npy @ np.transpose(b_npy, (1, 0))
-        c_mlx = a_mlx @ mx.transpose(b_mlx, (1, 0))
+        c_tiki = a_tiki @ tk.transpose(b_tiki, (1, 0))
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
         # Matmul with vector
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
 
         c_npy = a_npy @ b_npy
-        c_mlx = a_mlx @ b_mlx
+        c_tiki = a_tiki @ b_tiki
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
         # Test Multiheaded attention style matmul
         a_npy = np.random.normal(0.0, 1.0 / 128, (64, 16, 4, 32)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (64, 16, 4, 32)).astype(np.float32)
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
 
         a_npy = np.transpose(a_npy, (0, 2, 1, 3))
         b_npy = np.transpose(b_npy, (0, 2, 1, 3))
-        a_mlx = mx.transpose(a_mlx, (0, 2, 1, 3))
-        b_mlx = mx.transpose(b_mlx, (0, 2, 1, 3))
+        a_tiki = tk.transpose(a_tiki, (0, 2, 1, 3))
+        b_tiki = tk.transpose(b_tiki, (0, 2, 1, 3))
 
         c_npy = a_npy @ np.transpose(b_npy, (0, 1, 3, 2))
-        c_mlx = a_mlx @ mx.transpose(b_mlx, (0, 1, 3, 2))
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
+        c_tiki = a_tiki @ tk.transpose(b_tiki, (0, 1, 3, 2))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-6))
 
     def __gemv_test(
         self,
@@ -270,8 +270,8 @@ class TestBlas(mlx_tests.MLXTestCase):
         mat_first=True,
         np_mat_f=lambda x: x,
         np_vec_f=lambda x: x,
-        mlx_mat_f=lambda x: x,
-        mlx_vec_f=lambda x: x,
+        tiki_mat_f=lambda x: x,
+        tiki_vec_f=lambda x: x,
     ):
         with self.subTest(
             shape_mat=shape_mat, shape_vec=shape_vec, mat_first=mat_first
@@ -281,32 +281,32 @@ class TestBlas(mlx_tests.MLXTestCase):
             mat_npy = np.random.normal(0.0, 1.0 / scale, shape_mat).astype(np_dtype)
             vec_npy = np.random.normal(0.0, 1.0 / scale, shape_vec).astype(np_dtype)
 
-            mat_mlx = mx.array(mat_npy)
-            vec_mlx = mx.array(vec_npy)
+            mat_tiki = tk.array(mat_npy)
+            vec_tiki = tk.array(vec_npy)
 
             mat_npy = np_mat_f(mat_npy)
             vec_npy = np_vec_f(vec_npy)
-            mat_mlx = mlx_mat_f(mat_mlx)
-            vec_mlx = mlx_vec_f(vec_mlx)
+            mat_tiki = tiki_mat_f(mat_tiki)
+            vec_tiki = tiki_vec_f(vec_tiki)
 
             if mat_first:
                 out_npy = mat_npy @ vec_npy
-                out_mlx = mat_mlx @ vec_mlx
+                out_tiki = mat_tiki @ vec_tiki
             else:
                 out_npy = vec_npy @ mat_npy
-                out_mlx = vec_mlx @ mat_mlx
+                out_tiki = vec_tiki @ mat_tiki
 
             # Due to some bug, numpy sometimes has NaNs on macOS
             # See https://github.com/ml-explore/mlx/pull/3063
             nans = np.isnan(out_npy)
             if np.any(nans):
                 nan_ids = np.where(nans)
-                mlx_nan_ids = tuple(mx.array(n) for n in nan_ids)
+                tiki_nan_ids = tuple(tk.array(n) for n in nan_ids)
                 out_npy[nan_ids] = 0.0
-                out_mlx[mlx_nan_ids] = 0.0
+                out_tiki[tiki_nan_ids] = 0.0
 
-            self.assertListEqual(list(out_npy.shape), list(out_mlx.shape))
-            self.assertTrue(np.allclose(out_mlx, out_npy, atol=1e-5))
+            self.assertListEqual(list(out_npy.shape), list(out_tiki.shape))
+            self.assertTrue(np.allclose(out_tiki, out_npy, atol=1e-5))
 
     def test_matrix_vector(self):
         for dtype in self.dtypes:
@@ -323,7 +323,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                     np_dtype=np_dtype,
                     mat_first=False,
                     np_vec_f=lambda x: np.transpose(x, (1, 0)),
-                    mlx_vec_f=lambda x: mx.transpose(x, (1, 0)),
+                    tiki_vec_f=lambda x: tk.transpose(x, (1, 0)),
                 )
 
                 # Vector matrix product with aligned and unaligned shapes
@@ -393,8 +393,12 @@ class TestBlas(mlx_tests.MLXTestCase):
                         np_dtype=np_dtype,
                         np_mat_f=(lambda mat_npy: np.broadcast_to(mat_npy, shape_mat)),
                         np_vec_f=(lambda vec_npy: np.broadcast_to(vec_npy, shape_vec)),
-                        mlx_mat_f=(lambda mat_mlx: mx.broadcast_to(mat_mlx, shape_mat)),
-                        mlx_vec_f=(lambda vec_mlx: mx.broadcast_to(vec_mlx, shape_vec)),
+                        tiki_mat_f=(
+                            lambda mat_tiki: tk.broadcast_to(mat_tiki, shape_mat)
+                        ),
+                        tiki_vec_f=(
+                            lambda vec_tiki: tk.broadcast_to(vec_tiki, shape_vec)
+                        ),
                     )
 
                 # Different broadcasts vec mat
@@ -410,8 +414,12 @@ class TestBlas(mlx_tests.MLXTestCase):
                         mat_first=False,
                         np_mat_f=lambda mat_npy: np.broadcast_to(mat_npy, shape_mat),
                         np_vec_f=lambda vec_npy: np.broadcast_to(vec_npy, shape_vec),
-                        mlx_mat_f=lambda mat_mlx: mx.broadcast_to(mat_mlx, shape_mat),
-                        mlx_vec_f=lambda vec_mlx: mx.broadcast_to(vec_mlx, shape_vec),
+                        tiki_mat_f=lambda mat_tiki: tk.broadcast_to(
+                            mat_tiki, shape_mat
+                        ),
+                        tiki_vec_f=lambda vec_tiki: tk.broadcast_to(
+                            vec_tiki, shape_vec
+                        ),
                     )
 
     def test_matrix_vector_attn(self):
@@ -463,10 +471,10 @@ class TestBlas(mlx_tests.MLXTestCase):
                     o_np = s_np @ v_np_reshape
                     o_np = o_np.transpose(0, 3, 1, 2, 4).reshape(B, qsl, -1)
 
-                    # Test mlx
-                    q_mx = mx.array(q_np)
-                    k_mx = mx.array(k_np)
-                    v_mx = mx.array(v_np)
+                    # Test tiki
+                    q_mx = tk.array(q_np)
+                    k_mx = tk.array(k_np)
+                    v_mx = tk.array(v_np)
 
                     # Rearrange to move heads up
                     q_mx_reshape = q_mx.reshape(B, qsl, n_kv_heads, factor, -1).transpose(0, 2, 3, 1, 4)
@@ -508,14 +516,14 @@ class TestBlas(mlx_tests.MLXTestCase):
                                     for i in range(batch_size):
                                         b_npy[i] *= i + 1.0
 
-                                    a_mlx, b_mlx = map(mx.array, [a_npy, b_npy])
+                                    a_tiki, b_tiki = map(tk.array, [a_npy, b_npy])
                                     c_npy = a_npy @ b_npy
-                                    c_mlx = a_mlx @ b_mlx
+                                    c_tiki = a_tiki @ b_tiki
 
                                     self.assertListEqual(
-                                        list(c_npy.shape), list(c_mlx.shape)
+                                        list(c_npy.shape), list(c_tiki.shape)
                                     )
-                                    self.assertTrue(np.array_equal(c_mlx, c_npy))
+                                    self.assertTrue(np.array_equal(c_tiki, c_npy))
 
                                 # Vector matrix
                                 with self.subTest(transpose=True):
@@ -529,48 +537,48 @@ class TestBlas(mlx_tests.MLXTestCase):
                                     for i in range(batch_size):
                                         b_npy[i] *= i + 1.0
 
-                                    a_mlx, b_mlx = map(mx.array, [a_npy, b_npy])
+                                    a_tiki, b_tiki = map(tk.array, [a_npy, b_npy])
                                     c_npy = b_npy @ a_npy
-                                    c_mlx = b_mlx @ a_mlx
+                                    c_tiki = b_tiki @ a_tiki
 
                                     self.assertListEqual(
-                                        list(c_npy.shape), list(c_mlx.shape)
+                                        list(c_npy.shape), list(c_tiki.shape)
                                     )
-                                    self.assertTrue(np.array_equal(c_mlx, c_npy))
+                                    self.assertTrue(np.array_equal(c_tiki, c_npy))
 
     def test_dot_product(self):
-        if mx.default_device() == mx.cpu:
+        if tk.default_device() == tk.cpu:
             self.skipTest("requires GPU")
 
         def run_test(dtype, size, offset, atol):
             with self.subTest(dtype=str(dtype), size=size, offset=offset):
                 np.random.seed(42)
                 scale = size**-0.5
-                a_mx = mx.array(
+                a_mx = tk.array(
                     np.random.normal(0.0, scale, size + offset).astype(np.float32)
                 ).astype(dtype)[offset:]
-                b_mx = mx.array(
+                b_mx = tk.array(
                     np.random.normal(0.0, scale, size + offset).astype(np.float32)
                 ).astype(dtype)[offset:]
 
                 expected = np.inner(
-                    np.array(a_mx.astype(mx.float32)),
-                    np.array(b_mx.astype(mx.float32)),
+                    np.array(a_mx.astype(tk.float32)),
+                    np.array(b_mx.astype(tk.float32)),
                 )
-                actual = np.array(mx.inner(a_mx, b_mx).astype(mx.float32))
+                actual = np.array(tk.inner(a_mx, b_mx).astype(tk.float32))
                 self.assertTrue(np.allclose(actual, expected, atol=atol))
 
         for dtype, atol in (
-            (mx.float32, 1e-5),
-            (mx.float16, 2e-3),
-            (mx.bfloat16, 2e-3),
+            (tk.float32, 1e-5),
+            (tk.float16, 2e-3),
+            (tk.bfloat16, 2e-3),
         ):
             for size in (1023, 1024, 1025, 16385, 131072, 1000000):
                 for offset in (0, 1):
                     run_test(dtype, size, offset, atol)
 
     def test_wide_matmul(self):
-        if mx.default_device() == mx.cpu:
+        if tk.default_device() == tk.cpu:
             self.skipTest("requires GPU")
 
         # Eligible a @ b.T products of a few rows take the wide gemv route on metal;
@@ -583,25 +591,25 @@ class TestBlas(mlx_tests.MLXTestCase):
             with self.subTest(dtype=str(dtype), shape_a=shape_a, shape_b=shape_b):
                 np.random.seed(7)
                 scale = shape_a[-1] ** -0.5
-                a_mx = mx.array(
+                a_mx = tk.array(
                     np.random.normal(0.0, scale, shape_a).astype(np.float32)
                 ).astype(dtype)
-                b_mx = mx.array(
+                b_mx = tk.array(
                     np.random.normal(0.0, scale, shape_b).astype(np.float32)
                 ).astype(dtype)
-                a_np = np.array(a_mx.astype(mx.float32))
-                b_np = np.array(b_mx.astype(mx.float32))
+                a_np = np.array(a_mx.astype(tk.float32))
+                b_np = np.array(b_mx.astype(tk.float32))
 
                 out_np = a_np @ f_np_b(b_np)
-                out_mx = (a_mx @ f_mx_b(b_mx)).astype(mx.float32)
+                out_mx = (a_mx @ f_mx_b(b_mx)).astype(tk.float32)
 
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
 
         nt_np = lambda b: b.swapaxes(-1, -2)
-        nt_mx = lambda b: mx.swapaxes(b, -1, -2)
+        nt_mx = lambda b: tk.swapaxes(b, -1, -2)
 
-        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+        for dtype in (tk.float32, tk.float16, tk.bfloat16):
             for M in (1, 2, 3, 5, 8, 11, 16):
                 for K, N in (
                     (64, 128),
@@ -622,28 +630,28 @@ class TestBlas(mlx_tests.MLXTestCase):
                 (5, 512),
                 (333, 576),
                 lambda b: b[:, :512].swapaxes(-1, -2),
-                lambda b: mx.swapaxes(b[:, :512], -1, -2),
+                lambda b: tk.swapaxes(b[:, :512], -1, -2),
             )
             run_test(
                 dtype,
                 (5, 512),
                 (333, 512),
                 lambda b: b[7:, :].swapaxes(-1, -2),
-                lambda b: mx.swapaxes(b[7:, :], -1, -2),
+                lambda b: tk.swapaxes(b[7:, :], -1, -2),
             )
             run_test(
                 dtype,
                 (3, 512),
                 (333, 520),
                 lambda b: b[:, 4:516].swapaxes(-1, -2),
-                lambda b: mx.swapaxes(b[:, 4:516], -1, -2),
+                lambda b: tk.swapaxes(b[:, 4:516], -1, -2),
             )
             run_test(
                 dtype,
                 (3, 2052),
                 (129, 2056),
                 lambda b: b[:, :2052].swapaxes(-1, -2),
-                lambda b: mx.swapaxes(b[:, :2052], -1, -2),
+                lambda b: tk.swapaxes(b[:, :2052], -1, -2),
             )
 
             # batched: regular, broadcast weights, and multi-dim batch
@@ -653,7 +661,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                 (4, 3, 512),
                 (1, 257, 512),
                 lambda b: np.broadcast_to(b, (4, 257, 512)).swapaxes(-1, -2),
-                lambda b: mx.swapaxes(mx.broadcast_to(b, (4, 257, 512)), -1, -2),
+                lambda b: tk.swapaxes(tk.broadcast_to(b, (4, 257, 512)), -1, -2),
             )
             run_test(dtype, (2, 3, 5, 512), (2, 3, 129, 512), nt_np, nt_mx)
 
@@ -662,64 +670,64 @@ class TestBlas(mlx_tests.MLXTestCase):
         a_npy = np.random.normal(0.0, 1.0 / 128, (4, 16, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (4, 16, 16)).astype(np.float32)
 
-        a_mlx = mx.array(a_npy)
-        b_mlx = mx.array(b_npy)
+        a_tiki = tk.array(a_npy)
+        b_tiki = tk.array(b_npy)
 
         # Matmul with batches
         c_npy = a_npy[::2, :, :] @ b_npy[1::2, :, :]
-        c_mlx = a_mlx[::2, :, :] @ b_mlx[1::2, :, :]
+        c_tiki = a_tiki[::2, :, :] @ b_tiki[1::2, :, :]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matvec with batches
         c_npy = a_npy[::2, :, :] @ b_npy[1::2, :, 2:3]
-        c_mlx = a_mlx[::2, :, :] @ b_mlx[1::2, :, 2:3]
+        c_tiki = a_tiki[::2, :, :] @ b_tiki[1::2, :, 2:3]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matmul with slice
         c_npy = a_npy[:, :8, :] @ b_npy[:, :, :8]
-        c_mlx = a_mlx[:, :8, :] @ b_mlx[:, :, :8]
+        c_tiki = a_tiki[:, :8, :] @ b_tiki[:, :, :8]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matmul with slice
         c_npy = a_npy[:, :, :8] @ b_npy[:, :8, :]
-        c_mlx = a_mlx[:, :, :8] @ b_mlx[:, :8, :]
+        c_tiki = a_tiki[:, :, :8] @ b_tiki[:, :8, :]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matmul transpose with slice
         c_npy = a_npy[:, :8, :] @ b_npy[:, :8, :].swapaxes(-1, -2)
-        c_mlx = a_mlx[:, :8, :] @ b_mlx[:, :8, :].swapaxes(-1, -2)
+        c_tiki = a_tiki[:, :8, :] @ b_tiki[:, :8, :].swapaxes(-1, -2)
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matmul transpose with slice
         c_npy = a_npy[:, :, :8] @ b_npy[:, :, :8].swapaxes(-1, -2)
-        c_mlx = a_mlx[:, :, :8] @ b_mlx[:, :, :8].swapaxes(-1, -2)
+        c_tiki = a_tiki[:, :, :8] @ b_tiki[:, :, :8].swapaxes(-1, -2)
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matvec with slice
         c_npy = a_npy[:, :8, :] @ b_npy[:, :, 6:7]
-        c_mlx = a_mlx[:, :8, :] @ b_mlx[:, :, 6:7]
+        c_tiki = a_tiki[:, :8, :] @ b_tiki[:, :, 6:7]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
         # Matvec with slice
         c_npy = a_npy[:, :, :8] @ b_npy[:, 3:11, 2:3]
-        c_mlx = a_mlx[:, :, :8] @ b_mlx[:, 3:11, 2:3]
+        c_tiki = a_tiki[:, :, :8] @ b_tiki[:, 3:11, 2:3]
 
-        self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
-        self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-5))
+        self.assertListEqual(list(c_npy.shape), list(c_tiki.shape))
+        self.assertTrue(np.allclose(c_tiki, c_npy, atol=1e-5))
 
     def test_addmm(self):
         np.random.seed(0)
@@ -728,132 +736,132 @@ class TestBlas(mlx_tests.MLXTestCase):
         for beta in (1.0, 2.0):
             # c must broadcast to the output shape
             with self.assertRaises(ValueError):
-                mx.addmm(mx.zeros((2, 2, 2)), mx.zeros((2, 2)), mx.zeros((2, 2)))
+                tk.addmm(tk.zeros((2, 2, 2)), tk.zeros((2, 2)), tk.zeros((2, 2)))
 
             # Regular batched case
             a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (32, 16, 16)).astype(np.float32)
 
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (1, 16), (32, 1, 16), (1, 128, 16)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_tiki, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
 
             # Batched and transposed matmul
             b_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
-            b_mlx = mx.array(b_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (32, 1, 128), (1, 128)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 b_np_t = np.transpose(b_npy, (0, 2, 1))
-                b_mx_t = mx.transpose(b_mlx, (0, 2, 1))
+                b_mx_t = tk.transpose(b_tiki, (0, 2, 1))
 
                 d_npy = alpha * (a_npy @ b_np_t) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mx_t, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_mx_t, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
             # Batched matmul with simple broadcast
             a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (16, 16)).astype(np.float32)
 
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (1, 16), (32, 1, 16), (1, 128, 16)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_tiki, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
             # Matmul with vector
             a_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (32, 16, 128)).astype(np.float32)
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (128,), (32, 128)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_tiki, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
 
             # Matmul with vector
             a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (32, 128)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_tiki, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
 
             # Split K specializtion
             a_npy = np.random.normal(0.0, 1.0 / 128, (64, 4096)).astype(np.float32)
             b_npy = np.random.normal(0.0, 1.0 / 128, (4096, 32)).astype(np.float32)
 
-            a_mlx = mx.array(a_npy)
-            b_mlx = mx.array(b_npy)
+            a_tiki = tk.array(a_npy)
+            b_tiki = tk.array(b_npy)
 
             for c_shape in ((1,), (1, 32), (64, 1), (64, 32)):
                 c_npy = np.ones(c_shape).astype(np.float32)
-                c_mlx = mx.array(c_npy)
+                c_tiki = tk.array(c_npy)
 
                 d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
-                d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+                d_tiki = tk.addmm(c_tiki, a_tiki, b_tiki, alpha, beta)
 
-                self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
-                self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+                self.assertListEqual(list(d_npy.shape), list(d_tiki.shape))
+                self.assertTrue(np.allclose(d_tiki, d_npy, atol=1e-5))
 
             # Transposed c
-            a = mx.ones((10, 5)).T
-            b = mx.ones((5, 5))
-            out = mx.addmm(a, b, a, beta=beta, alpha=alpha)
+            a = tk.ones((10, 5)).T
+            b = tk.ones((5, 5))
+            out = tk.addmm(a, b, a, beta=beta, alpha=alpha)
             expected = beta * a + alpha * (b @ a)
-            self.assertTrue(mx.allclose(expected, out))
+            self.assertTrue(tk.allclose(expected, out))
 
             # Broadcast c
-            a = mx.ones((5, 5))
-            b = mx.ones((5, 5))
-            c = mx.ones((1, 5))
-            out = mx.addmm(c, a, b, beta=beta, alpha=alpha)
+            a = tk.ones((5, 5))
+            b = tk.ones((5, 5))
+            c = tk.ones((1, 5))
+            out = tk.addmm(c, a, b, beta=beta, alpha=alpha)
             expected = beta * c + alpha * (a @ b)
-            self.assertTrue(mx.allclose(expected, out))
+            self.assertTrue(tk.allclose(expected, out))
 
         # Test half precision
-        for t, tol in [(mx.float16, 1e-3), (mx.bfloat16, 1e-2)]:
-            c = mx.ones((32, 32)).astype(t)
-            a = mx.random.uniform(shape=(32, 32)).astype(t)
-            b = mx.random.uniform(shape=(32, 32)).astype(t)
-            out = mx.addmm(c, a, b, alpha=0.5, beta=2.0)
+        for t, tol in [(tk.float16, 1e-3), (tk.bfloat16, 1e-2)]:
+            c = tk.ones((32, 32)).astype(t)
+            a = tk.random.uniform(shape=(32, 32)).astype(t)
+            b = tk.random.uniform(shape=(32, 32)).astype(t)
+            out = tk.addmm(c, a, b, alpha=0.5, beta=2.0)
             expected = 0.5 * (a @ b) + 2.0 * c
-            self.assertTrue(mx.allclose(out, expected, rtol=tol, atol=tol))
+            self.assertTrue(tk.allclose(out, expected, rtol=tol, atol=tol))
 
     def test_wide_addmm(self):
-        if mx.default_device() == mx.cpu:
+        if tk.default_device() == tk.cpu:
             self.skipTest("requires GPU")
 
         # Eligible few-row addmm shapes take the wide gemv route on metal; cover
@@ -864,33 +872,33 @@ class TestBlas(mlx_tests.MLXTestCase):
                 shape_a = (M, K) if B is None else (B, M, K)
                 shape_b = (N, K) if B is None else (B, N, K)
                 scale = K**-0.5
-                a_mx = mx.array(
+                a_mx = tk.array(
                     np.random.normal(0.0, scale, shape_a).astype(np.float32)
                 ).astype(dtype)
-                b_mx = mx.array(
+                b_mx = tk.array(
                     np.random.normal(0.0, scale, shape_b).astype(np.float32)
                 ).astype(dtype)
-                c_mx = mx.array(
+                c_mx = tk.array(
                     np.random.normal(0.0, scale, c_shape).astype(np.float32)
                 ).astype(dtype)
-                a_np = np.array(a_mx.astype(mx.float32))
-                b_np = np.array(b_mx.astype(mx.float32))
-                c_np = np.array(c_mx.astype(mx.float32))
+                a_np = np.array(a_mx.astype(tk.float32))
+                b_np = np.array(b_mx.astype(tk.float32))
+                c_np = np.array(c_mx.astype(tk.float32))
 
                 out_np = alpha * (a_np @ b_np.swapaxes(-1, -2)) + beta * c_np
-                out_mx = mx.addmm(
+                out_mx = tk.addmm(
                     c_mx,
                     a_mx,
-                    mx.swapaxes(b_mx, -1, -2),
+                    tk.swapaxes(b_mx, -1, -2),
                     alpha,
                     beta,
-                ).astype(mx.float32)
+                ).astype(tk.float32)
 
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 atol = 0.05 * (abs(alpha) + abs(beta)) * scale
                 self.assertTrue(np.allclose(out_mx, out_np, atol=atol))
 
-        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+        for dtype in (tk.float32, tk.float16, tk.bfloat16):
             for M in (2, 5, 12):
                 for c_shape in ((250,), (1, 250), (M, 250)):
                     for alpha, beta in ((1.0, 1.0), (2.5, 0.5), (1.0, 0.0)):
@@ -901,18 +909,18 @@ class TestBlas(mlx_tests.MLXTestCase):
             # product past the fp16 max rescued by alpha stays finite (M = 4
             # keeps the 2-byte shape routed on every supported generation)
             with self.subTest(dtype=str(dtype), case="alpha rescue"):
-                a = mx.full((4, 512), 2.0, dtype=dtype)
-                b = mx.full((250, 512), 100.0, dtype=dtype)
-                c = mx.ones((4, 250), dtype=dtype)
-                out = mx.addmm(c, a, mx.swapaxes(b, -1, -2), 0.125, 0.0)
-                self.assertTrue(np.allclose(out.astype(mx.float32), 12800.0))
+                a = tk.full((4, 512), 2.0, dtype=dtype)
+                b = tk.full((250, 512), 100.0, dtype=dtype)
+                c = tk.ones((4, 250), dtype=dtype)
+                out = tk.addmm(c, a, tk.swapaxes(b, -1, -2), 0.125, 0.0)
+                self.assertTrue(np.allclose(out.astype(tk.float32), 12800.0))
 
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
             return lambda c, a, b: alpha * (a @ b) + beta * c
 
         def make_addmm(alpha, beta):
-            return lambda c, a, b: mx.addmm(c, a, b, alpha, beta)
+            return lambda c, a, b: tk.addmm(c, a, b, alpha, beta)
 
         # B, M, N, K
         shapes = ((1, 64, 32, 128), (4, 28, 24, 47), (1, 1, 24, 47))
@@ -923,57 +931,57 @@ class TestBlas(mlx_tests.MLXTestCase):
             f_ref = make_ref_addmm(alpha, beta)
 
             for B, M, N, K in shapes:
-                cotan = mx.ones((B, M, N))
-                c = mx.random.normal((B, M, N))
-                a = mx.random.normal((B, M, K))
-                b = mx.random.normal((B, K, N))
+                cotan = tk.ones((B, M, N))
+                c = tk.random.normal((B, M, N))
+                a = tk.random.normal((B, M, K))
+                b = tk.random.normal((B, K, N))
 
-                out_ref, dout_ref = mx.vjp(
+                out_ref, dout_ref = tk.vjp(
                     f_ref,
                     [c, a, b],
                     [cotan],
                 )
-                out_test, dout_test = mx.vjp(
+                out_test, dout_test = tk.vjp(
                     f_test,
                     [c, a, b],
                     [cotan],
                 )
 
-                self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-4).item())
+                self.assertTrue(tk.allclose(out_ref[0], out_test[0], atol=1e-4).item())
 
                 for r, t in zip(dout_ref, dout_test):
                     self.assertEqual(r.shape, t.shape)
-                    self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
+                    self.assertTrue(tk.allclose(r, t, atol=1e-4).item())
 
     def test_empty_matmul(self):
-        a = mx.array([[], []]).T
-        b = mx.array([[1.0, 2.0], [2.0, 3.0]])
+        a = tk.array([[], []]).T
+        b = tk.array([[1.0, 2.0], [2.0, 3.0]])
         c = a @ b
-        mx.eval(c)
+        tk.eval(c)
         self.assertEqual(c.shape, (0, 2))
 
-        a = mx.array([[1.0, 2.0], [2.0, 3.0]])
-        b = mx.array([[], []])
+        a = tk.array([[1.0, 2.0], [2.0, 3.0]])
+        b = tk.array([[], []])
         c = a @ b
-        mx.eval(c)
+        tk.eval(c)
         self.assertEqual(c.shape, (2, 0))
 
-        a = mx.array([[], []]).T
-        b = mx.array([[], []])
+        a = tk.array([[], []]).T
+        b = tk.array([[], []])
         c = a @ b
-        mx.eval(c)
+        tk.eval(c)
         self.assertEqual(c.shape, (0, 0))
 
-        c = mx.array(1.0, dtype=mx.float32)
-        a = mx.array([], dtype=mx.float32)
-        b = mx.array([], dtype=mx.float32)
-        out = mx.addmm(c, a, b)
+        c = tk.array(1.0, dtype=tk.float32)
+        a = tk.array([], dtype=tk.float32)
+        b = tk.array([], dtype=tk.float32)
+        out = tk.addmm(c, a, b)
         self.assertEqual(out.item(), 1.0)
         self.assertEqual(out.shape, ())
 
-        a = mx.ones((2, 0))
-        b = mx.ones((0, 2))
-        c = mx.ones((2, 2))
+        a = tk.ones((2, 0))
+        b = tk.ones((0, 2))
+        c = tk.ones((2, 2))
 
         test_cases = [
             (0.0, 1.0),
@@ -985,9 +993,9 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for alpha, beta in test_cases:
             with self.subTest(alpha=alpha, beta=beta):
-                result = mx.addmm(c, a, b, alpha=alpha, beta=beta)
+                result = tk.addmm(c, a, b, alpha=alpha, beta=beta)
                 expected = c * beta  # a @ b = 0 for empty matrices
-                self.assertTrue(mx.allclose(result, expected))
+                self.assertTrue(tk.allclose(result, expected))
 
         shapes_tests = [
             ((3, 0), (0, 3), (3, 3)),
@@ -998,19 +1006,19 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for shape_a, shape_b, shape_c in shapes_tests:
             with self.subTest(shape_a=shape_a, shape_b=shape_b, shape_c=shape_c):
-                a = mx.ones(shape_a)
-                b = mx.ones(shape_b)
-                c = mx.ones(shape_c)
-                result = mx.addmm(c, a, b, alpha=0.5, beta=2.0)
+                a = tk.ones(shape_a)
+                b = tk.ones(shape_b)
+                c = tk.ones(shape_c)
+                result = tk.addmm(c, a, b, alpha=0.5, beta=2.0)
                 expected = c * 2.0
-                self.assertTrue(mx.allclose(result, expected))
+                self.assertTrue(tk.allclose(result, expected))
 
-        a = mx.ones((2, 5, 0))
-        b = mx.ones((2, 0, 5))
-        c = mx.ones((2, 5, 5))
-        result = mx.addmm(c, a, b, alpha=0.0, beta=3.0)
+        a = tk.ones((2, 5, 0))
+        b = tk.ones((2, 0, 5))
+        c = tk.ones((2, 5, 5))
+        result = tk.addmm(c, a, b, alpha=0.0, beta=3.0)
         expected = c * 3.0
-        self.assertTrue(mx.allclose(result, expected))
+        self.assertTrue(tk.allclose(result, expected))
 
     def test_block_masked_matmul(self):
         def ref_block_masked_mm(
@@ -1025,13 +1033,13 @@ class TestBlas(mlx_tests.MLXTestCase):
 
             # Expand mask dims
             def expand_mask(mask, block_size, Y, X):
-                mask = mx.expand_dims(mask, (-3, -1))
+                mask = tk.expand_dims(mask, (-3, -1))
                 mask_shape = list(bsx_shape) + list(mask.shape[-4:])
                 mask_shape[-1] = block_size
                 x = mask_shape[-2] * block_size
                 mask_shape[-3] = block_size
                 y = mask_shape[-4] * block_size
-                mask = mx.broadcast_to(mask, mask_shape)
+                mask = tk.broadcast_to(mask, mask_shape)
                 mask_shape = mask_shape[:-4] + [y, x]
                 return mask.reshape(mask_shape)[..., :Y, :X]
 
@@ -1039,17 +1047,17 @@ class TestBlas(mlx_tests.MLXTestCase):
             b_masked = b
 
             if lhs_mask is not None:
-                lhs_mask = expand_mask(lhs_mask, block_size, M, K).astype(mx.float32)
+                lhs_mask = expand_mask(lhs_mask, block_size, M, K).astype(tk.float32)
                 a_masked = lhs_mask * a_masked
 
             if rhs_mask is not None:
-                rhs_mask = expand_mask(rhs_mask, block_size, K, N).astype(mx.float32)
+                rhs_mask = expand_mask(rhs_mask, block_size, K, N).astype(tk.float32)
                 b_masked = rhs_mask * b_masked
 
             out = a_masked @ b_masked
 
             if out_mask is not None:
-                out_mask = expand_mask(out_mask, block_size, M, N).astype(mx.float32)
+                out_mask = expand_mask(out_mask, block_size, M, N).astype(tk.float32)
                 out = out * out_mask
             return out
 
@@ -1058,16 +1066,16 @@ class TestBlas(mlx_tests.MLXTestCase):
                 return ref_block_masked_mm(a_, b_, block_size, out_mask, a_mask, b_mask)
 
             def f_test(a_, b_):
-                return mx.block_masked_mm(a_, b_, block_size, out_mask, a_mask, b_mask)
+                return tk.block_masked_mm(a_, b_, block_size, out_mask, a_mask, b_mask)
 
-            out_ref, dout_ref = mx.vjp(f_ref, [a, b], [cotan])
-            out_test, dout_test = mx.vjp(f_test, [a, b], [cotan])
+            out_ref, dout_ref = tk.vjp(f_ref, [a, b], [cotan])
+            out_test, dout_test = tk.vjp(f_test, [a, b], [cotan])
 
-            self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
+            self.assertTrue(tk.allclose(out_ref[0], out_test[0], atol=1e-5).item())
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertEqual(r.shape, t.shape)
-                self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
+                self.assertTrue(tk.allclose(r, t, atol=1e-4).item())
 
         def run_test_mask_vjp(a, b, block_size, out_mask, a_mask, b_mask, cotan):
             def f_ref(a_, b_, a_mask_, b_mask_):
@@ -1076,27 +1084,27 @@ class TestBlas(mlx_tests.MLXTestCase):
                 )
 
             def f_test(a_, b_, a_mask_, b_mask_):
-                return mx.block_masked_mm(
+                return tk.block_masked_mm(
                     a_, b_, block_size, out_mask, a_mask_, b_mask_
                 )
 
-            out_ref, dout_ref = mx.vjp(f_ref, [a, b, a_mask, b_mask], [cotan])
-            out_test, dout_test = mx.vjp(f_test, [a, b, a_mask, b_mask], [cotan])
+            out_ref, dout_ref = tk.vjp(f_ref, [a, b, a_mask, b_mask], [cotan])
+            out_test, dout_test = tk.vjp(f_test, [a, b, a_mask, b_mask], [cotan])
 
-            mx.eval((out_ref, dout_ref, out_test, dout_test))
+            tk.eval((out_ref, dout_ref, out_test, dout_test))
 
-            self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
+            self.assertTrue(tk.allclose(out_ref[0], out_test[0], atol=1e-5).item())
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertEqual(r.shape, t.shape)
-                self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
+                self.assertTrue(tk.allclose(r, t, atol=1e-4).item())
 
         def make_mask(tm_, tn_, batch, np_dtype):
             arr_np_mask = np.random.normal(size=batch + (tm_, tn_)).astype(np_dtype)
             arr_np_bool_mask = arr_np_mask < 0.0
             arr_np_mask[arr_np_bool_mask] = 0.0
 
-            return mx.array(arr_np_bool_mask), mx.array(arr_np_mask)
+            return tk.array(arr_np_bool_mask), tk.array(arr_np_mask)
 
         def test_shape(
             M,
@@ -1119,13 +1127,13 @@ class TestBlas(mlx_tests.MLXTestCase):
                 batch_B=batch_B,
             ):
                 batch_out = np.broadcast_shapes(batch_A, batch_B)
-                cotan = mx.ones(batch_out + (M, N))
+                cotan = tk.ones(batch_out + (M, N))
 
                 a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
                 b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
 
-                a_mx = mx.array(a_np)
-                b_mx = mx.array(b_np)
+                a_mx = tk.array(a_np)
+                b_mx = tk.array(b_np)
 
                 tm = (M + block_size - 1) // block_size
                 tn = (N + block_size - 1) // block_size
@@ -1192,17 +1200,17 @@ class TestBlas(mlx_tests.MLXTestCase):
         e_mask_np[e_mask_np < 0.0] = 0.0
         c_mask_np[c_mask_np < 0.0] = 0.0
 
-        a_mx = mx.array(a_np)
-        b_mx = mx.array(b_np)
-        d_mx = mx.array(d_np)
-        a_mask_mx = mx.array(a_mask_np)
-        b_mask_mx = mx.array(b_mask_np)
-        d_mask_mx = mx.array(d_mask_np)
-        e_mask_mx = mx.array(e_mask_np)
-        c_mask_mx = mx.array(c_mask_np)
+        a_mx = tk.array(a_np)
+        b_mx = tk.array(b_np)
+        d_mx = tk.array(d_np)
+        a_mask_mx = tk.array(a_mask_np)
+        b_mask_mx = tk.array(b_mask_np)
+        d_mask_mx = tk.array(d_mask_np)
+        e_mask_mx = tk.array(e_mask_np)
+        c_mask_mx = tk.array(c_mask_np)
 
-        c_mx = mx.block_masked_mm(a_mx.T, b_mx, 32, c_mask_mx, a_mask_mx.T, b_mask_mx)
-        e_mx = mx.block_masked_mm(d_mx, a_mx.T, 32, e_mask_mx, d_mask_mx, a_mask_mx.T)
+        c_mx = tk.block_masked_mm(a_mx.T, b_mx, 32, c_mask_mx, a_mask_mx.T, b_mask_mx)
+        e_mx = tk.block_masked_mm(d_mx, a_mx.T, 32, e_mask_mx, d_mask_mx, a_mask_mx.T)
 
         a_mask_np = np.broadcast_to(np.expand_dims(a_mask_np, (-3, -1)), (4, 32, 8, 32))
         a_mask_np = a_mask_np.reshape((128, 256))
@@ -1256,15 +1264,15 @@ class TestBlas(mlx_tests.MLXTestCase):
                 a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
                 b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
 
-                a_mx = mx.array(a_np)
-                b_mx = mx.array(b_np)
+                a_mx = tk.array(a_np)
+                b_mx = tk.array(b_np)
 
                 out_np = np_gather_mm(a_np, b_np, lhs_indices, rhs_indices)
 
-                lhs_indices_mx = None if lhs_indices is None else mx.array(lhs_indices)
-                rhs_indices_mx = None if rhs_indices is None else mx.array(rhs_indices)
+                lhs_indices_mx = None if lhs_indices is None else tk.array(lhs_indices)
+                rhs_indices_mx = None if rhs_indices is None else tk.array(rhs_indices)
 
-                out_mx = mx.gather_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+                out_mx = tk.gather_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
 
                 self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
@@ -1318,8 +1326,8 @@ class TestBlas(mlx_tests.MLXTestCase):
         # Add tests for broadcasting
         a_np = np.random.normal(size=(5, 32, 32)).astype(np.float32)
         b_np = np.random.normal(size=(3, 32, 32)).astype(np.float32)
-        a_mx = mx.array(a_np)
-        b_mx = mx.array(b_np)
+        a_mx = tk.array(a_np)
+        b_mx = tk.array(b_np)
 
         # Numpy
         a_np = a_np.reshape((5, 1, 32, 32))
@@ -1333,25 +1341,25 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         out_np = np_gather_mm(a_np, b_np, lhs_indices, rhs_indices)
 
-        # MLX
+        # Tiki
         a_mx = a_mx.reshape((5, 1, 32, 32))
         b_mx = b_mx.reshape((1, 3, 32, 32))
 
-        a_mx = mx.broadcast_to(a_mx, (5, 4, 32, 32))
-        b_mx = mx.broadcast_to(b_mx, (2, 3, 32, 32)).swapaxes(1, 0)
+        a_mx = tk.broadcast_to(a_mx, (5, 4, 32, 32))
+        b_mx = tk.broadcast_to(b_mx, (2, 3, 32, 32)).swapaxes(1, 0)
 
-        lhs_indices_mx = mx.array(lhs_indices)
-        rhs_indices_mx = mx.array(rhs_indices)
+        lhs_indices_mx = tk.array(lhs_indices)
+        rhs_indices_mx = tk.array(rhs_indices)
 
-        out_mx = mx.gather_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+        out_mx = tk.gather_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
 
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
         # Gemv test
         a_np = np.random.normal(size=(5, 1, 32)).astype(np.float32)
         b_np = np.random.normal(size=(3, 16, 32)).astype(np.float32)
-        a_mx = mx.array(a_np)
-        b_mx = mx.array(b_np)
+        a_mx = tk.array(a_np)
+        b_mx = tk.array(b_np)
 
         lhs_indices = [3, 1]
         rhs_indices = [0, 2]
@@ -1359,16 +1367,16 @@ class TestBlas(mlx_tests.MLXTestCase):
         b_np_t = np.swapaxes(b_np, -1, -2)
         out_np = np_gather_mm(a_np, b_np_t, lhs_indices, rhs_indices)
 
-        lhs_indices_mx = mx.array(lhs_indices)
-        rhs_indices_mx = mx.array(rhs_indices)
+        lhs_indices_mx = tk.array(lhs_indices)
+        rhs_indices_mx = tk.array(rhs_indices)
 
-        b_mx_t = mx.swapaxes(b_mx, -1, -2)
-        out_mx = mx.gather_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
+        b_mx_t = tk.swapaxes(b_mx, -1, -2)
+        out_mx = tk.gather_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
 
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
     def test_gather_mm_blocks(self):
-        if mx.default_device() == mx.cpu:
+        if tk.default_device() == tk.cpu:
             self.skipTest("requires GPU")
 
         # Eligible gathered products with few-row blocks route to the wide
@@ -1377,30 +1385,30 @@ class TestBlas(mlx_tests.MLXTestCase):
             with self.subTest(dtype=str(dtype), G=G, M=M, idx=idx_shape):
                 np.random.seed(11)
                 scale = K**-0.5
-                a_mx = mx.array(
+                a_mx = tk.array(
                     np.random.normal(0.0, scale, (G, M, K)).astype(np.float32)
                 ).astype(dtype)
-                w_mx = mx.array(
+                w_mx = tk.array(
                     np.random.normal(0.0, scale, (E, N, K)).astype(np.float32)
                 ).astype(dtype)
-                a_np = np.array(a_mx.astype(mx.float32))
-                w_np = np.array(w_mx.astype(mx.float32))
+                a_np = np.array(a_mx.astype(tk.float32))
+                w_np = np.array(w_mx.astype(tk.float32))
                 rhs = np.random.randint(0, E, size=idx_shape).astype(np.uint32)
 
                 out_np = np.stack(
                     [a_np[i % G] @ w_np[r].T for i, r in enumerate(rhs.reshape(-1))]
                 ).reshape(*idx_shape, M, N)
-                out_mx = mx.gather_mm(
+                out_mx = tk.gather_mm(
                     a_mx.reshape(*idx_shape, M, K),
-                    mx.swapaxes(w_mx, -1, -2),
+                    tk.swapaxes(w_mx, -1, -2),
                     None,
-                    mx.array(rhs),
-                ).astype(mx.float32)
+                    tk.array(rhs),
+                ).astype(tk.float32)
 
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
 
-        for dtype in (mx.float32, mx.float16, mx.bfloat16):
+        for dtype in (tk.float32, tk.float16, tk.bfloat16):
             for M in (2, 4, 5, 11):
                 run_test(dtype, 6, M, 2048, 1024, 8, (6,))
             run_test(dtype, 6, 3, 2048, 1024, 8, (2, 3))
@@ -1409,32 +1417,32 @@ class TestBlas(mlx_tests.MLXTestCase):
             with self.subTest(dtype=str(dtype), idx="scalar"):
                 np.random.seed(11)
                 scale = 512**-0.5
-                a_mx = mx.array(
+                a_mx = tk.array(
                     np.random.normal(0.0, scale, (4, 512)).astype(np.float32)
                 ).astype(dtype)
-                w_mx = mx.array(
+                w_mx = tk.array(
                     np.random.normal(0.0, scale, (8, 129, 512)).astype(np.float32)
                 ).astype(dtype)
                 out_np = (
-                    np.array(a_mx.astype(mx.float32))
-                    @ np.array(w_mx[3].astype(mx.float32)).T
+                    np.array(a_mx.astype(tk.float32))
+                    @ np.array(w_mx[3].astype(tk.float32)).T
                 )
-                out_mx = mx.gather_mm(
+                out_mx = tk.gather_mm(
                     a_mx,
-                    mx.swapaxes(w_mx, -1, -2),
+                    tk.swapaxes(w_mx, -1, -2),
                     None,
-                    mx.array(3, dtype=mx.uint32),
-                ).astype(mx.float32)
+                    tk.array(3, dtype=tk.uint32),
+                ).astype(tk.float32)
                 self.assertListEqual(list(out_np.shape), list(out_mx.shape))
                 self.assertTrue(np.allclose(out_mx, out_np, atol=0.05 * scale))
 
     def test_gather_matmul_grad(self):
-        lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
-        rhs_indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+        lhs_indices = tk.array([[7, 6], [4, 1], [0, 2]], dtype=tk.uint32)
+        rhs_indices = tk.array([[2], [0], [1]], dtype=tk.uint32)
 
         def f_ref(a, b):
-            lhs_indices_ = mx.broadcast_to(lhs_indices, (3, 2))
-            rhs_indices_ = mx.broadcast_to(rhs_indices, (3, 2))
+            lhs_indices_ = tk.broadcast_to(lhs_indices, (3, 2))
+            rhs_indices_ = tk.broadcast_to(rhs_indices, (3, 2))
             M = a.shape[-2]
             N = b.shape[-1]
             K = a.shape[-1]
@@ -1442,29 +1450,29 @@ class TestBlas(mlx_tests.MLXTestCase):
             a = a.reshape((-1, M, K))
             b = b.reshape((-1, K, N))
 
-            a = mx.take(a, lhs_indices_, 0)
-            b = mx.take(b, rhs_indices_, 0)
+            a = tk.take(a, lhs_indices_, 0)
+            b = tk.take(b, rhs_indices_, 0)
 
             return a @ b
 
         def f_test(a, b):
-            return mx.gather_mm(a, b, lhs_indices, rhs_indices)
+            return tk.gather_mm(a, b, lhs_indices, rhs_indices)
 
-        a_mx = mx.random.normal((4, 2, 32, 32))
-        b_mx = mx.random.normal((4, 1, 32, 32))
+        a_mx = tk.random.normal((4, 2, 32, 32))
+        b_mx = tk.random.normal((4, 1, 32, 32))
 
         out_test = f_test(a_mx, b_mx)
         out_ref = f_ref(a_mx, b_mx)
 
-        self.assertTrue(mx.allclose(out_test, out_ref, atol=1e-5))
+        self.assertTrue(tk.allclose(out_test, out_ref, atol=1e-5))
 
-        cotan = mx.ones_like(out_test)
-        out_ref, dout_ref = mx.vjp(
+        cotan = tk.ones_like(out_test)
+        out_ref, dout_ref = tk.vjp(
             f_ref,
             [a_mx, b_mx],
             [cotan],
         )
-        out_test, dout_test = mx.vjp(
+        out_test, dout_test = tk.vjp(
             f_test,
             [a_mx, b_mx],
             [cotan],
@@ -1472,25 +1480,25 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for r, t in zip(dout_ref, dout_test):
             self.assertEqual(r.shape, t.shape)
-            self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
+            self.assertTrue(tk.allclose(r, t, atol=1e-4).item())
 
     def test_gather_matmul_index_vjp_requires_stop_gradient(self):
-        a = mx.ones((4, 1, 2, 2))
-        b = mx.ones((4, 1, 2, 2))
+        a = tk.ones((4, 1, 2, 2))
+        b = tk.ones((4, 1, 2, 2))
 
         def fun(w):
-            indices = mx.reshape(mx.argsort(w)[:2], (1, 2))
-            return mx.gather_mm(a, b, indices, indices).sum()
+            indices = tk.reshape(tk.argsort(w)[:2], (1, 2))
+            return tk.gather_mm(a, b, indices, indices).sum()
 
         with self.assertRaisesRegex(ValueError, "stop_gradient"):
-            mx.grad(fun)(mx.array([3.0, 1.0, 2.0, 0.0]))
+            tk.grad(fun)(tk.array([3.0, 1.0, 2.0, 0.0]))
 
         def fun_stopped(w):
-            indices = mx.stop_gradient(mx.reshape(mx.argsort(w)[:2], (1, 2)))
-            return mx.gather_mm(a, b, indices, indices).sum()
+            indices = tk.stop_gradient(tk.reshape(tk.argsort(w)[:2], (1, 2)))
+            return tk.gather_mm(a, b, indices, indices).sum()
 
-        grad = mx.grad(fun_stopped)(mx.array([3.0, 1.0, 2.0, 0.0]))
-        self.assertTrue(mx.array_equal(grad, mx.zeros((4,))))
+        grad = tk.grad(fun_stopped)(tk.array([3.0, 1.0, 2.0, 0.0]))
+        self.assertTrue(tk.array_equal(grad, tk.zeros((4,))))
 
     def test_gather_mm_sorted(self):
         def gather_mm_ref(a, b, rhs):
@@ -1498,27 +1506,27 @@ class TestBlas(mlx_tests.MLXTestCase):
             return a @ b
 
         def gather_mm_test(a, b, rhs):
-            return mx.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
+            return tk.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
 
-        dtypes = [(mx.float32, 1e-4)]
-        if mx.cuda.is_available():
+        dtypes = [(tk.float32, 1e-4)]
+        if tk.cuda.is_available():
             dtypes += [
-                (mx.float16, 1e-3),
-                (mx.bfloat16, 1e-2),
+                (tk.float16, 1e-3),
+                (tk.bfloat16, 1e-2),
             ]
 
         for b_transposed in (True, False):
             for dtype, tol in dtypes:
                 with self.subTest(b_transposed=b_transposed, dtype=dtype):
-                    a = mx.random.normal((100, 1, 100), dtype=dtype)
-                    b = mx.random.normal((8, 100, 100), dtype=dtype)
+                    a = tk.random.normal((100, 1, 100), dtype=dtype)
+                    b = tk.random.normal((8, 100, 100), dtype=dtype)
                     if b_transposed:
                         b = b.swapaxes(-1, -2)
-                    rhs = mx.sort(mx.random.randint(0, 8, shape=(100,)))
+                    rhs = tk.sort(tk.random.randint(0, 8, shape=(100,)))
 
                     c1 = gather_mm_ref(a, b, rhs)
                     c2 = gather_mm_test(a, b, rhs)
-                    self.assertTrue(mx.allclose(c1, c2, rtol=tol, atol=tol))
+                    self.assertTrue(tk.allclose(c1, c2, rtol=tol, atol=tol))
 
     def test_gather_mm_sorted_vjp(self):
         def gather_mm_ref(a, b, rhs):
@@ -1526,26 +1534,26 @@ class TestBlas(mlx_tests.MLXTestCase):
             return a @ b
 
         def gather_mm_test(a, b, rhs):
-            return mx.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
+            return tk.gather_mm(a, b, rhs_indices=rhs, sorted_indices=True)
 
-        a = mx.random.normal((100, 1, 100))
-        b = mx.random.normal((8, 100, 100))
-        rhs = mx.sort(mx.random.randint(0, 8, shape=(100,)))
+        a = tk.random.normal((100, 1, 100))
+        b = tk.random.normal((8, 100, 100))
+        rhs = tk.sort(tk.random.randint(0, 8, shape=(100,)))
 
-        cotan = mx.random.normal((100, 1, 100))
-        c1, dc1 = mx.vjp(
+        cotan = tk.random.normal((100, 1, 100))
+        c1, dc1 = tk.vjp(
             lambda a, b: gather_mm_ref(a, b, rhs),
             [a, b],
             [cotan],
         )
-        c2, dc2 = mx.vjp(
+        c2, dc2 = tk.vjp(
             lambda a, b: gather_mm_test(a, b, rhs),
             [a, b],
             [cotan],
         )
-        self.assertTrue(mx.allclose(c1[0], c2[0], atol=1e-4))
-        self.assertTrue(mx.allclose(dc1[0], dc2[0], atol=1e-4))
-        self.assertTrue(mx.allclose(dc1[1], dc2[1], atol=1e-4))
+        self.assertTrue(tk.allclose(c1[0], c2[0], atol=1e-4))
+        self.assertTrue(tk.allclose(dc1[0], dc2[0], atol=1e-4))
+        self.assertTrue(tk.allclose(dc1[1], dc2[1], atol=1e-4))
 
     def test_segmented_mm(self):
         def segmented_mm_ref(a, b, s):
@@ -1553,7 +1561,7 @@ class TestBlas(mlx_tests.MLXTestCase):
             c = []
             for s1, s2 in s:
                 c.append(a[:, s1:s2] @ b[s1:s2, :])
-            return mx.stack(c, axis=0)
+            return tk.stack(c, axis=0)
 
         shapes = [
             (10, 10, 10),
@@ -1567,89 +1575,89 @@ class TestBlas(mlx_tests.MLXTestCase):
                 segments = []
                 for i in range(len(s) - 1):
                     segments.append([s[i], s[i + 1]])
-                segments = mx.array(segments)
-                segments = mx.minimum(K - 1, (K * segments).astype(mx.uint32))
-                a = mx.random.normal((M, K))
-                b = mx.random.normal((K, N))
+                segments = tk.array(segments)
+                segments = tk.minimum(K - 1, (K * segments).astype(tk.uint32))
+                a = tk.random.normal((M, K))
+                b = tk.random.normal((K, N))
                 c1 = segmented_mm_ref(a, b, segments)
-                c2 = mx.segmented_mm(a, b, segments)
-                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+                c2 = tk.segmented_mm(a, b, segments)
+                self.assertTrue(tk.allclose(c1, c2, atol=1e-4))
 
-                a = mx.random.normal((K, M))
-                b = mx.random.normal((K, N))
+                a = tk.random.normal((K, M))
+                b = tk.random.normal((K, N))
                 c1 = segmented_mm_ref(a.T, b, segments)
-                c2 = mx.segmented_mm(a.T, b, segments)
-                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+                c2 = tk.segmented_mm(a.T, b, segments)
+                self.assertTrue(tk.allclose(c1, c2, atol=1e-4))
 
-                a = mx.random.normal((M, K))
-                b = mx.random.normal((N, K))
+                a = tk.random.normal((M, K))
+                b = tk.random.normal((N, K))
                 c1 = segmented_mm_ref(a, b.T, segments)
-                c2 = mx.segmented_mm(a, b.T, segments)
-                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+                c2 = tk.segmented_mm(a, b.T, segments)
+                self.assertTrue(tk.allclose(c1, c2, atol=1e-4))
 
-                a = mx.random.normal((K, M))
-                b = mx.random.normal((N, K))
+                a = tk.random.normal((K, M))
+                b = tk.random.normal((N, K))
                 c1 = segmented_mm_ref(a.T, b.T, segments)
-                c2 = mx.segmented_mm(a.T, b.T, segments)
-                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+                c2 = tk.segmented_mm(a.T, b.T, segments)
+                self.assertTrue(tk.allclose(c1, c2, atol=1e-4))
 
         with self.assertRaises(ValueError):
-            a = mx.ones((2, 10, 10))
-            s = mx.array([[0, 5], [5, 10]]).astype(mx.uint32)
-            mx.segmented_mm(a, a, s)
+            a = tk.ones((2, 10, 10))
+            s = tk.array([[0, 5], [5, 10]]).astype(tk.uint32)
+            tk.segmented_mm(a, a, s)
 
-        a = mx.ones((10, 1000))
-        s = mx.random.randint(0, 16, shape=(1000,))
-        s = mx.zeros(16, dtype=s.dtype).at[s].add(1)
-        s = mx.sort(s)
-        s = mx.cumsum(s)
-        s = mx.concatenate([mx.array([0]), s])
-        s = mx.as_strided(s, (16, 2), (1, 1))
-        s = mx.reshape(s, (2, 2, 4, 2))
-        c = mx.segmented_mm(a, a.T, s)
+        a = tk.ones((10, 1000))
+        s = tk.random.randint(0, 16, shape=(1000,))
+        s = tk.zeros(16, dtype=s.dtype).at[s].add(1)
+        s = tk.sort(s)
+        s = tk.cumsum(s)
+        s = tk.concatenate([tk.array([0]), s])
+        s = tk.as_strided(s, (16, 2), (1, 1))
+        s = tk.reshape(s, (2, 2, 4, 2))
+        c = tk.segmented_mm(a, a.T, s)
         self.assertEqual(c.shape, (2, 2, 4, 10, 10))
 
     def test_gemv_gemm_same_precision(self):
-        mx.random.seed(0)
+        tk.random.seed(0)
         N = 256
-        if mx.is_available(mx.gpu):
-            t = mx.bfloat16
-            a = mx.random.normal([1, N]).astype(t)
-            b = mx.concatenate([a, a], axis=0).astype(t)
-            c = mx.random.normal([N, 64]).astype(t)
+        if tk.is_available(tk.gpu):
+            t = tk.bfloat16
+            a = tk.random.normal([1, N]).astype(t)
+            b = tk.concatenate([a, a], axis=0).astype(t)
+            c = tk.random.normal([N, 64]).astype(t)
             out_gemv = a @ c
             out_gemm = (b @ c)[0]
-            self.assertTrue(mx.allclose(out_gemv, out_gemm))
+            self.assertTrue(tk.allclose(out_gemv, out_gemm))
 
     def test_complex_gemv(self):
         M = 16
         N = 50
 
         def rand(shape):
-            return mx.random.uniform(shape=shape) + 1j * mx.random.uniform(shape=shape)
+            return tk.random.uniform(shape=shape) + 1j * tk.random.uniform(shape=shape)
 
         a = rand((M, N))
         b = rand((N, 1))
-        c = mx.matmul(a, b)
+        c = tk.matmul(a, b)
         c_np = np.matmul(a, b)
         self.assertTrue(np.allclose(c, c_np))
 
         # Transposed
         a = rand((N, M))
         b = rand((N, 1))
-        c = mx.matmul(a.T, b)
+        c = tk.matmul(a.T, b)
         c_np = np.matmul(np.array(a).T, b)
         self.assertTrue(np.allclose(c, c_np))
 
         # Check shapes
-        a = mx.random.normal((2, 3)).astype(mx.complex64)
-        b = mx.random.normal((3,))
+        a = tk.random.normal((2, 3)).astype(tk.complex64)
+        b = tk.random.normal((3,))
         self.assertEqual((a @ b).shape, (2,))
 
-        a = mx.random.normal((2, 3)).astype(mx.complex64)
-        b = mx.random.normal((3,))
-        c = mx.random.normal((2,))
-        self.assertEqual(mx.addmm(c, a, b).shape, (2,))
+        a = tk.random.normal((2, 3)).astype(tk.complex64)
+        b = tk.random.normal((3,))
+        c = tk.random.normal((2,))
+        self.assertEqual(tk.addmm(c, a, b).shape, (2,))
 
     def test_complex_gemm(self):
         M = 16
@@ -1657,11 +1665,11 @@ class TestBlas(mlx_tests.MLXTestCase):
         N = 32
 
         def rand(shape):
-            return mx.random.uniform(shape=shape) + 1j * mx.random.uniform(shape=shape)
+            return tk.random.uniform(shape=shape) + 1j * tk.random.uniform(shape=shape)
 
         a = rand((M, K))
         b = rand((K, N))
-        c = mx.matmul(a, b)
+        c = tk.matmul(a, b)
         c_np = np.matmul(a, b)
         self.assertTrue(np.allclose(c, c_np))
 
@@ -1669,17 +1677,17 @@ class TestBlas(mlx_tests.MLXTestCase):
         a = rand((M, K))
         b = rand((K, N))
         c = rand((M, N))
-        out = mx.addmm(c, a, b, 2.0, 2.0)
+        out = tk.addmm(c, a, b, 2.0, 2.0)
         out_np = 2.0 * np.matmul(a, b) + 2.0 * c
         self.assertTrue(np.allclose(out, out_np))
 
         # complex with real
         a = rand((M, K)).real
         b = rand((K, N))
-        c = mx.matmul(a, b)
+        c = tk.matmul(a, b)
         c_np = np.matmul(a, b)
         self.assertTrue(np.allclose(out, out_np))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

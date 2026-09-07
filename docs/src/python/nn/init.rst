@@ -1,32 +1,32 @@
 .. _init:
 
-.. currentmodule:: mlx.nn.init
+.. currentmodule:: tiki.nn.init
 
 Initializers
 ------------
 
-The ``mlx.nn.init`` package contains commonly used initializers for neural
+The ``tiki.nn.init`` package contains commonly used initializers for neural
 network parameters. Initializers return a function which can be applied to any
-input :obj:`mlx.core.array` to produce an initialized output.
+input :obj:`tiki.array` to produce an initialized output.
 
 For example:
 
 .. code:: python
 
-   import mlx.core as mx
-   import mlx.nn as nn
+   import tiki as tk
+   import tiki.nn as nn
 
    init_fn = nn.init.uniform()
 
    # Produces a [2, 2] uniform matrix
-   param = init_fn(mx.zeros((2, 2)))
+   param = init_fn(tk.zeros((2, 2)))
 
-To re-initialize all the parameter in an :obj:`mlx.nn.Module` from say a uniform 
+To re-initialize all the parameter in an :obj:`tiki.nn.Module` from say a uniform 
 distribution, you can do:
 
 .. code:: python
   
-   import mlx.nn as nn
+   import tiki.nn as nn
    model = nn.Sequential(nn.Linear(5, 10), nn.ReLU(), nn.Linear(10, 5))
    init_fn = nn.init.uniform(low=-0.1, high=0.1)
    model.apply(init_fn)

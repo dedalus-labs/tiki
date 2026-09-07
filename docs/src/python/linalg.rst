@@ -3,7 +3,7 @@
 Linear Algebra
 ==============
 
-.. currentmodule:: mlx.core.linalg
+.. currentmodule:: tiki.linalg
 
 .. autosummary::
    :toctree: _autosummary

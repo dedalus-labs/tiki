@@ -110,10 +110,10 @@ runs:
       if: runner.os == 'Linux' && startsWith(inputs.toolkit, 'cuda')
       uses: actions/cache@v5
       with:
-        path: /tmp/mlx-ptx-cache
+        path: /tmp/tiki-ptx-cache
         key: >-
           ptx-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolkit }}-
-          ${{ hashFiles('mlx/backend/cuda/**') }}
+          ${{ hashFiles('tiki/backend/cuda/**') }}
 
     - name: Setup Python venv
       if: runner.os != 'Windows'
@@ -128,7 +128,7 @@ runs:
         echo PYTHONPATH=`python -c 'import sys; print(sys.path[-1])'` >> $GITHUB_ENV
         # Use PTX ccache for CUDA.
         if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
-          echo MLX_PTX_CACHE_DIR=/tmp/mlx-ptx-cache >> $GITHUB_ENV
+          echo TIKI_PTX_CACHE_DIR=/tmp/tiki-ptx-cache >> $GITHUB_ENV
         fi
 
     - name: Setup Python venv (Windows)
@@ -229,11 +229,11 @@ runs:
         )
         if ${{ runner.os == 'macOS' }} ; then
           if ${{ inputs.toolkit == 'cpu' }} ; then
-            cmakeArgs+=("-DMLX_BUILD_METAL=OFF")
+            cmakeArgs+=("-DTIKI_BUILD_METAL=OFF")
           else
-            cmakeArgs+=("-DMLX_BUILD_METAL=ON")
+            cmakeArgs+=("-DTIKI_BUILD_METAL=ON")
             if ${{ inputs.toolkit == 'jit' }} ; then
-              cmakeArgs+=("-DMLX_METAL_JIT=ON")
+              cmakeArgs+=("-DTIKI_METAL_JIT=ON")
             fi
           fi
         fi
@@ -249,14 +249,14 @@ runs:
           )
         fi
         if ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
-          cmakeArgs+=("-DMLX_BUILD_CUDA=ON")
+          cmakeArgs+=("-DTIKI_BUILD_CUDA=ON")
           # Some machines have no GPU.
           if ! __nvcc_device_query ; then
             # Use a fallback arch for testing.
-            cmakeArgs+=("-DMLX_CUDA_ARCHITECTURES=80")
+            cmakeArgs+=("-DTIKI_CUDA_ARCHITECTURES=80")
             # Can not build tests and stubs when the built executables can not run.
-            cmakeArgs+=("-DMLX_BUILD_TESTS=OFF")
-            cmakeArgs+=("-DMLX_BUILD_PYTHON_STUBS=OFF")
+            cmakeArgs+=("-DTIKI_BUILD_TESTS=OFF")
+            cmakeArgs+=("-DTIKI_BUILD_PYTHON_STUBS=OFF")
           fi
           echo
           # Set cuDNN paths.
@@ -267,7 +267,7 @@ runs:
             )
           fi
         else
-          cmakeArgs+=("-DMLX_BUILD_CUDA=OFF")
+          cmakeArgs+=("-DTIKI_BUILD_CUDA=OFF")
         fi
         # Pass to following steps.
         IFS=" "

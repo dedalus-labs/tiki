@@ -1,8 +1,8 @@
 # Copyright © 2024 Apple Inc.
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx.utils
+import tiki as tk
+import tiki.nn as nn
+import tiki.utils
 
 
 class MLP(nn.Module):
@@ -31,22 +31,22 @@ if __name__ == "__main__":
     output_dim = 10
 
     # Load the model
-    mx.random.seed(0)  # Seed for params
+    tk.random.seed(0)  # Seed for params
     model = MLP(num_layers=5, input_dim=input_dim, hidden_dim=64, output_dim=output_dim)
-    mx.eval(model)
+    tk.eval(model)
 
     # Note, the model parameters are saved in the export function
     def forward(x):
         return model(x)
 
-    mx.random.seed(42)  # Seed for input
-    example_x = mx.random.uniform(shape=(batch_size, input_dim))
+    tk.random.seed(42)  # Seed for input
+    example_x = tk.random.uniform(shape=(batch_size, input_dim))
 
-    mx.export_function("eval_mlp.mlxfn", forward, example_x)
+    tk.export_function("eval_mlp.tkfn", forward, example_x)
 
     # Import in Python
-    imported_forward = mx.import_function("eval_mlp.mlxfn")
+    imported_forward = tk.import_function("eval_mlp.tkfn")
     expected = forward(example_x)
     (out,) = imported_forward(example_x)
-    assert mx.allclose(expected, out)
+    assert tk.allclose(expected, out)
     print(out)

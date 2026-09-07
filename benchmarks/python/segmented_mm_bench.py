@@ -3,13 +3,13 @@
 import argparse
 import time
 
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 
-MLX_DTYPES = {
-    "float16": mx.float16,
-    "bfloat16": mx.bfloat16,
-    "float32": mx.float32,
+TIKI_DTYPES = {
+    "float16": tk.float16,
+    "bfloat16": tk.bfloat16,
+    "float32": tk.float32,
 }
 
 
@@ -40,41 +40,41 @@ def numpy_segmented_mm_ref(a, b, segments):
     return np.stack(out, axis=0)
 
 
-def mlx_segmented_mm_loop(a, b, segments):
-    """MLX loop-of-matmuls baseline."""
+def tiki_segmented_mm_loop(a, b, segments):
+    """Tiki loop-of-matmuls baseline."""
     segments_list = segments.tolist()
     out = []
     for start, end in segments_list:
         out.append(a[:, start:end] @ b[start:end, :])
-    return mx.stack(out, axis=0)
+    return tk.stack(out, axis=0)
 
 
-def bench_mlx(a, b, segments, warmup, iters):
+def bench_tiki(a, b, segments, warmup, iters):
     for _ in range(warmup):
-        y = mx.segmented_mm(a, b, segments)
-        mx.eval(y)
-    mx.synchronize()
+        y = tk.segmented_mm(a, b, segments)
+        tk.eval(y)
+    tk.synchronize()
 
     start = time.perf_counter()
     for _ in range(iters):
-        y = mx.segmented_mm(a, b, segments)
-        mx.eval(y)
-    mx.synchronize()
+        y = tk.segmented_mm(a, b, segments)
+        tk.eval(y)
+    tk.synchronize()
     end = time.perf_counter()
     return (end - start) * 1e3 / iters
 
 
-def bench_mlx_loop(a, b, segments, warmup, iters):
+def bench_tiki_loop(a, b, segments, warmup, iters):
     for _ in range(warmup):
-        y = mlx_segmented_mm_loop(a, b, segments)
-        mx.eval(y)
-    mx.synchronize()
+        y = tiki_segmented_mm_loop(a, b, segments)
+        tk.eval(y)
+    tk.synchronize()
 
     start = time.perf_counter()
     for _ in range(iters):
-        y = mlx_segmented_mm_loop(a, b, segments)
-        mx.eval(y)
-    mx.synchronize()
+        y = tiki_segmented_mm_loop(a, b, segments)
+        tk.eval(y)
+    tk.synchronize()
     end = time.perf_counter()
     return (end - start) * 1e3 / iters
 
@@ -130,7 +130,7 @@ def main():
     parser.add_argument("--no-check", action="store_true")
     args = parser.parse_args()
 
-    mlx_dtype = MLX_DTYPES[args.dtype]
+    tiki_dtype = TIKI_DTYPES[args.dtype]
 
     print(
         f"dtype={args.dtype} warmup={args.warmup} iters={args.iters} segments={args.segments}"
@@ -138,10 +138,10 @@ def main():
 
     headers = [
         "Case",
-        "MLX ms",
+        "Tiki ms",
         "Loop ms",
         "Speedup",
-        "MLX err",
+        "Tiki err",
         "Loop err",
     ]
     rows = []
@@ -153,17 +153,17 @@ def main():
         b_np = rng.standard_normal((k, n)).astype(np.float32)
         seg_np = make_segments(k, s, args.segments, args.seed + idx)
 
-        a_mx = mx.array(a_np, dtype=mlx_dtype)
-        b_mx = mx.array(b_np, dtype=mlx_dtype)
-        seg_mx = mx.array(seg_np, dtype=mx.uint32)
-        mx.eval(a_mx, b_mx, seg_mx)
+        a_mx = tk.array(a_np, dtype=tiki_dtype)
+        b_mx = tk.array(b_np, dtype=tiki_dtype)
+        seg_mx = tk.array(seg_np, dtype=tk.uint32)
+        tk.eval(a_mx, b_mx, seg_mx)
 
-        mlx_err_str = ""
+        tiki_err_str = ""
         loop_err_str = ""
         if not args.no_check:
-            y_mlx = mx.segmented_mm(a_mx, b_mx, seg_mx)
-            y_loop = mlx_segmented_mm_loop(a_mx, b_mx, seg_mx)
-            mx.eval(y_mlx, y_loop)
+            y_tiki = tk.segmented_mm(a_mx, b_mx, seg_mx)
+            y_loop = tiki_segmented_mm_loop(a_mx, b_mx, seg_mx)
+            tk.eval(y_tiki, y_loop)
 
             if args.dtype == "float32":
                 ref = numpy_segmented_mm_ref(
@@ -171,28 +171,28 @@ def main():
                     b_np.astype(np.float64),
                     seg_np.tolist(),
                 )
-                mlx_err = np.max(np.abs(np.array(y_mlx, dtype=np.float64) - ref))
+                tiki_err = np.max(np.abs(np.array(y_tiki, dtype=np.float64) - ref))
                 loop_err = np.max(np.abs(np.array(y_loop, dtype=np.float64) - ref))
             else:
-                a_mx_f32 = mx.array(a_np, dtype=mx.float32)
-                b_mx_f32 = mx.array(b_np, dtype=mx.float32)
-                ref = mx.segmented_mm(a_mx_f32, b_mx_f32, seg_mx)
-                mx.eval(ref)
-                mlx_err = float(mx.max(mx.abs(ref - y_mlx.astype(mx.float32))).item())
-                loop_err = float(mx.max(mx.abs(ref - y_loop.astype(mx.float32))).item())
-            mlx_err_str = f"{mlx_err:.2e}"
+                a_mx_f32 = tk.array(a_np, dtype=tk.float32)
+                b_mx_f32 = tk.array(b_np, dtype=tk.float32)
+                ref = tk.segmented_mm(a_mx_f32, b_mx_f32, seg_mx)
+                tk.eval(ref)
+                tiki_err = float(tk.max(tk.abs(ref - y_tiki.astype(tk.float32))).item())
+                loop_err = float(tk.max(tk.abs(ref - y_loop.astype(tk.float32))).item())
+            tiki_err_str = f"{tiki_err:.2e}"
             loop_err_str = f"{loop_err:.2e}"
 
-        t_mlx = bench_mlx(a_mx, b_mx, seg_mx, args.warmup, args.iters)
-        t_loop = bench_mlx_loop(a_mx, b_mx, seg_mx, args.warmup, args.iters)
-        ratio = t_loop / t_mlx if t_mlx > 0 else float("inf")
+        t_tiki = bench_tiki(a_mx, b_mx, seg_mx, args.warmup, args.iters)
+        t_loop = bench_tiki_loop(a_mx, b_mx, seg_mx, args.warmup, args.iters)
+        ratio = t_loop / t_tiki if t_tiki > 0 else float("inf")
         rows.append(
             [
                 f"{m}x{n}x{k}x{s}",
-                f"{t_mlx:.3f}",
+                f"{t_tiki:.3f}",
                 f"{t_loop:.3f}",
                 f"{ratio:.2f}x",
-                mlx_err_str,
+                tiki_err_str,
                 loop_err_str,
             ]
         )

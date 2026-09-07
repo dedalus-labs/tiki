@@ -71,7 +71,7 @@ jobs:
           debug: ${{ matrix.os != 'Windows' }}
       - name: Check generated Python stubs with ty
         if: matrix.os == 'Linux' && matrix.arch == 'x86_64' && matrix.toolkit == 'cpu'
-        run: uvx ty check python/mlx/core
+        run: uvx ty check python/tiki/core
       - uses: ./.github/actions/test-linux
         if: matrix.os == 'Linux' && (matrix.toolkit == 'cpu' || matrix.arch == 'x86_64')
       - uses: ./.github/actions/test-windows
@@ -108,10 +108,10 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: matrix.toolkit != 'cpu'
         with:
-          name: mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
+          name: tiki-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}
           path: |
-            dist/mlx-*.whl
-            build/mlx/backend/metal/kernels/mlx.metallib
+            dist/tiki-*.whl
+            build/tiki/backend/metal/kernels/tiki.metallib
             build/tests/tests
           if-no-files-found: error
 
@@ -133,7 +133,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifact
-          pattern: mlx-${{ matrix.toolkit }}-*
+          pattern: tiki-${{ matrix.toolkit }}-*
       - run: ls -lhR artifact
       - uses: ./.github/actions/test-macos
         with:

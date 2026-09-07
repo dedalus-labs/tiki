@@ -5,9 +5,9 @@
 
 #include <cstdlib>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 int main(int argc, char** argv) {
   doctest::Context context;

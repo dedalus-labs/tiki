@@ -13,17 +13,17 @@ allocator slice.
 
 Independent builds of the initial port (`9191de8d`) and atomic address lookup
 change (`1e68053f`) each pass all three
-[GPU allocator tests](../../mlx/backend/cuda/runtime/tests/forced_reuse.rs)
+[GPU allocator tests](../../tiki/backend/cuda/runtime/tests/forced_reuse.rs)
 under Compute Sanitizer memcheck, with zero reported errors. The tests check
 forced address reuse after blocking export, stream-ordered export, and cache
 accounting. They run serially because they share the global allocator.
 
-The available C++ and Rust MLX builds also pass the memory and array suites:
+The available C++ and Rust Tiki builds also pass the memory and array suites:
 107 tests run, 87 passed, and 20 skipped on each build. This includes 84 passed
 and 19 skipped in `test_array`, not 103 passed plus 19 skipped. The recorded
 `test_ops` results have 159 passed, three errors, and one skipped on each
 build. All three error sites explicitly request a CPU stream in builds with
-`MLX_BUILD_CPU=OFF`; these results do not qualify a CPU-enabled build.
+`TIKI_BUILD_CPU=OFF`; these results do not qualify a CPU-enabled build.
 
 The separate reports from exports without an explicit producer synchronization
 remain outside this qualification. This record does not attribute them to
@@ -41,7 +41,7 @@ export LD_LIBRARY_PATH="$CUDA_TOOLKIT_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_
 export CARGO_TARGET_DIR=$(mktemp -d)
 export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER="$CUDA_TOOLKIT_PATH/bin/compute-sanitizer --tool memcheck --error-exitcode 99"
 cargo test --locked --release \
-  --manifest-path mlx/backend/cuda/runtime/Cargo.toml \
+  --manifest-path tiki/backend/cuda/runtime/Cargo.toml \
   --target aarch64-unknown-linux-gnu --test forced_reuse \
   -- --ignored --test-threads=1
 ```
@@ -52,7 +52,7 @@ Cargo test run without the sanitizer runner is a separate correctness check.
 ## Host-export measurements
 
 The [host-export benchmark](repros/host_export.py) separates a warmed allocation
-cache from fresh device storage. It disables and clears the MLX cache for the
+cache from fresh device storage. It disables and clears the Tiki cache for the
 fresh-storage measurements. Each group uses five warm-up iterations followed
 by 30 measured iterations, with cache-enabled and cache-disabled groups in
 ABBA order. The timed operation is `np.asarray`; GPU production and its
@@ -67,7 +67,7 @@ python experiments/rust_backend/repros/host_export.py
 
 The GH200 measurements below are ranges of the two group medians, in
 microseconds. They compare the supplied C++ and Rust binary artifacts, not a
-new pair of full MLX builds from the source revisions above.
+new pair of full Tiki builds from the source revisions above.
 
 | Export | C++ | Rust |
 | --- | ---: | ---: |

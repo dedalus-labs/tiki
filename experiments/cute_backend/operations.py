@@ -4,7 +4,7 @@ from collections.abc import Callable
 from enum import Enum
 from functools import partial
 
-import mlx.core as mx
+import tiki as tk
 
 
 class UnsupportedGraphError(ValueError):
@@ -12,21 +12,21 @@ class UnsupportedGraphError(ValueError):
 
 
 class Operation(Enum):
-    # Names match MLX's normalized export names, so consumers need no name table.
-    Add = (2, mx.add, "arith.addf {0}, {1} : f32")
-    Subtract = (2, mx.subtract, "arith.subf {0}, {1} : f32")
-    Multiply = (2, mx.multiply, "arith.mulf {0}, {1} : f32")
-    Negative = (1, mx.negative, "arith.negf {0} : f32")
-    Square = (1, mx.square, "arith.mulf {0}, {0} : f32")
-    Rsqrt = (1, mx.rsqrt, "math.rsqrt {0} : f32")
-    Broadcast = (1, mx.broadcast_to, "{0}", True)
-    ReduceSum = (1, partial(mx.sum, axis=-1, keepdims=True), None)
-    Transpose = (1, partial(mx.transpose, axes=(1, 0)), None)
+    # Names match Tiki's normalized export names, so consumers need no name table.
+    Add = (2, tk.add, "arith.addf {0}, {1} : f32")
+    Subtract = (2, tk.subtract, "arith.subf {0}, {1} : f32")
+    Multiply = (2, tk.multiply, "arith.mulf {0}, {1} : f32")
+    Negative = (1, tk.negative, "arith.negf {0} : f32")
+    Square = (1, tk.square, "arith.mulf {0}, {0} : f32")
+    Rsqrt = (1, tk.rsqrt, "math.rsqrt {0} : f32")
+    Broadcast = (1, tk.broadcast_to, "{0}", True)
+    ReduceSum = (1, partial(tk.sum, axis=-1, keepdims=True), None)
+    Transpose = (1, partial(tk.transpose, axes=(1, 0)), None)
 
     def __init__(
         self,
         arity: int,
-        evaluate: Callable[..., mx.array],
+        evaluate: Callable[..., tk.array],
         scalar_template: str | None,
         takes_shape: bool = False,
     ) -> None:
@@ -40,9 +40,11 @@ class Operation(Enum):
         try:
             return cls[name]
         except KeyError as error:
-            raise UnsupportedGraphError(f"unsupported MLX primitive: {name}") from error
+            raise UnsupportedGraphError(
+                f"unsupported Tiki primitive: {name}"
+            ) from error
 
-    def replay(self, inputs: tuple[mx.array, ...], shape: tuple[int, ...]) -> mx.array:
+    def replay(self, inputs: tuple[tk.array, ...], shape: tuple[int, ...]) -> tk.array:
         if self.takes_shape:
             return self.evaluate(*inputs, shape)
         return self.evaluate(*inputs)

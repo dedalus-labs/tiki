@@ -2,13 +2,13 @@
 
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 
 int main() {
-  auto x = mx::array({1, 2, 3});
-  auto y = mx::array({1, 2, 3});
+  auto x = tk::array({1, 2, 3});
+  auto y = tk::array({1, 2, 3});
   std::cout << x + y << std::endl;
   return 0;
 }

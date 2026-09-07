@@ -30,11 +30,11 @@ runs:
         # 1. Use the same ccache options with setup.py.
         # 2. Build dynamic library.
         # 3. Put the build dir in the same depth with python build dir.
-        CCACHE_BASEDIR: ${{ github.workspace }}/build/cpp/mlx
+        CCACHE_BASEDIR: ${{ github.workspace }}/build/cpp/tiki
         CCACHE_NOHASHDIR: true
       run: |
-        cmake . -B build/cpp/mlx ${{ inputs.cmake-args }} \
+        cmake . -B build/cpp/tiki ${{ inputs.cmake-args }} \
           -DBUILD_SHARED_LIBS=ON \
           -DCMAKE_BUILD_TYPE=${{ inputs.debug == 'true' && 'Debug' || 'Release' }}
-        cmake --build build/cpp/mlx \
+        cmake --build build/cpp/tiki \
           -j ${{ runner.os == 'Windows' && '$NUMBER_OF_PROCESSORS' || '$(nproc)' }}

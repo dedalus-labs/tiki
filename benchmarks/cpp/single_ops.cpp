@@ -1,9 +1,9 @@
 // Copyright © 2023 Apple Inc.
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 #include "time_utils.h"
 
-namespace mx = mlx::core;
+namespace mx = tiki::core;
 
 // mx::astype is overloaded, so it cannot be passed directly to the timing
 // helpers. Wrap the three argument form instead.
@@ -65,16 +65,16 @@ void time_unary_ops() {
 
   auto a = mx::random::normal({M, N});
   mx::eval(a);
-  TIME(mlx::core::abs, a, device);
+  TIME(tiki::core::abs, a, device);
   TIME(mx::negative, a, device);
   TIME(mx::sign, a, device);
   TIME(mx::square, a, device);
-  TIME(mlx::core::sqrt, a, device);
+  TIME(tiki::core::sqrt, a, device);
   TIME(mx::rsqrt, a, device);
-  TIME(mlx::core::exp, a, device);
+  TIME(tiki::core::exp, a, device);
 
   a = mx::random::uniform({M, N});
-  TIME(mlx::core::log, a, device);
+  TIME(tiki::core::log, a, device);
 }
 
 void time_binary_ops() {

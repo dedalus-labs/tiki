@@ -6,9 +6,9 @@
 #include <future>
 
 #include "doctest/doctest.h"
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 static const std::array<Dtype, 5> types =
     {bool_, uint32, int32, int64, float32};
@@ -502,7 +502,7 @@ TEST_CASE("test dynamic slice update waits for its start") {
   // Regression for #3880: a donated array-valued start could be read
   // stale when a command-buffer boundary lands between its producer
   // and the dynamic slice. The boundary occurs when the buffer's op
-  // or memory limits split the graph (or with MLX_MAX_OPS_PER_BUFFER
+  // or memory limits split the graph (or with TIKI_MAX_OPS_PER_BUFFER
   // set low); without a split the checks still assert the correct
   // update position.
   auto source = ones({2, 1 << 26}, int32);
@@ -682,7 +682,7 @@ TEST_CASE("test gpu depthwise conv2d non-mod-8 spatial") {
 
 TEST_CASE("test layer norm vjp bias grad race") {
   // Regression test for a write-after-read (WAR) hazard in
-  // LayerNormVJP::eval_gpu (mlx/backend/metal/normalization.cpp).
+  // LayerNormVJP::eval_gpu (tiki/backend/metal/normalization.cpp).
   //
   // The bias-gradient reduction reads the cotangent `g` and is dispatched
   // before the main vjp kernel. When the cotangent is donatable the kernel

@@ -1,6 +1,6 @@
 # Instructions for Tiki
 
-Tiki is an internal derivative of MLX. The `upstream-main` branch mirrors
+Tiki is an internal derivative of Tiki. The `upstream-main` branch mirrors
 `ml-explore/mlx`; Tiki changes belong on `main` and feature branches.
 
 ## Agent rules
@@ -8,7 +8,7 @@ Tiki is an internal derivative of MLX. The `upstream-main` branch mirrors
 - Never push without explicit user authorization.
 - Keep the Tiki patch set small enough to audit against `upstream-main`.
 - Send generally useful fixes upstream instead of carrying them indefinitely.
-- Follow MLX's contribution policy for changes proposed back to MLX.
+- Follow Tiki's contribution policy for changes proposed back to Tiki.
 
 ## Code standards
 

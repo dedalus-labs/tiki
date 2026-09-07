@@ -3,7 +3,7 @@
 Schedulers
 ==========
 
-.. currentmodule:: mlx.optimizers
+.. currentmodule:: tiki.optimizers
 
 .. autosummary::
    :toctree: _autosummary

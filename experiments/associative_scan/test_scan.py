@@ -5,9 +5,9 @@ import unittest
 from collections.abc import Callable
 from typing import Any
 
-import mlx.core as mx
 import numpy as np
-from mlx.utils import tree_flatten, tree_unflatten
+import tiki as tk
+from tiki.utils import tree_flatten, tree_unflatten
 
 from scan import associative_scan
 
@@ -15,8 +15,8 @@ HAS_JAX = importlib.util.find_spec("jax") is not None
 
 
 def strided_slice_autograd_is_fixed() -> bool:
-    """True on a Tiki build with the normalize_slice fix; pip MLX 0.32 lacks it."""
-    grad = mx.vjp(lambda x: x[::2], (mx.array([1.0, 2.0]),), (mx.array([1.0]),))[1][0]
+    """True on a Tiki build with the normalize_slice fix; pip Tiki 0.32 lacks it."""
+    grad = tk.vjp(lambda x: x[::2], (tk.array([1.0, 2.0]),), (tk.array([1.0]),))[1][0]
     return grad.tolist() == [1.0, 0.0]
 
 
@@ -38,22 +38,22 @@ def sequential(fn: Callable[[Any, Any], Any], elems: Any) -> Any:
         state = fn(state, at(i))
         states.append(state)
     stacked = [
-        mx.stack([[leaf for _, leaf in tree_flatten(state)][j] for state in states])
+        tk.stack([[leaf for _, leaf in tree_flatten(state)][j] for state in states])
         for j in range(len(leaves))
     ]
     return tree_unflatten(list(zip(keys, stacked)))
 
 
 def affine(
-    left: tuple[mx.array, mx.array], right: tuple[mx.array, mx.array]
-) -> tuple[mx.array, mx.array]:
+    left: tuple[tk.array, tk.array], right: tuple[tk.array, tk.array]
+) -> tuple[tk.array, tk.array]:
     al, bl = left
     ar, br = right
     return ar * al, ar * bl + br
 
 
-def rows(length: int, width: int, seed: int) -> mx.array:
-    return mx.array(
+def rows(length: int, width: int, seed: int) -> tk.array:
+    return tk.array(
         np.random.default_rng(seed).normal(size=(length, width)).astype(np.float32)
     )
 
@@ -72,7 +72,7 @@ def small_integer_matrices(length: int, seed: int) -> np.ndarray:
 def assert_close(actual: Any, expected: Any, name: str) -> None:
     actual_leaves = [leaf for _, leaf in tree_flatten(actual)]
     expected_leaves = [leaf for _, leaf in tree_flatten(expected)]
-    mx.eval(actual_leaves, expected_leaves)
+    tk.eval(actual_leaves, expected_leaves)
     for actual_leaf, expected_leaf in zip(actual_leaves, expected_leaves):
         np.testing.assert_allclose(
             np.asarray(actual_leaf),
@@ -84,23 +84,23 @@ def assert_close(actual: Any, expected: Any, name: str) -> None:
 
 
 class TestAssociativeScan(unittest.TestCase):
-    # Invariant: scan with addition equals mx.cumsum on every length, both
+    # Invariant: scan with addition equals tk.cumsum on every length, both
     # directions, on a leading and a trailing axis.
     # Witness: random float32 rows for each length in LENGTHS.
     def test_cumsum_parity(self) -> None:
         for length in LENGTHS:
             x = rows(length, 3, length)
             for reverse in (False, True):
-                got = associative_scan(mx.add, x, reverse=reverse)
+                got = associative_scan(tk.add, x, reverse=reverse)
                 assert_close(
                     got,
-                    mx.cumsum(x, axis=0, reverse=reverse),
+                    tk.cumsum(x, axis=0, reverse=reverse),
                     f"{length=} reverse={reverse}",
                 )
-                got_t = associative_scan(mx.add, x.T, reverse=reverse, axis=1)
+                got_t = associative_scan(tk.add, x.T, reverse=reverse, axis=1)
                 assert_close(
                     got_t,
-                    mx.cumsum(x.T, axis=1, reverse=reverse),
+                    tk.cumsum(x.T, axis=1, reverse=reverse),
                     f"{length=} axis=1 reverse={reverse}",
                 )
 
@@ -108,10 +108,10 @@ class TestAssociativeScan(unittest.TestCase):
     # Witness: prefix products of random 2x2 matrices versus a sequential fold.
     def test_noncommutative_matmul(self) -> None:
         for length in (1, 2, 3, 5, 8, 9):
-            mats = mx.array(small_integer_matrices(length, length))
+            mats = tk.array(small_integer_matrices(length, length))
             assert_close(
-                associative_scan(mx.matmul, mats),
-                sequential(mx.matmul, mats),
+                associative_scan(tk.matmul, mats),
+                sequential(tk.matmul, mats),
                 f"{length=}",
             )
 
@@ -135,10 +135,10 @@ class TestAssociativeScan(unittest.TestCase):
     def test_vjp_matches_sequential(self) -> None:
         for length in (1, 2, 3, 7, 16, 33):
             a, b, ga, gb = (rows(length, 3, length + k) for k in range(4))
-            tree_grads = mx.vjp(
+            tree_grads = tk.vjp(
                 lambda a, b: associative_scan(affine, (a, b)), (a, b), (ga, gb)
             )[1]
-            seq_grads = mx.vjp(
+            seq_grads = tk.vjp(
                 lambda a, b: sequential(affine, (a, b)), (a, b), (ga, gb)
             )[1]
             assert_close(tree_grads, seq_grads, f"{length=}")
@@ -149,48 +149,48 @@ class TestAssociativeScan(unittest.TestCase):
     def test_jvp_matches_sequential(self) -> None:
         for length in (7, 16):
             a, b = rows(length, 3, length), rows(length, 3, length + 1)
-            tangents = (mx.ones_like(a), mx.ones_like(b))
-            tree = mx.jvp(
+            tangents = (tk.ones_like(a), tk.ones_like(b))
+            tree = tk.jvp(
                 lambda a, b: associative_scan(affine, (a, b)), (a, b), tangents
             )[1]
-            seq = mx.jvp(lambda a, b: sequential(affine, (a, b)), (a, b), tangents)[1]
+            seq = tk.jvp(lambda a, b: sequential(affine, (a, b)), (a, b), tangents)[1]
             assert_close(tree, seq, f"{length=}")
 
     # Invariant: the scan composes with vmap the way JAX's does.
     # Witness: a batched cumsum equals cumsum along the scanned axis.
     @unittest.skipUnless(FIXED, "requires the singleton slice transformation fix")
     def test_vmap(self) -> None:
-        x = mx.array(np.random.default_rng(0).normal(size=(4, 9, 2)).astype(np.float32))
-        batched = mx.vmap(lambda row: associative_scan(mx.add, row))(x)
-        assert_close(batched, mx.cumsum(x, axis=1), "vmap")
+        x = tk.array(np.random.default_rng(0).normal(size=(4, 9, 2)).astype(np.float32))
+        batched = tk.vmap(lambda row: associative_scan(tk.add, row))(x)
+        assert_close(batched, tk.cumsum(x, axis=1), "vmap")
 
-    # Invariant: the length-2 case, the one the MLX slice fix repairs,
+    # Invariant: the length-2 case, the one the Tiki slice fix repairs,
     # differentiates correctly through stride-2 pairing.
     # Witness: d(sum of scan)/dx for x of length 2 is [2, 1].
     @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
     def test_length_two_vjp(self) -> None:
-        x = mx.array([1.0, 2.0])
-        grad = mx.grad(lambda x: mx.sum(associative_scan(mx.add, x)))(x)
-        assert_close(grad, mx.array([2.0, 1.0]), "length-2 vjp")
+        x = tk.array([1.0, 2.0])
+        grad = tk.grad(lambda x: tk.sum(associative_scan(tk.add, x)))(x)
+        assert_close(grad, tk.array([2.0, 1.0]), "length-2 vjp")
 
     # Invariant: the VJP of x[::2] on a length-2 input routes the single
     # cotangent to element 0 only (the Tiki normalize_slice fix).
-    # Witness: expected [1, 0]; unfixed MLX 0.32 returns [1, 1].
+    # Witness: expected [1, 0]; unfixed Tiki 0.32 returns [1, 1].
     @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
-    def test_mlx_strided_slice_vjp_is_fixed(self) -> None:
-        x = mx.array([1.0, 2.0])
-        grad = mx.vjp(lambda x: x[::2], (x,), (mx.array([1.0]),))[1][0]
-        assert_close(grad, mx.array([1.0, 0.0]), "x[::2] vjp")
+    def test_tiki_strided_slice_vjp_is_fixed(self) -> None:
+        x = tk.array([1.0, 2.0])
+        grad = tk.vjp(lambda x: x[::2], (x,), (tk.array([1.0]),))[1][0]
+        assert_close(grad, tk.array([1.0, 0.0]), "x[::2] vjp")
 
     # Invariant: malformed inputs fail with a typed error, never a wrong result.
     # Witness: non-callable fn, an empty tree, and mismatched scan lengths.
     def test_errors(self) -> None:
         with self.assertRaises(TypeError):
-            associative_scan(None, mx.zeros((3,)))
+            associative_scan(None, tk.zeros((3,)))
         with self.assertRaises(ValueError):
-            associative_scan(mx.add, ())
+            associative_scan(tk.add, ())
         with self.assertRaises(ValueError):
-            associative_scan(affine, (mx.zeros((3,)), mx.zeros((4,))))
+            associative_scan(affine, (tk.zeros((3,)), tk.zeros((4,))))
 
 
 @unittest.skipUnless(HAS_JAX, "needs jax")
@@ -214,11 +214,11 @@ class TestJaxParity(unittest.TestCase):
                 .astype(np.float32)
             )
             for reverse in (False, True):
-                ours = associative_scan(mx.add, mx.array(x), reverse=reverse)
+                ours = associative_scan(tk.add, tk.array(x), reverse=reverse)
                 theirs = self.jax_scan(jnp.add, jnp.asarray(x), reverse=reverse)
                 assert_close(
                     ours,
-                    mx.array(np.asarray(theirs)),
+                    tk.array(np.asarray(theirs)),
                     f"{length=} reverse={reverse}",
                 )
 
@@ -234,9 +234,9 @@ class TestJaxParity(unittest.TestCase):
                     small_integer_matrices(length, length + 50),
                 ]
             )
-            ours = associative_scan(mx.matmul, mx.array(x), axis=1)
+            ours = associative_scan(tk.matmul, tk.array(x), axis=1)
             theirs = self.jax_scan(jnp.matmul, jnp.asarray(x), axis=1)
-            assert_close(ours, mx.array(np.asarray(theirs)), f"{length=}")
+            assert_close(ours, tk.array(np.asarray(theirs)), f"{length=}")
 
     # Invariant: same results as JAX for a tuple pytree combine.
     # Witness: the affine pair, matching JAX's own tuple-of-arrays example shape.
@@ -259,11 +259,11 @@ class TestJaxParity(unittest.TestCase):
                 .normal(size=(length, 3))
                 .astype(np.float32)
             )
-            ours = associative_scan(affine, (mx.array(a), mx.array(b)))
+            ours = associative_scan(affine, (tk.array(a), tk.array(b)))
             theirs = self.jax_scan(jax_affine, (jnp.asarray(a), jnp.asarray(b)))
             assert_close(
                 ours,
-                tuple(mx.array(np.asarray(leaf)) for leaf in theirs),
+                tuple(tk.array(np.asarray(leaf)) for leaf in theirs),
                 f"{length=}",
             )
 

@@ -4,21 +4,21 @@
 #include <iostream>
 #include <sstream>
 
-#include "mlx/backend/common/utils.h"
-#include "mlx/backend/cpu/encoder.h"
-#include "mlx/utils.h"
+#include "tiki/backend/common/utils.h"
+#include "tiki/backend/cpu/encoder.h"
+#include "tiki/utils.h"
 
 #include "axpby/axpby.h"
 
 #ifdef _METAL_
-#include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/utils.h"
+#include "tiki/backend/metal/device.h"
+#include "tiki/backend/metal/utils.h"
 #endif
 
 namespace my_ext {
 
 // A helper function to find the location of the current binary on disk.
-// The Metal library ("mlx_ext.mtllib"), should be in the same directory.
+// The Metal library ("tiki_ext.mtllib"), should be in the same directory.
 std::string current_binary_dir() {
   static std::string binary_dir = []() {
     Dl_info info;
@@ -41,24 +41,24 @@ std::string current_binary_dir() {
  *  Follow numpy style broadcasting between x and y
  *  Inputs are upcasted to floats if needed
  **/
-mx::array axpby(
-    const mx::array& x, // Input mx::array x
-    const mx::array& y, // Input mx::array y
+tk::array axpby(
+    const tk::array& x, // Input tk::array x
+    const tk::array& y, // Input tk::array y
     const float alpha, // Scaling factor for x
     const float beta, // Scaling factor for y
-    mx::StreamOrDevice s /* = {} */ // Stream on which to schedule the operation
+    tk::StreamOrDevice s /* = {} */ // Stream on which to schedule the operation
 ) {
   // Promote dtypes between x and y as needed
   auto promoted_dtype = promote_types(x.dtype(), y.dtype());
 
   // Upcast to float32 for non-floating point inputs x and y
-  auto out_dtype = mx::issubdtype(promoted_dtype, mx::float32)
+  auto out_dtype = tk::issubdtype(promoted_dtype, tk::float32)
       ? promoted_dtype
-      : promote_types(promoted_dtype, mx::float32);
+      : promote_types(promoted_dtype, tk::float32);
 
   // Cast x and y up to the determined dtype (on the same stream s)
-  auto x_casted = mx::astype(x, out_dtype, s);
-  auto y_casted = mx::astype(y, out_dtype, s);
+  auto x_casted = tk::astype(x, out_dtype, s);
+  auto y_casted = tk::astype(y, out_dtype, s);
 
   // Broadcast the shapes of x and y (on the same stream s)
   auto broadcasted_inputs = broadcast_arrays({x_casted, y_casted}, s);
@@ -66,12 +66,12 @@ mx::array axpby(
 
   // Construct the array as the output of the Axpby primitive
   // with the broadcasted and upcasted arrays as inputs
-  return mx::array(
-      /* const mx::Shape& shape = */ out_shape,
-      /* mx::Dtype dtype = */ out_dtype,
-      /* std::shared_ptr<mx::Primitive> primitive = */
+  return tk::array(
+      /* const tk::Shape& shape = */ out_shape,
+      /* tk::Dtype dtype = */ out_dtype,
+      /* std::shared_ptr<tk::Primitive> primitive = */
       std::make_shared<Axpby>(to_stream(s), alpha, beta),
-      /* const std::vector<mx::array>& inputs = */ broadcasted_inputs);
+      /* const std::vector<tk::array>& inputs = */ broadcasted_inputs);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -80,16 +80,16 @@ mx::array axpby(
 
 template <typename T>
 void axpby_impl(
-    const mx::array& x,
-    const mx::array& y,
-    mx::array& out,
+    const tk::array& x,
+    const tk::array& y,
+    tk::array& out,
     float alpha_,
     float beta_,
-    mx::Stream stream) {
-  out.set_data(mx::allocator::malloc(out.nbytes()));
+    tk::Stream stream) {
+  out.set_data(tk::allocator::malloc(out.nbytes()));
 
   // Get the CPU command encoder and register input and output arrays
-  auto& encoder = mx::cpu::get_command_encoder(stream);
+  auto& encoder = tk::cpu::get_command_encoder(stream);
   encoder.set_input_array(x);
   encoder.set_input_array(y);
   encoder.set_output_array(out);
@@ -111,8 +111,8 @@ void axpby_impl(
     // Do the element-wise operation for each output
     for (size_t out_idx = 0; out_idx < size; out_idx++) {
       // Map linear indices to offsets in x and y
-      auto x_offset = mx::elem_to_loc(out_idx, shape, x_strides);
-      auto y_offset = mx::elem_to_loc(out_idx, shape, y_strides);
+      auto x_offset = tk::elem_to_loc(out_idx, shape, x_strides);
+      auto y_offset = tk::elem_to_loc(out_idx, shape, y_strides);
 
       // We allocate the output to be contiguous and regularly strided
       // (defaults to row major) and hence it doesn't need additional mapping
@@ -122,21 +122,21 @@ void axpby_impl(
 }
 
 void Axpby::eval_cpu(
-    const std::vector<mx::array>& inputs,
-    std::vector<mx::array>& outputs) {
+    const std::vector<tk::array>& inputs,
+    std::vector<tk::array>& outputs) {
   auto& x = inputs[0];
   auto& y = inputs[1];
   auto& out = outputs[0];
 
   // Dispatch to the correct dtype
-  if (out.dtype() == mx::float32) {
+  if (out.dtype() == tk::float32) {
     return axpby_impl<float>(x, y, out, alpha_, beta_, stream());
-  } else if (out.dtype() == mx::float16) {
-    return axpby_impl<mx::float16_t>(x, y, out, alpha_, beta_, stream());
-  } else if (out.dtype() == mx::bfloat16) {
-    return axpby_impl<mx::bfloat16_t>(x, y, out, alpha_, beta_, stream());
-  } else if (out.dtype() == mx::complex64) {
-    return axpby_impl<mx::complex64_t>(x, y, out, alpha_, beta_, stream());
+  } else if (out.dtype() == tk::float16) {
+    return axpby_impl<tk::float16_t>(x, y, out, alpha_, beta_, stream());
+  } else if (out.dtype() == tk::bfloat16) {
+    return axpby_impl<tk::bfloat16_t>(x, y, out, alpha_, beta_, stream());
+  } else if (out.dtype() == tk::complex64) {
+    return axpby_impl<tk::complex64_t>(x, y, out, alpha_, beta_, stream());
   } else {
     throw std::runtime_error(
         "Axpby is only supported for floating point types.");
@@ -151,8 +151,8 @@ void Axpby::eval_cpu(
 
 /** Evaluate primitive on GPU */
 void Axpby::eval_gpu(
-    const std::vector<mx::array>& inputs,
-    std::vector<mx::array>& outputs) {
+    const std::vector<tk::array>& inputs,
+    std::vector<tk::array>& outputs) {
   // Prepare inputs
   auto& x = inputs[0];
   auto& y = inputs[1];
@@ -162,7 +162,7 @@ void Axpby::eval_gpu(
   // and each stream carries its device identifiers
   auto& s = stream();
   // We get the needed metal device using the stream
-  auto& d = mx::metal::device(s.device);
+  auto& d = tk::metal::device(s.device);
 
   // Prepare to specialize based on contiguity
   bool contiguous_kernel =
@@ -172,12 +172,12 @@ void Axpby::eval_gpu(
   // Allocate output memory with strides based on specialization
   if (contiguous_kernel) {
     out.set_data(
-        mx::allocator::malloc(x.data_size() * out.itemsize()),
+        tk::allocator::malloc(x.data_size() * out.itemsize()),
         x.data_size(),
         x.strides(),
         x.flags());
   } else {
-    out.set_data(mx::allocator::malloc(out.nbytes()));
+    out.set_data(tk::allocator::malloc(out.nbytes()));
   }
 
   // Resolve name of kernel (corresponds to axpby.metal)
@@ -186,13 +186,13 @@ void Axpby::eval_gpu(
   kname += type_to_name(out);
 
   // Load the metal library
-  auto lib = d.get_library("mlx_ext", current_binary_dir());
+  auto lib = d.get_library("tiki_ext", current_binary_dir());
 
   // Make a kernel from this metal library
   auto kernel = d.get_kernel(kname, lib);
 
   // Prepare to encode kernel
-  auto& compute_encoder = mx::metal::get_command_encoder(s);
+  auto& compute_encoder = tk::metal::get_command_encoder(s);
   compute_encoder.set_compute_pipeline_state(kernel);
 
   // Kernel parameters are registered with buffer indices corresponding to
@@ -238,8 +238,8 @@ void Axpby::eval_gpu(
 
 /** Fail evaluation on GPU */
 void Axpby::eval_gpu(
-    const std::vector<mx::array>& inputs,
-    std::vector<mx::array>& out) {
+    const std::vector<tk::array>& inputs,
+    std::vector<tk::array>& out) {
   throw std::runtime_error("Axpby has no GPU implementation.");
 }
 
@@ -250,9 +250,9 @@ void Axpby::eval_gpu(
 ///////////////////////////////////////////////////////////////////////////////
 
 /** The Jacobian-vector product. */
-std::vector<mx::array> Axpby::jvp(
-    const std::vector<mx::array>& primals,
-    const std::vector<mx::array>& tangents,
+std::vector<tk::array> Axpby::jvp(
+    const std::vector<tk::array>& primals,
+    const std::vector<tk::array>& tangents,
     const std::vector<int>& argnums) {
   // Forward mode diff that pushes along the tangents
   // The jvp transform on the primitive can built with ops
@@ -264,8 +264,8 @@ std::vector<mx::array> Axpby::jvp(
   // scaled by beta
   if (argnums.size() > 1) {
     auto scale = argnums[0] == 0 ? alpha_ : beta_;
-    auto scale_arr = mx::array(scale, tangents[0].dtype());
-    return {mx::multiply(scale_arr, tangents[0], stream())};
+    auto scale_arr = tk::array(scale, tangents[0].dtype());
+    return {tk::multiply(scale_arr, tangents[0], stream())};
   }
   // If, argnums = {0, 1}, we take contributions from both
   // which gives us jvp = tangent_x * alpha + tangent_y * beta
@@ -275,24 +275,24 @@ std::vector<mx::array> Axpby::jvp(
 }
 
 /** The vector-Jacobian product. */
-std::vector<mx::array> Axpby::vjp(
-    const std::vector<mx::array>& primals,
-    const std::vector<mx::array>& cotangents,
+std::vector<tk::array> Axpby::vjp(
+    const std::vector<tk::array>& primals,
+    const std::vector<tk::array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<mx::array>&) {
+    const std::vector<tk::array>&) {
   // Reverse mode diff
-  std::vector<mx::array> vjps;
+  std::vector<tk::array> vjps;
   for (auto arg : argnums) {
     auto scale = arg == 0 ? alpha_ : beta_;
-    auto scale_arr = mx::array(scale, cotangents[0].dtype());
-    vjps.push_back(mx::multiply(scale_arr, cotangents[0], stream()));
+    auto scale_arr = tk::array(scale, cotangents[0].dtype());
+    vjps.push_back(tk::multiply(scale_arr, cotangents[0], stream()));
   }
   return vjps;
 }
 
 /** Vectorize primitive along given axis */
-std::pair<std::vector<mx::array>, std::vector<int>> Axpby::vmap(
-    const std::vector<mx::array>& inputs,
+std::pair<std::vector<tk::array>, std::vector<int>> Axpby::vmap(
+    const std::vector<tk::array>& inputs,
     const std::vector<int>& axes) {
   throw std::runtime_error("Axpby has no vmap implementation.");
 }

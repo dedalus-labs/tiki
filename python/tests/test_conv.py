@@ -5,9 +5,9 @@ import os
 import unittest
 from itertools import permutations
 
-import mlx.core as mx
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki_tests
 
 try:
     import torch
@@ -18,7 +18,7 @@ except ImportError:
     has_torch = False
 
 
-class TestConv(mlx_tests.MLXTestCase):
+class TestConv(tiki_tests.TIKITestCase):
     def test_numpy_conv(self):
         for dtype in (
             "float16",
@@ -39,21 +39,21 @@ class TestConv(mlx_tests.MLXTestCase):
                     atol = 1e-6 if dtype == "float32" else 1e-5
                     a_np = np.random.rand(M).astype(np_dtype)
                     v_np = np.random.rand(N).astype(np_dtype)
-                    a_mx = mx.array(a_np)
-                    v_mx = mx.array(v_np)
+                    a_mx = tk.array(a_np)
+                    v_mx = tk.array(v_np)
 
                     c_np = np.convolve(a_np, v_np, mode=mode)
-                    c_mx = mx.convolve(a_mx, v_mx, mode=mode)
+                    c_mx = tk.convolve(a_mx, v_mx, mode=mode)
 
                     self.assertEqual(c_mx.shape, c_np.shape)
                     self.assertTrue(np.allclose(c_mx, c_np, atol=atol))
 
     def test_conv_1d_groups_flipped(self):
-        x = mx.broadcast_to(mx.arange(5).astype(mx.float32), (2, 5)).T
-        w = mx.broadcast_to(mx.arange(4).astype(mx.float32), (2, 4))
-        out = mx.conv_general(x[None], w[..., None], flip=True, groups=2)
-        expected = mx.array([4.0, 4.0, 10.0, 10.0]).reshape(1, 2, 2)
-        self.assertTrue(mx.allclose(out, expected))
+        x = tk.broadcast_to(tk.arange(5).astype(tk.float32), (2, 5)).T
+        w = tk.broadcast_to(tk.arange(4).astype(tk.float32), (2, 4))
+        out = tk.conv_general(x[None], w[..., None], flip=True, groups=2)
+        expected = tk.array([4.0, 4.0, 10.0, 10.0]).reshape(1, 2, 2)
+        self.assertTrue(tk.allclose(out, expected))
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_1D(self):
@@ -89,12 +89,12 @@ class TestConv(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt, wt_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 2, 1)), (in_np, wt_np)
                 )
 
-                out_mx = mx.conv1d(
+                out_mx = tk.conv1d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -148,10 +148,10 @@ class TestConv(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0, 1.0 / 16, (16, 16, 16)).astype(np.float32)
                 wt_np = np.random.normal(0, 1.0 / 16, (16, 16, 16)).astype(np.float32)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
-                in_mx_t = mx.transpose(in_mx, tpose_in)
-                wt_mx_t = mx.transpose(wt_mx, tpose_wt)
-                out_mx = mx.conv1d(in_mx_t, wt_mx_t)
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
+                in_mx_t = tk.transpose(in_mx, tpose_in)
+                wt_mx_t = tk.transpose(wt_mx, tpose_wt)
+                out_mx = tk.conv1d(in_mx_t, wt_mx_t)
 
                 in_pt, wt_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 2, 1)),
@@ -199,14 +199,14 @@ class TestConv(mlx_tests.MLXTestCase):
                 wt_np = np.random.normal(0, 1.0 / C, (O, kH, C)).astype(np_dtype)
                 ct_np = np.random.normal(0, 1.0 / C, (N, oH, O)).astype(np_dtype)
 
-                in_mx, wt_mx, ct_mx = map(mx.array, (in_np, wt_np, ct_np))
+                in_mx, wt_mx, ct_mx = map(tk.array, (in_np, wt_np, ct_np))
                 in_pt, wt_pt, ct_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 2, 1)),
                     (in_np, wt_np, ct_np),
                 )
 
                 def f(a, b):
-                    return mx.conv1d(
+                    return tk.conv1d(
                         a,
                         b,
                         stride=stride,
@@ -215,7 +215,7 @@ class TestConv(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [
                         in_mx,
@@ -303,10 +303,10 @@ class TestConv(mlx_tests.MLXTestCase):
                 in_np = np.random.normal(0.0, scale, (N, iH, iW, C))
                 wt_np = np.random.normal(0.0, 1.0, (O, kH, kW, int(C / groups)))
 
-                mx_dtype = getattr(mx, dtype)
+                mx_dtype = getattr(tk, dtype)
                 torch_dtype = getattr(torch, dtype)
                 in_mx, wt_mx = map(
-                    lambda x: mx.array(x).astype(mx_dtype), (in_np, wt_np)
+                    lambda x: tk.array(x).astype(mx_dtype), (in_np, wt_np)
                 )
                 in_pt, wt_pt = map(
                     lambda x: (
@@ -317,14 +317,14 @@ class TestConv(mlx_tests.MLXTestCase):
                     (in_np, wt_np),
                 )
 
-                out_mx = mx.conv2d(
+                out_mx = tk.conv2d(
                     in_mx,
                     wt_mx,
                     stride=stride,
                     padding=padding,
                     dilation=dilation,
                     groups=groups,
-                ).astype(mx.float32)
+                ).astype(tk.float32)
                 out_pt = torch.conv2d(
                     in_pt,
                     wt_pt,
@@ -418,14 +418,14 @@ class TestConv(mlx_tests.MLXTestCase):
                 )
                 ct_np = np.random.normal(0.0, scale, (N, oH, oW, O)).astype(np_dtype)
 
-                in_mx, wt_mx, ct_mx = map(mx.array, (in_np, wt_np, ct_np))
+                in_mx, wt_mx, ct_mx = map(tk.array, (in_np, wt_np, ct_np))
                 in_pt, wt_pt, ct_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 3, 1, 2)).to("cpu"),
                     (in_np, wt_np, ct_np),
                 )
 
                 def f(a, b):
-                    return mx.conv2d(
+                    return tk.conv2d(
                         a,
                         b,
                         stride=stride,
@@ -434,7 +434,7 @@ class TestConv(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [in_mx, wt_mx],
                     [ct_mx],
@@ -534,13 +534,13 @@ class TestConv(mlx_tests.MLXTestCase):
                 )
                 wt_np = np.random.normal(0.0, 1.0, (O, kD, kH, kW, C)).astype(np_dtype)
 
-                in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+                in_mx, wt_mx = map(tk.array, (in_np, wt_np))
                 in_pt, wt_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 4, 1, 2, 3)).to("cpu"),
                     (in_np, wt_np),
                 )
 
-                out_mx = mx.conv3d(
+                out_mx = tk.conv3d(
                     in_mx,
                     wt_mx,
                     stride=stride,
@@ -634,14 +634,14 @@ class TestConv(mlx_tests.MLXTestCase):
                     np_dtype
                 )
 
-                in_mx, wt_mx, ct_mx = map(mx.array, (in_np, wt_np, ct_np))
+                in_mx, wt_mx, ct_mx = map(tk.array, (in_np, wt_np, ct_np))
                 in_pt, wt_pt, ct_pt = map(
                     lambda x: torch.from_numpy(x.transpose(0, 4, 1, 2, 3)).to("cpu"),
                     (in_np, wt_np, ct_np),
                 )
 
                 def f(a, b):
-                    return mx.conv3d(
+                    return tk.conv3d(
                         a,
                         b,
                         stride=stride,
@@ -650,7 +650,7 @@ class TestConv(mlx_tests.MLXTestCase):
                         groups=groups,
                     )
 
-                _, outs_mx = mx.vjp(
+                _, outs_mx = tk.vjp(
                     f,
                     [in_mx, wt_mx],
                     [ct_mx],
@@ -730,14 +730,14 @@ class TestConv(mlx_tests.MLXTestCase):
             in_np = np.random.normal(0, scale, in_shape).astype(np_dtype)
             wt_np = np.random.normal(0, scale, wt_shape).astype(np_dtype)
 
-            in_mx, wt_mx = map(mx.array, (in_np, wt_np))
+            in_mx, wt_mx = map(tk.array, (in_np, wt_np))
 
             in_pt, wt_pt = map(
                 lambda x: torch.from_numpy(np.moveaxis(x, -1, 1)).to("cpu"),
                 (in_np, wt_np),
             )
 
-            out_mx = mx.conv_general(
+            out_mx = tk.conv_general(
                 in_mx,
                 wt_mx,
                 stride=stride,
@@ -901,11 +901,11 @@ class TestConv(mlx_tests.MLXTestCase):
 
     def test_conv_general_flip_grad(self):
         for s in (1, 2):
-            w = mx.random.normal(shape=(1, 2, 2, 1))
-            x = mx.random.normal(shape=(1, 2, 2, 1))
+            w = tk.random.normal(shape=(1, 2, 2, 1))
+            x = tk.random.normal(shape=(1, 2, 2, 1))
 
             def conv_t(w):
-                return mx.conv_general(
+                return tk.conv_general(
                     x,
                     w,
                     stride=1,
@@ -915,9 +915,9 @@ class TestConv(mlx_tests.MLXTestCase):
                     flip=True,
                 )
 
-            cotan = mx.random.normal(shape=(1, 2 + s, 2 + s, 1))
+            cotan = tk.random.normal(shape=(1, 2 + s, 2 + s, 1))
 
-            dw = mx.vjp(conv_t, (w,), (cotan,))[1][0]
+            dw = tk.vjp(conv_t, (w,), (cotan,))[1][0]
 
             x = x.squeeze()
             cotan = cotan.squeeze()
@@ -927,15 +927,15 @@ class TestConv(mlx_tests.MLXTestCase):
             dw01 = (cotan[:-1:s, 1::s] * x).sum()
             dw10 = (cotan[1::s, :-1:s] * x).sum()
             dw11 = (cotan[1::s, 1::s] * x).sum()
-            expected = mx.array([[dw00, dw01], [dw10, dw11]])
-            self.assertTrue(mx.allclose(dw, expected, rtol=1e-5, atol=1e-5))
+            expected = tk.array([[dw00, dw01], [dw10, dw11]])
+            self.assertTrue(tk.allclose(dw, expected, rtol=1e-5, atol=1e-5))
 
         # Test with input dilation
-        inputs = mx.random.normal((1, 14, 14, 2))
-        kernel = mx.random.normal((2, 7, 7, 2))
+        inputs = tk.random.normal((1, 14, 14, 2))
+        kernel = tk.random.normal((2, 7, 7, 2))
 
         def conv_flip(kernel):
-            return mx.conv_general(
+            return tk.conv_general(
                 inputs,
                 kernel,
                 stride=1,
@@ -947,13 +947,13 @@ class TestConv(mlx_tests.MLXTestCase):
             ).sum()
 
         def reverse_sequence(xs, axis=0):
-            indices = mx.arange(xs.shape[axis] - 1, -1, -1)
-            return mx.take(xs, indices, axis=axis)
+            indices = tk.arange(xs.shape[axis] - 1, -1, -1)
+            return tk.take(xs, indices, axis=axis)
 
         def conv_manual_flip(kernel):
             for ax in range(1, kernel.ndim - 1):
                 kernel = reverse_sequence(kernel, axis=ax)
-            return mx.conv_general(
+            return tk.conv_general(
                 inputs,
                 kernel,
                 stride=1,
@@ -964,110 +964,110 @@ class TestConv(mlx_tests.MLXTestCase):
                 flip=False,
             ).sum()
 
-        grad = mx.grad(conv_flip)(kernel)
-        expected_grad = mx.grad(conv_manual_flip)(kernel)
-        self.assertTrue(mx.allclose(grad, expected_grad))
+        grad = tk.grad(conv_flip)(kernel)
+        expected_grad = tk.grad(conv_manual_flip)(kernel)
+        self.assertTrue(tk.allclose(grad, expected_grad))
 
     def test_conv_groups_grad(self):
         def fn(x, w):
             num_groups = x.shape[-1] // w.shape[-1]
-            return mx.conv1d(x, w, groups=num_groups)
+            return tk.conv1d(x, w, groups=num_groups)
 
         def fn_gt(x, w):
             num_groups = x.shape[-1] // w.shape[-1]
             group_size = w.shape[-1]
             ws = w.reshape(num_groups, -1, *w.shape[1:]).split(num_groups)
             xs = x.reshape(*x.shape[:-1], num_groups, -1).split(num_groups, axis=-2)
-            return mx.concatenate(
-                [mx.conv_general(x.squeeze(-2), w.squeeze(0)) for x, w in zip(xs, ws)],
+            return tk.concatenate(
+                [tk.conv_general(x.squeeze(-2), w.squeeze(0)) for x, w in zip(xs, ws)],
                 axis=-1,
             )
 
-        mx.random.seed(3)
+        tk.random.seed(3)
 
-        w = mx.random.normal(shape=(2, 3, 1))
-        x = mx.random.normal(shape=(1, 5, 2))
-        cotans = (mx.ones(shape=(1, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 1))
+        x = tk.random.normal(shape=(1, 5, 2))
+        cotans = (tk.ones(shape=(1, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
-        w = mx.random.normal(shape=(2, 3, 2))
-        x = mx.random.normal(shape=(1, 5, 4))
-        cotans = (mx.ones(shape=(1, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 2))
+        x = tk.random.normal(shape=(1, 5, 4))
+        cotans = (tk.ones(shape=(1, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
-        w = mx.random.normal(shape=(6, 3, 2))
-        x = mx.random.normal(shape=(1, 5, 4))
-        cotans = (mx.ones(shape=(1, 3, 6)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(6, 3, 2))
+        x = tk.random.normal(shape=(1, 5, 4))
+        cotans = (tk.ones(shape=(1, 3, 6)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
         # Test 2D
-        w = mx.random.normal(shape=(2, 3, 3, 1))
-        x = mx.random.normal(shape=(1, 5, 5, 2))
-        cotans = (mx.ones(shape=(1, 3, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 3, 1))
+        x = tk.random.normal(shape=(1, 5, 5, 2))
+        cotans = (tk.ones(shape=(1, 3, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
         # Test with flip
         def fn(x, w):
             num_groups = x.shape[-1] // w.shape[-1]
-            return mx.conv_general(x, w, groups=num_groups, flip=True)
+            return tk.conv_general(x, w, groups=num_groups, flip=True)
 
         def fn_gt(x, w):
             num_groups = x.shape[-1] // w.shape[-1]
             group_size = w.shape[-1]
             ws = w.reshape(num_groups, -1, *w.shape[1:]).split(num_groups)
             xs = x.reshape(*x.shape[:-1], num_groups, -1).split(num_groups, axis=-2)
-            return mx.concatenate(
+            return tk.concatenate(
                 [
-                    mx.conv_general(x.squeeze(-2), w.squeeze(0), flip=True)
+                    tk.conv_general(x.squeeze(-2), w.squeeze(0), flip=True)
                     for x, w in zip(xs, ws)
                 ],
                 axis=-1,
             )
 
-        w = mx.random.normal(shape=(2, 3, 1))
-        x = mx.random.normal(shape=(1, 5, 2))
-        cotans = (mx.ones(shape=(1, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 1))
+        x = tk.random.normal(shape=(1, 5, 2))
+        cotans = (tk.ones(shape=(1, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
-        w = mx.random.normal(shape=(2, 3, 2))
-        x = mx.random.normal(shape=(1, 5, 4))
-        cotans = (mx.ones(shape=(1, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 2))
+        x = tk.random.normal(shape=(1, 5, 4))
+        cotans = (tk.ones(shape=(1, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
         # Test 2D
-        w = mx.random.normal(shape=(2, 3, 3, 1))
-        x = mx.random.normal(shape=(1, 5, 5, 2))
-        cotans = (mx.ones(shape=(1, 3, 3, 2)),)
-        grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
-        self.assertTrue(mx.allclose(expected[0], grads[0]))
-        self.assertTrue(mx.allclose(expected[1], grads[1]))
+        w = tk.random.normal(shape=(2, 3, 3, 1))
+        x = tk.random.normal(shape=(1, 5, 5, 2))
+        cotans = (tk.ones(shape=(1, 3, 3, 2)),)
+        grads = tk.vjp(fn, (x, w), cotans)[1]
+        expected = tk.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(tk.allclose(expected[0], grads[0]))
+        self.assertTrue(tk.allclose(expected[1], grads[1]))
 
     def test_repeated_conv(self):
-        x = mx.random.normal((1, 3, 3, 320))
-        w = mx.random.normal((320, 3, 3, 320))
+        x = tk.random.normal((1, 3, 3, 320))
+        w = tk.random.normal((320, 3, 3, 320))
         for i in range(8):
-            y1 = mx.conv2d(x, w, (1, 1), (1, 1), (1, 1), 1)
-            y2 = mx.conv2d(x, w, (1, 1), (1, 1), (1, 1), 1)
-            self.assertTrue(mx.allclose(y1, y2))
+            y1 = tk.conv2d(x, w, (1, 1), (1, 1), (1, 1), 1)
+            y2 = tk.conv2d(x, w, (1, 1), (1, 1), (1, 1), 1)
+            self.assertTrue(tk.allclose(y1, y2))
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_depthwise(self):
@@ -1083,7 +1083,7 @@ class TestConv(mlx_tests.MLXTestCase):
         # fmt: on
 
         dtypes = [np.float32]
-        if mx.default_device() == mx.gpu:
+        if tk.default_device() == tk.gpu:
             dtypes += [np.float16]
 
         for N, H, W, C, kH, kW, O, strides, padding, groups in shapes:
@@ -1118,14 +1118,14 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         pt_out = torch.permute(pt_out, (0, 2, 3, 4, 1))[:, 1:, 1:, 1:, :].numpy()
 
-        mx_out = mx.conv_general(
-            mx.array(inputs),
-            mx.array(kernel),
+        mx_out = tk.conv_general(
+            tk.array(inputs),
+            tk.array(kernel),
             stride=strides,
             padding=([0, 0, 0], [1, 1, 1]),
         )
 
-        self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
+        self.assertTrue(tk.allclose(mx_out, tk.array(pt_out), atol=1e-3, rtol=1e-3))
 
         inputs = np.random.normal(size=(2, 10, 10, 3)).astype(np.float32)
         kernel = np.random.normal(size=(2, 2, 2, 3)).astype(np.float32)
@@ -1138,18 +1138,18 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         pt_out = torch.permute(pt_out, (0, 2, 3, 1))[:, 1:].numpy()
 
-        mx_out = mx.conv_general(
-            mx.array(inputs),
-            mx.array(kernel),
+        mx_out = tk.conv_general(
+            tk.array(inputs),
+            tk.array(kernel),
             stride=1,
             padding=([0, 0], [1, 0]),
         )
-        self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
+        self.assertTrue(tk.allclose(mx_out, tk.array(pt_out), atol=1e-3, rtol=1e-3))
 
     def test_basic_grad_shapes(self):
         def loss_fn(kernel, inputs, strides, groups):
-            return mx.sum(
-                mx.conv_general(
+            return tk.sum(
+                tk.conv_general(
                     inputs,
                     kernel,
                     stride=strides,
@@ -1163,63 +1163,63 @@ class TestConv(mlx_tests.MLXTestCase):
             ((3, 5, 5, 4), (6, 2, 2, 2), (2, 1), 2),
             ((3, 5, 5, 4), (24, 2, 2, 1), (2, 2), 4),
         ]:
-            grads = mx.grad(loss_fn)(
-                mx.zeros(k_shape), mx.zeros(in_shape), strides, groups
+            grads = tk.grad(loss_fn)(
+                tk.zeros(k_shape), tk.zeros(in_shape), strides, groups
             )
             self.assertEqual(grads.shape, k_shape)
 
-    @unittest.skipIf(mx.cuda.is_available() and "CI" in os.environ, "flaky in CI")
+    @unittest.skipIf(tk.cuda.is_available() and "CI" in os.environ, "flaky in CI")
     def test_conv_1d_with_2d(self):
-        x = mx.random.uniform(shape=(2, 10, 16))
-        y = mx.random.normal(shape=(16, 3, 16))
+        x = tk.random.uniform(shape=(2, 10, 16))
+        y = tk.random.normal(shape=(16, 3, 16))
 
-        out = mx.conv1d(x, y, padding=1)
-        out_2d = mx.conv2d(
-            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        out = tk.conv1d(x, y, padding=1)
+        out_2d = tk.conv2d(
+            tk.expand_dims(x, axis=2), tk.expand_dims(y, axis=2), padding=(1, 0)
         )
 
-        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+        self.assertTrue(tk.allclose(out, out_2d.squeeze(2)))
 
-        x = mx.random.uniform(shape=(2, 10, 4))
-        y = mx.random.normal(shape=(4, 3, 4))
+        x = tk.random.uniform(shape=(2, 10, 4))
+        y = tk.random.normal(shape=(4, 3, 4))
 
-        out = mx.conv1d(x, y, padding=1)
-        out_2d = mx.conv2d(
-            mx.expand_dims(x, axis=2), mx.expand_dims(y, axis=2), padding=(1, 0)
+        out = tk.conv1d(x, y, padding=1)
+        out_2d = tk.conv2d(
+            tk.expand_dims(x, axis=2), tk.expand_dims(y, axis=2), padding=(1, 0)
         )
 
-        self.assertTrue(mx.allclose(out, out_2d.squeeze(2)))
+        self.assertTrue(tk.allclose(out, out_2d.squeeze(2)))
 
     def test_conv2d_unaligned_channels(self):
-        x = mx.random.uniform(shape=(2, 16, 16, 21))
-        w = mx.random.uniform(shape=(32, 3, 3, 21))
-        y = mx.conv2d(x, w, stream=mx.cpu)
-        y_hat = mx.conv2d(x, w)
-        self.assertTrue(mx.allclose(y, y_hat))
+        x = tk.random.uniform(shape=(2, 16, 16, 21))
+        w = tk.random.uniform(shape=(32, 3, 3, 21))
+        y = tk.conv2d(x, w, stream=tk.cpu)
+        y_hat = tk.conv2d(x, w)
+        self.assertTrue(tk.allclose(y, y_hat))
 
-        x = mx.random.uniform(shape=(2, 16, 16, 21))
-        w = mx.random.uniform(shape=(21, 3, 3, 21))
-        y = mx.conv2d(x, w, stream=mx.cpu)
-        y_hat = mx.conv2d(x, w)
-        self.assertTrue(mx.allclose(y, y_hat))
+        x = tk.random.uniform(shape=(2, 16, 16, 21))
+        w = tk.random.uniform(shape=(21, 3, 3, 21))
+        y = tk.conv2d(x, w, stream=tk.cpu)
+        y_hat = tk.conv2d(x, w)
+        self.assertTrue(tk.allclose(y, y_hat))
 
-        x = mx.random.uniform(shape=(2, 16, 16, 24))
-        w = mx.random.uniform(shape=(32, 5, 5, 24))
-        y = mx.conv2d(x, w, padding=2, stream=mx.cpu)
-        y_hat = mx.conv2d(x, w, padding=2)
-        self.assertTrue(mx.allclose(y, y_hat))
+        x = tk.random.uniform(shape=(2, 16, 16, 24))
+        w = tk.random.uniform(shape=(32, 5, 5, 24))
+        y = tk.conv2d(x, w, padding=2, stream=tk.cpu)
+        y_hat = tk.conv2d(x, w, padding=2)
+        self.assertTrue(tk.allclose(y, y_hat))
 
-        x = mx.random.uniform(shape=(2, 16, 16, 24))
-        w = mx.random.uniform(shape=(32, 3, 3, 24))
-        y = mx.conv_transpose2d(x, w, stream=mx.cpu)
-        y_hat = mx.conv_transpose2d(x, w)
-        self.assertTrue(mx.allclose(y, y_hat))
+        x = tk.random.uniform(shape=(2, 16, 16, 24))
+        w = tk.random.uniform(shape=(32, 3, 3, 24))
+        y = tk.conv_transpose2d(x, w, stream=tk.cpu)
+        y_hat = tk.conv_transpose2d(x, w)
+        self.assertTrue(tk.allclose(y, y_hat))
 
-    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    @unittest.skipIf(not tk.metal.is_available(), "requires Metal")
     def test_conv2d_winograd_batch_tiling(self):
         # Use envs to test tiling without allocating large buffers.
-        tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
-        ws_key = "MLX_CONV_WINOGRAD_WORKING_SET"
+        tile_key = "TIKI_CONV_WINOGRAD_TILE_BATCH"
+        ws_key = "TIKI_CONV_WINOGRAD_WORKING_SET"
         prev = {k: os.environ.get(k) for k in (tile_key, ws_key)}
 
         # Winograd needs 3x3 stride-1, channels in multiples of 32,
@@ -1234,21 +1234,21 @@ class TestConv(mlx_tests.MLXTestCase):
             for k in (tile_key, ws_key):
                 os.environ.pop(k, None)
             os.environ.update(env)
-            y = mx.conv2d(x, w, padding=1)
-            mx.eval(y)
+            y = tk.conv2d(x, w, padding=1)
+            tk.eval(y)
             return np.array(y)
 
         try:
             for in_shape, wt_shape in cases:
                 np.random.seed(0)
-                x = mx.array(np.random.normal(size=in_shape).astype(np.float32))
+                x = tk.array(np.random.normal(size=in_shape).astype(np.float32))
                 # Small weights keep the output near unit scale.
-                w = mx.array(
+                w = tk.array(
                     (np.random.normal(size=wt_shape) * 0.05).astype(np.float32)
                 )
-                b = mx.zeros((wt_shape[0],))
-                mx.eval(x, w, b)
-                cpu_ref = np.array(mx.conv2d(x, w, padding=1, stream=mx.cpu))
+                b = tk.zeros((wt_shape[0],))
+                tk.eval(x, w, b)
+                cpu_ref = np.array(tk.conv2d(x, w, padding=1, stream=tk.cpu))
 
                 untiled = run(x, w)
                 self.assertGreater(np.abs(untiled).max(), 0)
@@ -1267,8 +1267,8 @@ class TestConv(mlx_tests.MLXTestCase):
                         # A consumer op checks the output is fenced across
                         # command encoders.
                         os.environ[tile_key] = str(tile)
-                        fused = mx.conv2d(x, w, padding=1) + b
-                        mx.eval(fused)
+                        fused = tk.conv2d(x, w, padding=1) + b
+                        tk.eval(fused)
                         self.assertTrue(np.allclose(untiled, fused, atol=1e-4))
                         os.environ.pop(tile_key, None)
 
@@ -1308,11 +1308,11 @@ class TestConv(mlx_tests.MLXTestCase):
                     os.environ[k] = v
 
     def test_conv2d_large_filter_small_channels(self):
-        x = mx.random.normal(shape=(1, 181, 181, 1))
-        w = mx.random.normal(shape=(1, 182, 182, 1))
-        y = mx.conv2d(x, w, (1, 1), (1, 1), stream=mx.cpu)
-        y_hat = mx.conv2d(x, w, (1, 1), (1, 1))
-        self.assertTrue(mx.allclose(y, y_hat, rtol=1e-3, atol=1e-3))
+        x = tk.random.normal(shape=(1, 181, 181, 1))
+        w = tk.random.normal(shape=(1, 182, 182, 1))
+        y = tk.conv2d(x, w, (1, 1), (1, 1), stream=tk.cpu)
+        y_hat = tk.conv2d(x, w, (1, 1), (1, 1))
+        self.assertTrue(tk.allclose(y, y_hat, rtol=1e-3, atol=1e-3))
 
     def test_conv_3D_small_kd_decomposition(self):
         # Exercises the small kernel-depth 3D -> KD x 2D decomposition (#3625):
@@ -1325,21 +1325,21 @@ class TestConv(mlx_tests.MLXTestCase):
             (5, 12, 12, 16, 16, 5, 1, 1),  # larger KD, 1x1 spatial
             (4, 10, 10, 32, 16, 2, 3, 3),  # KD = 2
         ]:
-            x = mx.random.normal((1, T, H, W, Cin))
-            w = mx.random.normal((Cout, kd, kh, kw, Cin))
+            x = tk.random.normal((1, T, H, W, Cin))
+            w = tk.random.normal((Cout, kd, kh, kw, Cin))
             # flip mirrors every kernel axis, including the decomposed depth
             for flip in (False, True):
-                y_gpu = mx.conv_general(x, w, stride=(1, 1, 1), flip=flip)
-                y_cpu = mx.conv_general(
-                    x, w, stride=(1, 1, 1), flip=flip, stream=mx.cpu
+                y_gpu = tk.conv_general(x, w, stride=(1, 1, 1), flip=flip)
+                y_cpu = tk.conv_general(
+                    x, w, stride=(1, 1, 1), flip=flip, stream=tk.cpu
                 )
-                mx.eval(y_gpu, y_cpu)
+                tk.eval(y_gpu, y_cpu)
                 self.assertTrue(
-                    mx.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
+                    tk.allclose(y_gpu, y_cpu, rtol=1e-4, atol=1e-4),
                     f"3D small-kd mismatch T{T} H{H} W{W} "
                     f"C{Cin}->{Cout} k{kd}{kh}{kw} flip={flip}",
                 )
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

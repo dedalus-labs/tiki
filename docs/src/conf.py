@@ -8,7 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import mlx.core as mx
+import tiki as tk
 
 # -- Repository documents ----------------------------------------------------
 # The compiler, scan, and runtime pages are the experiment directories' own
@@ -67,7 +67,7 @@ repository_page(
 project = "Tiki"
 copyright = "2026 Dedalus Labs, Inc"
 author = "Dedalus Labs"
-version = ".".join(mx.__version__.split(".")[:3])
+version = ".".join(tk.__version__.split(".")[:3])
 release = version
 
 # -- General configuration ---------------------------------------------------
@@ -86,7 +86,7 @@ extensions = [
 ]
 
 python_use_unqualified_type_names = True
-autodoc_type_aliases = {"Coordinate": "mlx.tiki.composed.Coordinate"}
+autodoc_type_aliases = {"Coordinate": "tiki.layout.composed.Coordinate"}
 autosummary_generate = True
 autosummary_filename_map = {
     "tiki.Stream": "stream_class",
