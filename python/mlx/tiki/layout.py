@@ -21,7 +21,9 @@ from mlx.tiki._pycute import (
     Layout,
     MutableAccessor,
     Ptr,
-    Swizzle,
+)
+from mlx.tiki._pycute import Swizzle as _Swizzle
+from mlx.tiki._pycute import (
     Tensor,
     TransformAccessor,
     blocked_product,
@@ -68,6 +70,19 @@ basis = E
 
 class LayoutError(ValueError):
     """A layout precondition failed: congruence, divisibility, or invertibility."""
+
+
+class Swizzle(_Swizzle):
+    """A CuTe bit permutation whose source and destination fields are disjoint."""
+
+    def __init__(self, bits: int, base: int, shift: int) -> None:
+        if any(type(value) is not int for value in (bits, base, shift)):
+            raise LayoutError("swizzle bits, base, and shift must be integers")
+        if bits < 0 or base < 0 or abs(shift) < bits:
+            raise LayoutError(
+                f"invalid swizzle ({bits}, {base}, {shift}). Require bits >= 0, base >= 0, and abs(shift) >= bits"
+            )
+        super().__init__(bits, base, shift)
 
 
 def _typed(operation: Callable[..., Any]) -> Callable[..., Any]:
