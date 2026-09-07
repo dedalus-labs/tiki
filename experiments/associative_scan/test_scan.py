@@ -29,12 +29,12 @@ def sequential(fn: Callable[[Any, Any], Any], elems: Any) -> Any:
     flat = tree_flatten(elems)
     keys = [key for key, _ in flat]
     leaves = [leaf for _, leaf in flat]
-    n = leaves[0].shape[0]
-    if n == 0:
+    length = leaves[0].shape[0]
+    if length == 0:
         return elems
     at = lambda i: tree_unflatten([(key, leaf[i]) for key, leaf in zip(keys, leaves)])
     state, states = at(0), [at(0)]
-    for i in range(1, n):
+    for i in range(1, length):
         state = fn(state, at(i))
         states.append(state)
     stacked = [
@@ -52,18 +52,20 @@ def affine(
     return ar * al, ar * bl + br
 
 
-def rows(n: int, width: int, seed: int) -> mx.array:
+def rows(length: int, width: int, seed: int) -> mx.array:
     return mx.array(
-        np.random.default_rng(seed).normal(size=(n, width)).astype(np.float32)
+        np.random.default_rng(seed).normal(size=(length, width)).astype(np.float32)
     )
 
 
-def small_integer_matrices(n: int, seed: int) -> np.ndarray:
+def small_integer_matrices(length: int, seed: int) -> np.ndarray:
     """Entries in {-1, 0, 1} so every prefix product up to length 9 is exact in
     float32 on any backend, including TF32 matmul; the test then measures the
     scan, not the device's matmul precision."""
     return (
-        np.random.default_rng(seed).integers(-1, 2, size=(n, 2, 2)).astype(np.float32)
+        np.random.default_rng(seed)
+        .integers(-1, 2, size=(length, 2, 2))
+        .astype(np.float32)
     )
 
 
@@ -81,78 +83,82 @@ def assert_close(actual: Any, expected: Any, name: str) -> None:
         )
 
 
-@unittest.skipUnless(
-    FIXED, "MLX build lacks the normalize_slice fix; strided-slice VJP is wrong"
-)
 class TestAssociativeScan(unittest.TestCase):
     # Invariant: scan with addition equals mx.cumsum on every length, both
     # directions, on a leading and a trailing axis.
     # Witness: random float32 rows for each length in LENGTHS.
     def test_cumsum_parity(self) -> None:
-        for n in LENGTHS:
-            x = rows(n, 3, n)
+        for length in LENGTHS:
+            x = rows(length, 3, length)
             for reverse in (False, True):
                 got = associative_scan(mx.add, x, reverse=reverse)
                 assert_close(
                     got,
                     mx.cumsum(x, axis=0, reverse=reverse),
-                    f"n={n} reverse={reverse}",
+                    f"{length=} reverse={reverse}",
                 )
                 got_t = associative_scan(mx.add, x.T, reverse=reverse, axis=1)
                 assert_close(
                     got_t,
                     mx.cumsum(x.T, axis=1, reverse=reverse),
-                    f"n={n} axis=1 reverse={reverse}",
+                    f"{length=} axis=1 reverse={reverse}",
                 )
 
     # Invariant: combine order is preserved for a non-commutative operation.
     # Witness: prefix products of random 2x2 matrices versus a sequential fold.
     def test_noncommutative_matmul(self) -> None:
-        for n in (1, 2, 3, 5, 8, 9):
-            mats = mx.array(small_integer_matrices(n, n))
+        for length in (1, 2, 3, 5, 8, 9):
+            mats = mx.array(small_integer_matrices(length, length))
             assert_close(
-                associative_scan(mx.matmul, mats), sequential(mx.matmul, mats), f"n={n}"
+                associative_scan(mx.matmul, mats),
+                sequential(mx.matmul, mats),
+                f"{length=}",
             )
 
     # Invariant: pytree inputs scan leaf-wise with one combine over the tree.
     # Witness: the affine pair (a, b) with a zero coefficient inside the row.
     def test_pytree_affine(self) -> None:
-        for n in LENGTHS:
-            a, b = rows(n, 3, n), rows(n, 3, n + 100)
-            if n > 1:
+        for length in LENGTHS:
+            a, b = rows(length, 3, length), rows(length, 3, length + 100)
+            if length > 1:
                 a[1, 0] = 0
             assert_close(
-                associative_scan(affine, (a, b)), sequential(affine, (a, b)), f"n={n}"
+                associative_scan(affine, (a, b)),
+                sequential(affine, (a, b)),
+                f"{length=}",
             )
 
     # Invariant: reverse-mode derivatives of the tree match the sequential fold
     # for arbitrary cotangents on both outputs, with no registered backward.
     # Witness: the affine pair at lengths that cover both recursion parities.
+    @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
     def test_vjp_matches_sequential(self) -> None:
-        for n in (1, 2, 3, 7, 16, 33):
-            a, b, ga, gb = (rows(n, 3, n + k) for k in range(4))
+        for length in (1, 2, 3, 7, 16, 33):
+            a, b, ga, gb = (rows(length, 3, length + k) for k in range(4))
             tree_grads = mx.vjp(
                 lambda a, b: associative_scan(affine, (a, b)), (a, b), (ga, gb)
             )[1]
             seq_grads = mx.vjp(
                 lambda a, b: sequential(affine, (a, b)), (a, b), (ga, gb)
             )[1]
-            assert_close(tree_grads, seq_grads, f"n={n}")
+            assert_close(tree_grads, seq_grads, f"{length=}")
 
     # Invariant: forward-mode derivatives match the sequential fold.
     # Witness: unit tangents on the affine pair at length 7 and 16.
+    @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
     def test_jvp_matches_sequential(self) -> None:
-        for n in (7, 16):
-            a, b = rows(n, 3, n), rows(n, 3, n + 1)
+        for length in (7, 16):
+            a, b = rows(length, 3, length), rows(length, 3, length + 1)
             tangents = (mx.ones_like(a), mx.ones_like(b))
             tree = mx.jvp(
                 lambda a, b: associative_scan(affine, (a, b)), (a, b), tangents
             )[1]
             seq = mx.jvp(lambda a, b: sequential(affine, (a, b)), (a, b), tangents)[1]
-            assert_close(tree, seq, f"n={n}")
+            assert_close(tree, seq, f"{length=}")
 
     # Invariant: the scan composes with vmap the way JAX's does.
     # Witness: a batched cumsum equals cumsum along the scanned axis.
+    @unittest.skipUnless(FIXED, "requires the singleton slice transformation fix")
     def test_vmap(self) -> None:
         x = mx.array(np.random.default_rng(0).normal(size=(4, 9, 2)).astype(np.float32))
         batched = mx.vmap(lambda row: associative_scan(mx.add, row))(x)
@@ -161,6 +167,7 @@ class TestAssociativeScan(unittest.TestCase):
     # Invariant: the length-2 case, the one the MLX slice fix repairs,
     # differentiates correctly through stride-2 pairing.
     # Witness: d(sum of scan)/dx for x of length 2 is [2, 1].
+    @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
     def test_length_two_vjp(self) -> None:
         x = mx.array([1.0, 2.0])
         grad = mx.grad(lambda x: mx.sum(associative_scan(mx.add, x)))(x)
@@ -169,6 +176,7 @@ class TestAssociativeScan(unittest.TestCase):
     # Invariant: the VJP of x[::2] on a length-2 input routes the single
     # cotangent to element 0 only (the Tiki normalize_slice fix).
     # Witness: expected [1, 0]; unfixed MLX 0.32 returns [1, 1].
+    @unittest.skipUnless(FIXED, "requires the singleton slice derivative fix")
     def test_mlx_strided_slice_vjp_is_fixed(self) -> None:
         x = mx.array([1.0, 2.0])
         grad = mx.vjp(lambda x: x[::2], (x,), (mx.array([1.0]),))[1][0]
@@ -185,9 +193,9 @@ class TestAssociativeScan(unittest.TestCase):
             associative_scan(affine, (mx.zeros((3,)), mx.zeros((4,))))
 
 
-@unittest.skipUnless(HAS_JAX and FIXED, "needs jax and the normalize_slice fix")
+@unittest.skipUnless(HAS_JAX, "needs jax")
 class TestJaxParity(unittest.TestCase):
-    """The port must reproduce jax.lax.associative_scan bit-for-bit up to float32 rounding."""
+    """The port must match jax.lax.associative_scan within the stated tolerance."""
 
     def jax_scan(self, fn: Any, elems: Any, **kwargs: Any) -> Any:
         import jax
@@ -199,27 +207,36 @@ class TestJaxParity(unittest.TestCase):
     def test_add(self) -> None:
         import jax.numpy as jnp
 
-        for n in LENGTHS:
-            x = np.random.default_rng(n).normal(size=(n, 3)).astype(np.float32)
+        for length in LENGTHS:
+            x = (
+                np.random.default_rng(length)
+                .normal(size=(length, 3))
+                .astype(np.float32)
+            )
             for reverse in (False, True):
                 ours = associative_scan(mx.add, mx.array(x), reverse=reverse)
                 theirs = self.jax_scan(jnp.add, jnp.asarray(x), reverse=reverse)
                 assert_close(
-                    ours, mx.array(np.asarray(theirs)), f"n={n} reverse={reverse}"
+                    ours,
+                    mx.array(np.asarray(theirs)),
+                    f"{length=} reverse={reverse}",
                 )
 
     # Invariant: same results as JAX for a non-commutative combine on axis 1.
-    # Witness: prefix matrix products along the middle axis of a (2, n, 2, 2) array.
+    # Witness: prefix matrix products along the middle axis of a (2, length, 2, 2) array.
     def test_matmul_axis_one(self) -> None:
         import jax.numpy as jnp
 
-        for n in (1, 2, 3, 6, 9):
+        for length in (1, 2, 3, 6, 9):
             x = np.stack(
-                [small_integer_matrices(n, n), small_integer_matrices(n, n + 50)]
+                [
+                    small_integer_matrices(length, length),
+                    small_integer_matrices(length, length + 50),
+                ]
             )
             ours = associative_scan(mx.matmul, mx.array(x), axis=1)
             theirs = self.jax_scan(jnp.matmul, jnp.asarray(x), axis=1)
-            assert_close(ours, mx.array(np.asarray(theirs)), f"n={n}")
+            assert_close(ours, mx.array(np.asarray(theirs)), f"{length=}")
 
     # Invariant: same results as JAX for a tuple pytree combine.
     # Witness: the affine pair, matching JAX's own tuple-of-arrays example shape.
@@ -231,13 +248,23 @@ class TestJaxParity(unittest.TestCase):
             ar, br = right
             return ar * al, ar * bl + br
 
-        for n in (1, 2, 5, 16, 33):
-            a = np.random.default_rng(n).normal(size=(n, 3)).astype(np.float32)
-            b = np.random.default_rng(n + 1).normal(size=(n, 3)).astype(np.float32)
+        for length in (1, 2, 5, 16, 33):
+            a = (
+                np.random.default_rng(length)
+                .normal(size=(length, 3))
+                .astype(np.float32)
+            )
+            b = (
+                np.random.default_rng(length + 1)
+                .normal(size=(length, 3))
+                .astype(np.float32)
+            )
             ours = associative_scan(affine, (mx.array(a), mx.array(b)))
             theirs = self.jax_scan(jax_affine, (jnp.asarray(a), jnp.asarray(b)))
             assert_close(
-                ours, tuple(mx.array(np.asarray(leaf)) for leaf in theirs), f"n={n}"
+                ours,
+                tuple(mx.array(np.asarray(leaf)) for leaf in theirs),
+                f"{length=}",
             )
 
 

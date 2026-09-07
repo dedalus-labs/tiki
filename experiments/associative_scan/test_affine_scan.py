@@ -46,6 +46,29 @@ def assert_close(actual: Pair, expected: Pair, name: str) -> None:
 
 @unittest.skipUnless(HAS_CUDA, "the affine scan kernel needs CUDA")
 class TestAffineScan(unittest.TestCase):
+    def test_first_offset_does_not_depend_on_the_first_coefficient(self) -> None:
+        for time in (1, 3, 8):
+            for coefficient in (float("inf"), -float("inf"), float("nan")):
+                a = mx.ones((1, time))
+                a[0, 0] = coefficient
+                b = mx.arange(1, time + 1, dtype=mx.float32)[None]
+                _, offsets = affine_scan(a, b)
+                mx.eval(offsets)
+                mx.synchronize()
+                np.testing.assert_array_equal(
+                    np.asarray(offsets), np.asarray(mx.cumsum(b, axis=1))
+                )
+
+    def test_first_coefficient_has_no_offset_cotangent(self) -> None:
+        a = mx.ones((1, 3))
+        b = mx.ones_like(a)
+        gp = mx.zeros_like(a)
+        gh = mx.array([[float("inf"), 0.0, 0.0]])
+        da, _ = mx.vjp(affine_scan, (a, b), (gp, gh))[1]
+        mx.eval(da)
+        mx.synchronize()
+        self.assertEqual(da[0, 0].item(), 0.0)
+
     # Invariant: the kernel's forward equals the generic tree at every
     # contract length, including a zero coefficient mid-row.
     # Witness: batch 5 rows for each length in LENGTHS.
