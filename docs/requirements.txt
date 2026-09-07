@@ -5,4 +5,3 @@ sphinx-design
 sphinx-copybutton
 sphinxcontrib-mermaid
 breathe
-tiki
