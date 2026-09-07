@@ -4,6 +4,8 @@ import struct
 from dataclasses import dataclass
 from math import prod
 
+from mlx.tiki import Swizzle
+
 from graph import Graph, Node, Shape, UnsupportedGraphError, Value
 from operations import Operation
 
@@ -66,34 +68,21 @@ class RowSchedule:
 
 
 @dataclass(frozen=True)
-class Swizzle:
-    bits: int = 5
-    base: int = 0
-    shift: int = 5
-
-    def __post_init__(self) -> None:
-        if any(type(value) is not int for value in (self.bits, self.base, self.shift)):
-            raise UnsupportedScheduleError("swizzle parameters must be integers")
-        if not (
-            0 <= self.bits <= 5 and 0 <= self.base <= 5 - self.bits and self.shift == 5
-        ):
-            raise UnsupportedScheduleError(
-                "32x32 transpose requires 0 <= bits + base <= 5 and shift=5"
-            )
-
-    def offset(self, index: int) -> int:
-        mask = ((1 << self.bits) - 1) << self.base
-        return index ^ ((index >> self.shift) & mask)
-
-
-@dataclass(frozen=True)
 class TransposeSchedule:
     arch: str = "sm_90"
     threads: int = 128
-    swizzle: Swizzle = Swizzle()
+    swizzle: Swizzle = Swizzle(5, 0, 5)
 
     def __post_init__(self) -> None:
         Schedule(arch=self.arch, threads=self.threads)
+        if not isinstance(self.swizzle, Swizzle):
+            raise UnsupportedScheduleError(
+                "transpose requires a validated Tiki Swizzle"
+            )
+        if self.swizzle.bits + self.swizzle.base > 5 or self.swizzle.shift != 5:
+            raise UnsupportedScheduleError(
+                "32x32 transpose requires bits + base <= 5 and shift=5"
+            )
 
 
 @dataclass(frozen=True)
