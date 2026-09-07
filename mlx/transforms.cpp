@@ -434,7 +434,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   std::unordered_set<std::uintptr_t> calc_grad;
   for (int i = 0, j = 0; i < primals_.size(); ++i) {
     auto& primal = primals_[i];
-    primal.set_tracer(false);
+    primal.set_tracer(detail::in_abstract_tracing());
     cache.insert(primal.id());
     if (j < argnums.size() && argnums[j] == i) {
       j++;
@@ -450,9 +450,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     if (auto inserted = cache.insert(a.id()); !inserted.second) {
       return;
     }
-    a.set_tracer(false);
+    a.set_tracer(detail::in_abstract_tracing());
     for (auto& s : a.siblings()) {
-      s.set_tracer(false);
+      s.set_tracer(detail::in_abstract_tracing());
       cache.insert(s.id());
     }
 
@@ -600,11 +600,13 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   auto outputs = fun(primals_);
 
   // Topologically sort the compute graph, record outputs
-  // in the tape if a gradient is needed.
+  // in the tape if a gradient is needed. A rule may evaluate what it is
+  // given, so the arrays stop being tracers, unless a vmap or compile
+  // placeholder is upstream, in which case they still cannot be evaluated.
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_set<std::uintptr_t> calc_grad;
   for (auto& primal : primals_) {
-    primal.set_tracer(false);
+    primal.set_tracer(detail::in_abstract_tracing());
     calc_grad.insert(primal.id());
     cache.insert(primal.id());
   }
@@ -617,9 +619,9 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     if (auto inserted = cache.insert(a.id()); !inserted.second) {
       return;
     }
-    a.set_tracer(false);
+    a.set_tracer(detail::in_abstract_tracing());
     for (auto& s : a.siblings()) {
-      s.set_tracer(false);
+      s.set_tracer(detail::in_abstract_tracing());
       cache.insert(s.id());
     }
 

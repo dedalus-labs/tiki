@@ -42,6 +42,16 @@ struct InTracing {
   static bool in_grad_tracing() {
     return grad_counter > 0;
   }
+  // vmap and compile trace on placeholders that cannot be evaluated; a
+  // derivative transformation traces on arrays that can.
+  static bool in_abstract_tracing() {
+    for (auto& [dynamic, grad] : trace_stack()) {
+      if (!grad) {
+        return true;
+      }
+    }
+    return false;
+  }
 
  private:
   static thread_local int grad_counter;
@@ -84,6 +94,10 @@ struct RetainGraph {
  * order to keep the graph when evaluating tracer arrays. */
 inline bool in_tracing() {
   return detail::InTracing::in_tracing();
+}
+
+inline bool in_abstract_tracing() {
+  return detail::InTracing::in_abstract_tracing();
 }
 
 /** Return true if the current trace is being recorded for export. */

@@ -166,6 +166,10 @@ bool array::is_tracer() const {
       detail::retain_graph();
 }
 
+bool array::is_placeholder() const {
+  return array_desc_->is_tracer && detail::in_abstract_tracing();
+}
+
 void array::set_data(allocator::Buffer buffer, Deleter d) {
   array_desc_->data = std::make_shared<Data>(buffer, d);
   array_desc_->offset = 0;
