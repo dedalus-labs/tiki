@@ -7,10 +7,10 @@ html_theme.sidebar_secondary.remove: true
 **Model code that reads like the math. Kernel code that says where every byte
 goes. A compiler we can understand and steer.**
 
-Tiki is Dedalus's machine learning framework, built from upstream MLX. Write ordinary
-array code when the computation is ordinary; when performance depends on a
-particular tile, memory layout, or instruction, say so directly in Python.
-The same arrays, automatic differentiation, and runtime surround both.
+Tiki is Dedalus's machine learning framework. Write ordinary array code when
+the computation is ordinary. When performance depends on a particular tile,
+memory layout, or instruction, say so directly in Python. The same arrays,
+automatic differentiation, and runtime surround both.
 
 ::::{grid} 1 2 2 3
 :gutter: 3
