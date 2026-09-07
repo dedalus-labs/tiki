@@ -12,8 +12,6 @@ on:
       - README.md
       - gha/docs.ts
   pull_request:
-    branches:
-      - main
     paths:
       - docs/**
       - python/**

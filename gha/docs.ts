@@ -13,7 +13,7 @@ export const docs = workflow({
 	name: "Docs",
 	on: {
 		push: { branches: ["main"], paths: docsPaths },
-		pull_request: { branches: ["main"], paths: docsPaths },
+		pull_request: { paths: docsPaths },
 		workflow_dispatch: {},
 	},
 	concurrency: {
