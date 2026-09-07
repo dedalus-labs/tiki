@@ -3,14 +3,69 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
+import shutil
 import subprocess
+from pathlib import Path
 
 import mlx.core as mx
+
+# -- Repository documents ----------------------------------------------------
+# The compiler, scan, and runtime pages are the experiment directories' own
+# Markdown, copied here before Sphinx reads the tree so their relative links
+# resolve as pages. The copies are build products, ignored by git.
+
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+SECTIONS = {
+    "compile": "experiments/cute_backend",
+    "scan": "experiments/associative_scan",
+    "runtime": "experiments/rust_backend",
+}
+
+
+GITHUB = "https://github.com/dedalus-labs/tiki/blob/main"
+
+
+def repository_page(
+    source: Path, target: Path, root: Path, title: str | None = None
+) -> None:
+    """Copy one repository document as a page; links to other repository files go to GitHub."""
+    text = source.read_text()
+    if title:
+        text = text.replace(text.split("\n", 1)[0], f"# {title}", 1)
+
+    def link(match: re.Match[str]) -> str:
+        label, href = match.group(1), match.group(2)
+        if "://" in href or href.startswith("#") or href.startswith("mailto:"):
+            return match.group(0)
+        path, _, fragment = href.partition("#")
+        resolved = (source.parent / path).resolve()
+        if not resolved.exists() or root not in resolved.parents:
+            return match.group(0)
+        return f"[{label}]({GITHUB}/{resolved.relative_to(root)}{'#' + fragment if fragment else ''})"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, text))
+
+
+for section, directory in SECTIONS.items():
+    target = Path(__file__).resolve().parent / "tiki" / section
+    shutil.rmtree(target, ignore_errors=True)
+    repository_page(
+        REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY
+    )
+repository_page(
+    REPOSITORY / "README.md",
+    Path(__file__).resolve().parent / "tiki" / "vision.md",
+    REPOSITORY,
+    title="Vision",
+)
 
 # -- Project information -----------------------------------------------------
 
 project = "Tiki"
-copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc"
+copyright = "2026 Dedalus Labs, Inc"
 author = "Dedalus Labs"
 version = ".".join(mx.__version__.split(".")[:3])
 release = version
@@ -53,7 +108,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 main_doc = "index"
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "attrs_block"]
 myst_heading_anchors = 3
-exclude_patterns = ["tiki/*/target", "tiki/runtime/repros/crubit"]
+
 myst_fence_as_directive = ["mermaid"]
 highlight_language = "python"
 pygments_style = "sphinx"
@@ -104,7 +159,6 @@ htmlhelp_basename = "tiki_doc"
 
 def setup(app):
     from sphinx.util import inspect
-
 
     wrapped_isfunc = inspect.isfunction
 
