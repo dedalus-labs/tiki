@@ -10,7 +10,7 @@ import mlx.core as mx
 # -- Project information -----------------------------------------------------
 
 project = "Tiki"
-copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc."
+copyright = "2026 Dedalus Labs, Inc. Portions 2023 Apple Inc"
 author = "Dedalus Labs"
 version = ".".join(mx.__version__.split(".")[:3])
 release = version
@@ -77,6 +77,9 @@ html_theme_options = {
     "github_url": "https://github.com/dedalus-labs/tiki",
     "use_edit_page_button": True,
     "show_toc_level": 2,
+    "show_nav_level": 1,
+    "navigation_depth": 1,
+    "collapse_navigation": False,
     "navigation_with_keys": False,
     "navbar_align": "left",
     "navbar_end": ["theme-switcher", "navbar-icon-links"],

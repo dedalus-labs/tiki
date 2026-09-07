@@ -43,14 +43,14 @@ CUDA storage and completion owned by a checked Rust runtime behind a C++
 boundary.
 :::
 
-:::{grid-item-card} Tiki guide
+:::{grid-item-card} Guide
 :link: guide/index
 :link-type: doc
 The array framework underneath: lazy evaluation, unified memory, function
 transformations, compilation.
 :::
 
-:::{grid-item-card} API reference
+:::{grid-item-card} API
 :link: api/index
 :link-type: doc
 `tiki.layout`, `tiki`, `tiki.nn`, and the C++ operations.
@@ -62,8 +62,8 @@ transformations, compilation.
 :hidden:
 :maxdepth: 1
 
-tiki/index
-guide/index
-api/index
-develop/index
+Overview <tiki/index>
+Guide <guide/index>
+API <api/index>
+Develop <develop/index>
 ```
