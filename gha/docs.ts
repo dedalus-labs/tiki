@@ -17,8 +17,8 @@ export const docs = workflow({
 		workflow_dispatch: {},
 	},
 	concurrency: {
-		group: "pages",
-		"cancel-in-progress": false,
+		group: "docs-${{ github.ref }}",
+		"cancel-in-progress": true,
 	},
 	permissions: { contents: "read" },
 	jobs: {
@@ -86,6 +86,7 @@ export const docs = workflow({
 			needs: "build",
 			if: "github.event_name == 'push' && github.ref == 'refs/heads/main'",
 			"runs-on": "ubuntu-latest",
+			concurrency: { group: "pages", "cancel-in-progress": false },
 			permissions: {
 				pages: "write",
 				"id-token": "write",
