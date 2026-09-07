@@ -26,8 +26,17 @@ html {
   border-top: 4px solid transparent;
   border-image: linear-gradient(90deg, #ff1f3a 0%, #ff6b00 50%, #ffc300 100%) 1;
 }
+/* Wordmark order: the name, then the mark. */
+.navbar-brand {
+  flex-direction: row-reverse;
+  gap: 0.5rem;
+}
 .navbar-brand img {
-  height: 34px;
+  height: 30px;
+}
+.navbar-brand .title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 .bd-article p, .bd-article li {
   max-width: 72ch;

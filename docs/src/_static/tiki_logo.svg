@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" width="520" height="160">
-  <g transform="translate(0,20) scale(0.12)">
-    <polygon fill="#FF1F3A" points="160,740 1100,420.4 1100,300.4 160,620"/>
-    <polygon fill="#FF6B00" points="320,860 1000,628.8 1000,508.8 320,740"/>
-    <polygon fill="#FFC300" points="460,985 910,832.0 910,712.0 460,865"/>
-  </g>
-  <text x="165" y="112" font-family="-apple-system, 'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="96" font-weight="700" letter-spacing="-2" fill="#1a1a1a">Tiki</text>
-</svg>
