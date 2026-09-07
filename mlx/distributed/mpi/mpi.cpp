@@ -109,7 +109,9 @@ struct MPIWrapper {
     // Check library version and warn if it isn't Open MPI
     int (*get_version)(char*, int*);
     LOAD_SYMBOL(MPI_Get_library_version, get_version);
-    char version_ptr[MPI_MAX_LIBRARY_VERSION_STRING];
+    // The library is chosen at run time, so the header's limit may belong to
+    // a different MPI. MPICH's limit is the largest in use.
+    char version_ptr[8192];
     int version_length = 0;
     get_version(version_ptr, &version_length);
     std::string_view version(version_ptr, version_length);
