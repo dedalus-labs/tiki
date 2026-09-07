@@ -21,12 +21,14 @@ extensions = [
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
+    "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "breathe",
 ]
 
 python_use_unqualified_type_names = True
+autodoc_type_aliases = {"Coordinate": "mlx.tiki.composed.Coordinate"}
 autosummary_generate = True
 autosummary_filename_map = {
     "mlx.core.Stream": "stream_class",
