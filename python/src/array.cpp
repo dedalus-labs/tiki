@@ -14,6 +14,7 @@
 #include <nanobind/typing.h>
 
 #include "mlx/backend/metal/metal.h"
+#include "mlx/transforms_impl.h"
 #include "mlx/utils.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
@@ -348,12 +349,16 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def_prop_ro(
           "is_tracer",
-          &mx::array::is_tracer,
+          [](const mx::array& a) {
+            return a.is_tracer() && !mx::detail::retain_graph();
+          },
           R"pbdoc(
-            Whether the array is a placeholder inside a function transformation.
+            Whether the array is a placeholder that cannot be evaluated.
 
-            A tracer has no storage yet, so its layout cannot be read; code that
-            specializes on strides packs tracers instead.
+            Inside ``vmap`` or ``compile`` tracing an array has no storage, so
+            its layout cannot be read and code that specializes on strides
+            packs it instead. Inside a derivative rule the graph is retained
+            and evaluation is allowed, so this is ``False`` there.
           )pbdoc")
       .def_prop_ro(
           "strides",

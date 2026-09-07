@@ -669,7 +669,13 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       }
     }
 
-    auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    std::vector<array> jvps;
+    {
+      // As in vjp: a rule may evaluate its primals, and under an enclosing
+      // transformation that must not detach them from the outer graph.
+      detail::RetainGraph retain;
+      jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    }
     auto outputs = a.outputs();
     // A primitive's jvp returns one tangent per output
     assert(jvps.size() <= outputs.size());
@@ -859,21 +865,21 @@ std::vector<array> vmap_replace(
     // A custom function records its forward outputs as trailing inputs so
     // it can replay the forward; its vmap rule owns the batched computation,
     // so the recorded graph is never vmapped itself.
-    auto inputs = a.inputs();
+    auto& inputs = a.inputs();
+    size_t primal_inputs = inputs.size();
     if (a.has_primitive() &&
         typeid(a.primitive()) == typeid(CustomTransforms)) {
-      inputs.resize(
-          inputs.size() -
-          static_cast<CustomTransforms&>(a.primitive()).num_outputs());
+      primal_inputs -=
+          static_cast<CustomTransforms&>(a.primitive()).num_outputs();
     }
     // Recurse on inputs
-    for (auto& input : inputs) {
-      recurse(input);
+    for (size_t i = 0; i < primal_inputs; ++i) {
+      recurse(inputs[i]);
     }
     // If any input needs a vmap, then the outputs also need
     // a vmap
-    for (auto& input : inputs) {
-      if (needs_vmap.find(input.id()) != needs_vmap.end()) {
+    for (size_t i = 0; i < primal_inputs; ++i) {
+      if (needs_vmap.find(inputs[i].id()) != needs_vmap.end()) {
         tape.push_back(a);
         tape.back().set_tracer(false);
         needs_vmap.insert(a.id());
