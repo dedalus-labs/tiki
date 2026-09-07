@@ -1,42 +1,48 @@
-# Tiki guide
+# Guide
 
-The array model, transformations, and runtime that every Tiki kernel
-stands on. These pages come from upstream MLX and are carried here as they are.
+The array model, transformations, and runtime that every Tiki kernel stands
+on. These pages come from upstream MLX and are carried here as they are.
 
 ```{toctree}
-:caption: Install
+:caption: Start
 :maxdepth: 1
 
-../install
+Install <../install>
+Quick start <../usage/quick_start>
 ```
 
 ```{toctree}
-:caption: Usage
+:caption: Concepts
 :maxdepth: 1
 
-../usage/quick_start
-../usage/lazy_evaluation
-../usage/unified_memory
-../usage/indexing
-../usage/kv_cache
-../usage/saving_and_loading
-../usage/function_transforms
-../usage/compile
-../usage/numpy
-../usage/precision
-../usage/environment_variables
-../usage/distributed
-../usage/using_streams
-../usage/export
+Lazy evaluation <../usage/lazy_evaluation>
+Unified memory <../usage/unified_memory>
+Indexing <../usage/indexing>
+Function transforms <../usage/function_transforms>
+Compilation <../usage/compile>
+Streams <../usage/using_streams>
+Precision <../usage/precision>
+```
+
+```{toctree}
+:caption: Working with data
+:maxdepth: 1
+
+Saving and loading <../usage/saving_and_loading>
+NumPy interop <../usage/numpy>
+Exporting functions <../usage/export>
+KV cache <../usage/kv_cache>
+Environment variables <../usage/environment_variables>
+Distributed <../usage/distributed>
 ```
 
 ```{toctree}
 :caption: Examples
 :maxdepth: 1
 
-../examples/linear_regression
-../examples/mlp
-../examples/llama-inference
-../examples/data_parallelism
-../examples/tensor_parallelism
+Linear regression <../examples/linear_regression>
+Multi-layer perceptron <../examples/mlp>
+LLM inference <../examples/llama-inference>
+Data parallelism <../examples/data_parallelism>
+Tensor parallelism <../examples/tensor_parallelism>
 ```
