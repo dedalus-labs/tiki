@@ -68,8 +68,8 @@ def main() -> None:
         function = tk.compile(schedule=schedule)(rms_norm)
         save_case(name, function, (x, weight), args.output, args.execute)
     for name, swizzle in (
-        ("transpose_plain", tk.Swizzle(bits=0)),
-        ("transpose_swizzle", tk.Swizzle(bits=5)),
+        ("transpose_plain", tk.Swizzle(0, 0, 5)),
+        ("transpose_swizzle", tk.Swizzle(5, 0, 5)),
     ):
         function = tk.compile(schedule=tk.TransposeSchedule(swizzle=swizzle))(transpose)
         save_case(name, function, (matrix,), args.output, args.execute)

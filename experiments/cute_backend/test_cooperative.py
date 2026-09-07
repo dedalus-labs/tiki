@@ -53,22 +53,30 @@ class ScheduleTests(unittest.TestCase):
                 tk.compile(schedule=tk.RowSchedule())(function).lower(mx.ones((3, 129)))
 
     def test_swizzle_is_a_bijection_and_changes_column_banks(self):
-        plain = tk.Swizzle(bits=0)
-        xor = tk.Swizzle(bits=5)
-        for swizzle in (plain, xor, tk.Swizzle(bits=3, base=2)):
+        plain = tk.Swizzle(0, 0, 5)
+        xor = tk.Swizzle(5, 0, 5)
+        for swizzle in (plain, xor, tk.Swizzle(3, 2, 5)):
             offsets = [
-                swizzle.offset(row * 32 + col) for row in range(32) for col in range(32)
+                swizzle(row * 32 + col) for row in range(32) for col in range(32)
             ]
             self.assertEqual(sorted(offsets), list(range(1024)))
-        self.assertEqual(len({plain.offset(row * 32) % 32 for row in range(32)}), 1)
-        self.assertEqual(len({xor.offset(row * 32) % 32 for row in range(32)}), 32)
+        self.assertEqual(len({plain(row * 32) % 32 for row in range(32)}), 1)
+        self.assertEqual(len({xor(row * 32) % 32 for row in range(32)}), 32)
+
+    def test_transpose_uses_the_public_index_transform(self) -> None:
+        from mlx.tiki import Swizzle
+
+        swizzle = Swizzle(2, 1, 5)
+        schedule = tk.TransposeSchedule(swizzle=swizzle)
+        self.assertIs(schedule.swizzle, swizzle)
+        self.assertIs(tk.Swizzle, Swizzle)
 
     def test_bad_schedules_are_rejected(self):
         for create in (
             lambda: tk.RowSchedule(threads_per_row=48),
             lambda: tk.RowSchedule(threads_per_row=256, rows_per_block=8),
             lambda: tk.RowSchedule(threads_per_row=8, rows_per_block=1),
-            lambda: tk.Swizzle(bits=5, base=1),
+            lambda: tk.TransposeSchedule(swizzle=tk.Swizzle(5, 1, 5)),
         ):
             with self.assertRaises(tk.UnsupportedScheduleError):
                 create()
@@ -120,7 +128,7 @@ class CooperativeExecutionTests(unittest.TestCase):
     def test_swizzled_transpose_preserves_values_and_partial_tiles(self):
         for bits, base in ((0, 0), (5, 0), (3, 2)):
             compiled = tk.compile(
-                schedule=tk.TransposeSchedule(swizzle=tk.Swizzle(bits=bits, base=base))
+                schedule=tk.TransposeSchedule(swizzle=tk.Swizzle(bits, base, 5))
             )(lambda x: x.T)
             for shape in ((32, 32), (33, 65), (1, 7), (0, 32)):
                 with self.subTest(bits=bits, base=base, shape=shape):
