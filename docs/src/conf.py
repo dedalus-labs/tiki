@@ -3,7 +3,10 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
+import shutil
 import subprocess
+from pathlib import Path
 
 import tiki as tk
 
@@ -12,9 +15,6 @@ import tiki as tk
 # Markdown, copied here before Sphinx reads the tree so their relative links
 # resolve as pages. The copies are build products, ignored by git.
 
-import re
-import shutil
-from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 SECTIONS = {
@@ -27,7 +27,9 @@ SECTIONS = {
 GITHUB = "https://github.com/dedalus-labs/tiki/blob/main"
 
 
-def repository_page(source: Path, target: Path, root: Path, title: str | None = None) -> None:
+def repository_page(
+    source: Path, target: Path, root: Path, title: str | None = None
+) -> None:
     """Copy one repository document as a page; links to other repository files go to GitHub."""
     text = source.read_text()
     if title:
@@ -50,8 +52,15 @@ def repository_page(source: Path, target: Path, root: Path, title: str | None = 
 for section, directory in SECTIONS.items():
     target = Path(__file__).resolve().parent / "tiki" / section
     shutil.rmtree(target, ignore_errors=True)
-    repository_page(REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY)
-repository_page(REPOSITORY / "README.md", Path(__file__).resolve().parent / "tiki" / "vision.md", REPOSITORY, title="Vision")
+    repository_page(
+        REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY
+    )
+repository_page(
+    REPOSITORY / "README.md",
+    Path(__file__).resolve().parent / "tiki" / "vision.md",
+    REPOSITORY,
+    title="Vision",
+)
 
 # -- Project information -----------------------------------------------------
 
@@ -150,7 +159,6 @@ htmlhelp_basename = "tiki_doc"
 
 def setup(app):
     from sphinx.util import inspect
-
 
     wrapped_isfunc = inspect.isfunction
 
