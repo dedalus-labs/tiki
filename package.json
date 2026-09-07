@@ -1,0 +1,12 @@
+{
+  "name": "tiki-workflows",
+  "private": true,
+  "description": "Typed GitHub Actions definitions; run `npm run generate` after editing gha/",
+  "scripts": {
+    "generate": "hollywood generate",
+    "check": "hollywood check"
+  },
+  "devDependencies": {
+    "@dedalus-labs/hollywood": "0.0.5"
+  }
+}
