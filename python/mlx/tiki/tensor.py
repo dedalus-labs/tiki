@@ -10,10 +10,10 @@ and an incompatible extent is a ``LayoutError``, never a runtime guess.
 """
 
 from math import prod
-from typing import Any
+from operator import index
 
 import mlx.core as mx
-from mlx.tiki._pycute import Layout, Tensor, flatten
+from mlx.tiki._pycute import Layout, Shape, Stride, Tensor, flatten, size
 from mlx.tiki.composed import ComposedLayout
 from mlx.tiki.engine import ArrayEngine
 from mlx.tiki.layout import LayoutError
@@ -28,19 +28,20 @@ def right_major_layout(shape: tuple[int, ...]) -> Layout:
 def from_array(array: mx.array) -> Tensor:
     """View ``array`` as a tensor over its flattened storage.
 
-    The base is ``array.reshape(-1)``. MLX cannot report whether a lazy view is
-    contiguous, so a non-contiguous input is copied by that reshape.
+    Noncontiguous inputs are normalized explicitly. Reshape alone can retain
+    a strided vector, which cannot serve as an ``as_strided`` Engine.
     """
     return Tensor(
-        ArrayEngine(array.reshape(-1)), right_major_layout(tuple(array.shape))
+        ArrayEngine(mx.contiguous(array, allow_col_major=False).reshape(-1)),
+        right_major_layout(tuple(array.shape)),
     )
 
 
 def realize(tensor: Tensor) -> mx.array:
     """One zero-copy MLX view of an affine layout over an ``ArrayEngine``.
 
-    Layout modes become the view's axes, leaf by leaf. Composed layouts have no
-    strides and cannot be a view; they stay kernel-side.
+    Layout modes become the view's axes, leaf by leaf. Composed layouts require
+    a separate layout-aware consumer and cannot become an affine MLX view.
     """
     if isinstance(tensor.layout, ComposedLayout):
         raise LayoutError(
@@ -49,8 +50,29 @@ def realize(tensor: Tensor) -> mx.array:
     engine = tensor.accessor
     if not isinstance(engine, ArrayEngine):
         raise LayoutError(f"realize needs an ArrayEngine, got {type(engine).__name__}")
-    shape = tuple(int(extent) for extent in flatten(tensor.layout.shape))
-    strides = tuple(int(stride) for stride in flatten(tensor.layout.stride))
+    try:
+        shape = tuple(index(extent) for extent in flatten(tensor.layout.shape))
+        strides = tuple(index(stride) for stride in flatten(tensor.layout.stride))
+    except TypeError as error:
+        raise LayoutError(
+            "realize requires integer strides, not coordinate or XOR strides"
+        ) from error
+    if len(shape) != len(strides) or any(
+        extent < 0 or extent >= 2**31 for extent in shape
+    ):
+        raise LayoutError(
+            f"realize needs matching nonnegative MLX extents and strides, got {shape}"
+        )
+    if any(not -(2**63) <= stride < 2**63 for stride in strides):
+        raise LayoutError("realize strides must fit signed 64-bit indexing")
+    if prod(shape) != 0:
+        deltas = [(extent - 1) * stride for extent, stride in zip(shape, strides)]
+        lower = engine.offset + sum(min(0, delta) for delta in deltas)
+        upper = engine.offset + sum(max(0, delta) for delta in deltas)
+        if lower < 0 or upper >= engine.base.size:
+            raise LayoutError(
+                f"layout addresses [{lower}, {upper}] outside Engine [0, {engine.base.size})"
+            )
     return mx.as_strided(
         engine.base, shape=shape, strides=strides, offset=engine.offset
     )
@@ -58,7 +80,7 @@ def realize(tensor: Tensor) -> mx.array:
 
 def unsqueeze(tensor: Tensor, axis: int) -> Tensor:
     """Insert an extent-1, stride-0 mode before ``axis`` (0 through rank)."""
-    shape, stride = _flat_modes(tensor.layout)
+    shape, stride = _modes(tensor.layout)
     if not 0 <= axis <= len(shape):
         raise LayoutError(f"unsqueeze axis {axis} outside 0..{len(shape)}")
     shape.insert(axis, 1)
@@ -68,10 +90,10 @@ def unsqueeze(tensor: Tensor, axis: int) -> Tensor:
 
 def squeeze(tensor: Tensor, axis: int) -> Tensor:
     """Remove mode ``axis``, which must have extent 1."""
-    shape, stride = _flat_modes(tensor.layout)
+    shape, stride = _modes(tensor.layout)
     if not 0 <= axis < len(shape):
         raise LayoutError(f"squeeze axis {axis} outside 0..{len(shape) - 1}")
-    if shape[axis] != 1:
+    if size(shape[axis]) != 1:
         raise LayoutError(f"squeeze axis {axis} has extent {shape[axis]}, not 1")
     del shape[axis], stride[axis]
     return Tensor(tensor.accessor, Layout(tuple(shape), tuple(stride)))
@@ -83,13 +105,20 @@ def expand(tensor: Tensor, target: tuple[int, ...]) -> Tensor:
     A leading axis may be prepended; an extent of 1 may grow; any other change
     is a ``LayoutError``. The target is exact: there is no ``-1`` sentinel.
     """
-    shape, stride = _flat_modes(tensor.layout)
+    shape, stride = _modes(tensor.layout)
+    try:
+        target = tuple(index(extent) for extent in target)
+    except TypeError as error:
+        raise LayoutError("expand target extents must be integers") from error
+    if any(extent < 0 for extent in target):
+        raise LayoutError(f"expand target extents must be nonnegative, got {target}")
     if len(target) < len(shape):
         raise LayoutError(f"expand target {target} has fewer axes than {tuple(shape)}")
     lead = len(target) - len(shape)
     shape = [1] * lead + shape
     stride = [0] * lead + stride
-    for axis, (extent, wanted) in enumerate(zip(shape, target)):
+    for axis, (mode, wanted) in enumerate(zip(shape, target)):
+        extent = size(mode)
         if extent == wanted:
             continue
         if extent != 1:
@@ -100,9 +129,10 @@ def expand(tensor: Tensor, target: tuple[int, ...]) -> Tensor:
     return Tensor(tensor.accessor, Layout(tuple(shape), tuple(stride)))
 
 
-def _flat_modes(layout: Any) -> tuple[list[int], list[int]]:
+def _modes(layout: Layout | ComposedLayout) -> tuple[list[Shape], list[Stride]]:
+    """Preserve top-level axes instead of promoting nested leaves to axes."""
     if isinstance(layout, ComposedLayout):
         raise LayoutError("broadcasting needs an affine layout")
-    return [int(extent) for extent in flatten(layout.shape)], [
-        int(stride) for stride in flatten(layout.stride)
-    ]
+    if isinstance(layout.shape, (tuple, list)):
+        return list(layout.shape), list(layout.stride)
+    return [layout.shape], [layout.stride]

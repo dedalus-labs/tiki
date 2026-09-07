@@ -73,6 +73,16 @@ class TestLayout(mlx_tests.MLXTestCase):
 
 
 class TestComposedLayout(mlx_tests.MLXTestCase):
+    def test_integer_slice_offsets_cannot_erase_xor_addition(self) -> None:
+        layout = tk.Layout((2, 2), (tk.F2(1), tk.F2(1)))
+        with self.assertRaises(tk.LayoutError):
+            tk.slice_and_offset((1, None), layout)
+
+    def test_public_swizzle_constructor_enforces_its_contract(self) -> None:
+        for args in ((1, 0, 0), (2, 0, 1), (-1, 0, 1), (1, -1, 1), (1.5, 0, 2)):
+            with self.subTest(args=args), self.assertRaises(tk.LayoutError):
+                tk.Swizzle(*args)
+
     def swizzled(self):
         return tk.ComposedLayout(tk.Swizzle(2, 0, 2), 0, tk.Layout((4, 4), (4, 1)))
 
@@ -98,7 +108,9 @@ class TestComposedLayout(mlx_tests.MLXTestCase):
         with self.assertRaises(tk.LayoutError):
             tk.check_swizzle(tk.Swizzle(2, 0, 1))
         self.assertEqual(tk.check_swizzle(tk.Swizzle(1, 0, 1)).shift, 1)
-        self.assertEqual({tk.Swizzle(1, 0, 0)(index) for index in range(2)}, {0})
+        from mlx.tiki._pycute import Swizzle as ReferenceSwizzle
+
+        self.assertEqual({ReferenceSwizzle(1, 0, 0)(index) for index in range(2)}, {0})
 
     # Invariant (zop): parent(fixed, free) == engine_delta + residual(free) at
     # every coordinate, for affine, swizzled, and nested-swizzled layouts. An
