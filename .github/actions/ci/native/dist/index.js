@@ -21655,8 +21655,6 @@ async function sanitizer(exec2, mode) {
     ".",
     "-B",
     build,
-    "-DCMAKE_C_COMPILER=/usr/bin/clang",
-    "-DCMAKE_CXX_COMPILER=/usr/bin/clang++",
     "-DCMAKE_BUILD_TYPE=Debug",
     "-DMLX_BUILD_METAL=OFF",
     "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON",
