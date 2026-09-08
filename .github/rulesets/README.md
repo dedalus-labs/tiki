@@ -17,6 +17,11 @@ severity threshold. Each required check runs for pull requests and merge groups.
 The upstream-only MLX build jobs are not required because they skip on Tiki.
 These checks do not certify Tiki's Rust CUDA runtime or distributed training.
 
+Hollywood generates the workflows from `ci/`. `Check Lint` validates the complete
+CI result, including successful path detection and intentional skips. Policy-only
+changes skip native builds. See [CI maintenance](../../ci/README.md) for the path
+contract and regeneration commands.
+
 Before enabling the queue, ensure the candidate pull request includes the
 `merge_group` workflow trigger. Older open pull requests must incorporate this
 change before entering the queue. CODEOWNERS takes effect after it reaches main.
