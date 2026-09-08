@@ -23,7 +23,7 @@ from mlx.tiki.layout import LayoutError
 def right_major_layout(shape: tuple[int, ...]) -> Layout:
     """Dense layout whose final axis has unit stride, matching MLX and NumPy."""
     strides = tuple(prod(shape[axis + 1 :]) for axis in range(len(shape)))
-    return Layout(shape, strides)
+    return Layout(shape, stride=strides)
 
 
 def from_array(array: mx.array) -> Tensor:
@@ -46,7 +46,7 @@ def realize(tensor: Tensor) -> mx.array:
     """
     if isinstance(tensor.layout, ComposedLayout):
         raise LayoutError(
-            f"cannot realize a composed layout as a view: {tensor.layout}"
+            "cannot realize a composed layout as a view. Require an affine layout"
         )
     engine = tensor.accessor
     if not isinstance(engine, ArrayEngine):
@@ -86,7 +86,7 @@ def unsqueeze(tensor: Tensor, axis: int) -> Tensor:
         raise LayoutError(f"unsqueeze axis {axis} outside 0..{len(shape)}")
     shape.insert(axis, 1)
     stride.insert(axis, 0)
-    return Tensor(tensor.accessor, Layout(tuple(shape), tuple(stride)))
+    return Tensor(tensor.accessor, Layout(tuple(shape), stride=tuple(stride)))
 
 
 def squeeze(tensor: Tensor, axis: int) -> Tensor:
@@ -97,7 +97,7 @@ def squeeze(tensor: Tensor, axis: int) -> Tensor:
     if size(shape[axis]) != 1:
         raise LayoutError(f"squeeze axis {axis} has extent {shape[axis]}, not 1")
     del shape[axis], stride[axis]
-    return Tensor(tensor.accessor, Layout(tuple(shape), tuple(stride)))
+    return Tensor(tensor.accessor, Layout(tuple(shape), stride=tuple(stride)))
 
 
 def expand(tensor: Tensor, target: tuple[int, ...]) -> Tensor:
@@ -127,7 +127,7 @@ def expand(tensor: Tensor, target: tuple[int, ...]) -> Tensor:
                 f"expand axis {axis}: extent {extent} cannot become {wanted}"
             )
         shape[axis], stride[axis] = wanted, 0
-    return Tensor(tensor.accessor, Layout(tuple(shape), tuple(stride)))
+    return Tensor(tensor.accessor, Layout(tuple(shape), stride=tuple(stride)))
 
 
 def _modes(layout: Layout | ComposedLayout) -> tuple[list[Shape], list[Stride]]:
