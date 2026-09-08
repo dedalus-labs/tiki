@@ -1,30 +1,21 @@
 ---
 name: Bug report
-about: Create a report about a bug you've encountered
-title: "[BUG] "
-labels: ''
-assignees: ''
-
+about: Report incorrect behavior with a reproducible example
+title: ""
+labels: bug
+assignees: ""
 ---
 
-☑️ I understand it is strictly prohibited to use AI to write issues.
+<!-- AI assistance is welcome. Follow CONTRIBUTING.md and verify what you submit. -->
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+### What went wrong?
 
-**To Reproduce**
+<!-- Describe observed and expected behavior. -->
 
-Include code snippet
-```python
+### How can we reproduce it?
 
-```
+<!-- Include a minimal example, commands, and relevant error output. -->
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+### Environment
 
-**Desktop (please complete the following information):**
- - OS Version: [e.g. MacOS 14.1.2]
- - Version [e.g. 0.7.0]
-
-**Additional context**
-Add any other context about the problem here.
+<!-- Tiki version or commit, OS, hardware, and relevant CUDA/NCCL versions. -->
