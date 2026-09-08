@@ -1,0 +1,5 @@
+# type(scope): short imperative description
+#
+# Explain why this change is needed when the title is not enough.
+# Include relevant validation or compatibility details.
+# Follow CONTRIBUTING.md. AI assistance is welcome; verify every claim.
