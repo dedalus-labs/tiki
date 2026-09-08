@@ -37,8 +37,8 @@ share the same operation:
 ```python
 import mlx.tiki as tk
 
-base = tk.Layout((4, 4), (4, 1))
-transform = tk.Swizzle(2, 0, 2)
+base = tk.Layout((4, 4), stride=(4, 1))
+transform = tk.Swizzle(bits=2, base=0, shift=2)
 layout = base.swizzle(transform)
 assert layout == tk.compose(transform, base)
 assert layout(1, 2) == transform(base(1, 2)) == 7

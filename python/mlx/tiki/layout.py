@@ -147,7 +147,7 @@ def compose(
             raise LayoutError("composition outer must be a Swizzle or a layout")
         if not isinstance(inner, (ReferenceLayout, ComposedLayout)):
             raise LayoutError("composition inner must supply a layout domain")
-        return ComposedLayout(outer, offset, inner)
+        return ComposedLayout(outer=outer, offset=offset, inner=inner)
     return _affine_compose(outer, inner, mode=mode)
 
 

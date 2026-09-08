@@ -18,12 +18,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from operator import index
+from textwrap import indent
 from typing import SupportsIndex, TypeAlias, cast
 
 from mlx.tiki._layout import LayoutError
 from mlx.tiki._pycute import Layout, LayoutBase, Shape, rank, size
 from mlx.tiki._pycute.typedefs import Coord, StrideScalar
-from mlx.tiki.swizzle import Swizzle
+from mlx.tiki.swizzle import Swizzle, notation
 
 Coordinate: TypeAlias = int | None | slice | tuple["Coordinate", ...]
 
@@ -35,7 +36,7 @@ def check_swizzle(swizzle: Swizzle) -> Swizzle:
     return swizzle
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, repr=False, kw_only=True)
 class ComposedLayout(LayoutBase):
     """An index transform composed with an internal offset and a layout domain."""
 
@@ -60,14 +61,14 @@ class ComposedLayout(LayoutBase):
 
     def swizzle(self, transform: Swizzle, offset: int = 0) -> "ComposedLayout":
         """Compose another index transform without changing storage ownership."""
-        return ComposedLayout(check_swizzle(transform), offset, self)
+        return ComposedLayout(outer=check_swizzle(transform), offset=offset, inner=self)
 
     def _offset_and_slice(
         self, coordinate: Coordinate
     ) -> tuple[int, "Layout | ComposedLayout"]:
         residual, delta = slice_and_offset(coordinate, self)
         if rank(residual) == 0:
-            return delta + _evaluate(residual, ()), Layout((), ())
+            return delta + _evaluate(residual, ()), Layout((), stride=())
         return delta, residual
 
     @property
@@ -78,8 +79,63 @@ class ComposedLayout(LayoutBase):
     def stride(self) -> None:
         raise LayoutError("a composed layout has no stride. Require an affine layout")
 
-    def __str__(self) -> str:
-        return f"{self.outer} o {{{self.offset}}} o {self.inner}"
+    def describe(self) -> str:
+        """The inner coordinates and strides, then the index formula through ``outer``."""
+        return describe(self)
+
+    def __repr__(self) -> str:
+        fields = f"inner={self.inner!r},\noffset={self.offset},\nouter={self.outer!r},"
+        return f"ComposedLayout(\n{indent(fields, '    ')}\n)"
+
+    __str__ = __repr__
+
+    def __format__(self, spec: str) -> str:
+        """``format(layout, "cute")`` is CuTe's ``outer o {offset} o inner``."""
+        return notation(self, spec, cute(self))
+
+
+def cute(value: "Swizzle | Layout | ComposedLayout") -> str:
+    """CuTe's notation for a swizzle or a layout."""
+    if isinstance(value, ComposedLayout):
+        return f"{cute(value.outer)} o {{{value.offset}}} o {cute(value.inner)}"
+    if isinstance(value, Swizzle):
+        return format(value, "cute")
+    return f"{value.shape}:{value.stride}"
+
+
+def _leaves(
+    shape: object, stride: object, path: str = ""
+) -> "list[tuple[str, str, str]]":
+    if isinstance(shape, tuple):
+        return [
+            row
+            for position, (extent, step) in enumerate(zip(shape, cast(tuple, stride)))
+            for row in _leaves(extent, step, f"{path}[{position}]")
+        ]
+    return [(f"c{path}", str(shape), str(stride))]
+
+
+def _formula(
+    layout: "Layout | ComposedLayout",
+) -> "tuple[list[tuple[str, str, str]], str]":
+    if isinstance(layout, ComposedLayout):
+        rows, inner = _formula(layout.inner)
+        argument = f"{layout.offset} + {inner}" if layout.offset else inner
+        return rows, f"{layout.outer!r}({argument})"
+    rows = _leaves(layout.shape, layout.stride)
+    return rows, " + ".join(f"{stride} * {name}" for name, _, stride in rows) or "0"
+
+
+def describe(layout: "Layout | ComposedLayout") -> str:
+    """One coordinate per line with its extent and stride, then the index formula."""
+    rows, formula = _formula(layout)
+    header = ("coordinate", "extent", "stride")
+    widths = [max(len(cell) for cell in column) for column in zip(header, *rows)]
+    lines = [
+        "  ".join(cell.ljust(width) for cell, width in zip(line, widths)).rstrip()
+        for line in (header, *rows)
+    ]
+    return "\n".join([*lines, f"index = {formula}"])
 
 
 def slice_and_offset(
@@ -96,7 +152,12 @@ def slice_and_offset(
         offset, residual = layout._offset_and_slice(cast(Coord, coordinate))
         return residual, _offset(offset)
     residual, delta = slice_and_offset(coordinate, layout.inner)
-    return ComposedLayout(layout.outer, layout.offset + delta, residual), 0
+    return (
+        ComposedLayout(
+            outer=layout.outer, offset=layout.offset + delta, inner=residual
+        ),
+        0,
+    )
 
 
 def _offset(value: StrideScalar | SupportsIndex) -> int:
