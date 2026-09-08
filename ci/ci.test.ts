@@ -91,5 +91,8 @@ test("native actions execute structured commands and retire their container afte
   };
   await sanitizer(success, "ASAN");
   assert.ok(commands.some((entry) => entry.args.includes("-DUSE_ASAN=ON")));
+  assert.ok(
+    commands.every((entry) => !entry.args.some((arg) => /^-DCMAKE_C(?:XX)?_COMPILER=/.test(arg))),
+  );
   assert.ok(commands.every((entry) => !["bash", "sh", "cmd"].includes(entry.file)));
 });
