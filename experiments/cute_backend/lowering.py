@@ -71,7 +71,7 @@ class RowSchedule:
 class TransposeSchedule:
     arch: str = "sm_90"
     threads: int = 128
-    swizzle: Swizzle = Swizzle(5, 0, 5)
+    swizzle: Swizzle = Swizzle(bits=5, base=0, shift=5)
 
     def __post_init__(self) -> None:
         Schedule(arch=self.arch, threads=self.threads)
