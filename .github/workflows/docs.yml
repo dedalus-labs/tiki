@@ -10,14 +10,14 @@ on:
       - python/**
       - experiments/**/*.md
       - README.md
-      - gha/docs.ts
+      - ci/docs.ts
   pull_request:
     paths:
       - docs/**
       - python/**
       - experiments/**/*.md
       - README.md
-      - gha/docs.ts
+      - ci/docs.ts
   workflow_dispatch: {}
 concurrency:
   group: docs-${{ github.ref }}

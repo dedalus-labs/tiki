@@ -39,7 +39,7 @@ and point your browser to `http://localhost:<port>`.
 
 ### Deploy
 
-The Docs workflow, defined in `gha/docs.ts` and generated into
+The Docs workflow, defined in `ci/docs.ts` and generated into
 `.github/workflows/docs.yml`, builds the site for every pull request that
 touches it and deploys `main` to GitHub Pages.
 

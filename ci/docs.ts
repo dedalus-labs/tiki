@@ -4,10 +4,10 @@ import {
 	deployPagesAction,
 	setupPythonAction,
 	uploadPagesArtifactAction,
-} from "./actions";
-import { trustedCiRun } from "./guards";
+} from "./actions.ts";
+import { trustedCiRun } from "./guards.ts";
 
-const docsPaths = ["docs/**", "python/**", "experiments/**/*.md", "README.md", "gha/docs.ts"] as const;
+const docsPaths = ["docs/**", "python/**", "experiments/**/*.md", "README.md", "ci/docs.ts"] as const;
 
 export const docs = workflow({
 	name: "Docs",
