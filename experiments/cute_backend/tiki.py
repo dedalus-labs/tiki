@@ -6,7 +6,6 @@ from functools import lru_cache
 from math import prod
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any
 
 import mlx.core as mx
 
@@ -15,8 +14,9 @@ from graph import (
     Profile,
     Shape,
     UnsupportedGraphError,
-    capture,
     dense_strides,
+    from_events,
+    trace,
 )
 from lowering import (  # noqa: F401 - Public schedule types.
     Lowered,
@@ -27,6 +27,7 @@ from lowering import (  # noqa: F401 - Public schedule types.
     UnsupportedScheduleError,
     lower,
 )
+from program import NATIVE_OPERATIONS, Program, partition
 
 
 class BackendUnavailableError(RuntimeError):
@@ -50,10 +51,23 @@ def specialize(
     function: ArrayFunction,
     schedule: Schedule | RowSchedule | TransposeSchedule,
     profiles: tuple[Profile, ...],
-) -> Lowered:
+    stream: mx.Stream,
+) -> Lowered | Program:
     if packs_views(schedule):
         profiles = tuple((shape, dense_strides(shape)) for shape, _ in profiles)
-    graph = capture(function, profiles)
+    with mx.stream(stream):
+        events = trace(function, profiles)
+    if any(
+        event["name"] in NATIVE_OPERATIONS or event["stream"] != stream
+        for event in events
+        if event["type"] == "primitive"
+    ):
+        if not isinstance(schedule, Schedule):
+            raise UnsupportedScheduleError(
+                "native operations and stream boundaries require an elementwise Schedule"
+            )
+        return partition(events, profiles, schedule)
+    graph = from_events(events, profiles)
     if isinstance(schedule, RowSchedule):
         from row_reduction import lower_row
 
@@ -98,14 +112,35 @@ def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
     return (value,) if isinstance(value, mx.array) else tuple(value)
 
 
-def _tangents(
-    primals: tuple[mx.array, ...], tangents: mx.array | tuple[mx.array | None, ...]
+def launch_kernel(
+    lowered: Lowered, inputs: tuple[mx.array, ...], stream: mx.Stream
 ) -> tuple[mx.array, ...]:
-    """MLX passes ``None`` for an input that carries no tangent; that is a zero."""
+    shapes = lowered.output_shapes
+    if prod(lowered.graph.shape) == 0:
+        return tuple(
+            mx.zeros(shape, dtype=mx.float32, stream=stream) for shape in shapes
+        )
     return tuple(
-        mx.zeros_like(primal) if tangent is None else tangent
-        for primal, tangent in zip(primals, _arrays(tangents))
+        mx.fast.precompiled_cuda_kernel(
+            name="tiki_fused",
+            compiled_source=binary(lowered).cubin,
+            inputs=list(inputs),
+            output_shapes=list(shapes),
+            output_dtypes=[mx.float32] * len(shapes),
+            scalars=[],
+            grid=lowered.grid,
+            threadgroup=(lowered.schedule.threads, 1, 1),
+            shared_memory=lowered.shared_memory_bytes,
+            ensure_row_contiguous=packs_views(lowered.schedule),
+            stream=stream,
+        )
     )
+
+
+@lru_cache(maxsize=32)
+def program_executor(program: Program) -> Callable[..., tuple[mx.array, ...]]:
+    """Cache native graph replay after specializing the CuTe regions."""
+    return mx.compile(lambda *inputs: program.launch(inputs, launch_kernel))
 
 
 class Compiled:
@@ -127,11 +162,10 @@ class Compiled:
         self._differentiable = mx.custom_function(self.launch)
         self._differentiable.vjp(self._vjp)
         self._differentiable.jvp(self._jvp)
-        self._differentiable.vmap(self._vmap)
         self._cotangent_kernels: dict[int, Compiled] = {}
         self._tangent_kernel: Compiled | None = None
 
-    def lower(self, *inputs: mx.array) -> Lowered:
+    def lower(self, *inputs: mx.array) -> Lowered | Program:
         if not inputs:
             raise UnsupportedGraphError("at least one array input is required")
         if any(
@@ -140,52 +174,30 @@ class Compiled:
         ):
             raise UnsupportedGraphError("all arguments must be float32 MLX arrays")
         return specialize(
-            self.function, self.schedule, tuple(profile(value) for value in inputs)
+            self.function,
+            self.schedule,
+            tuple(profile(value) for value in inputs),
+            mx.default_stream(mx.default_device()),
         )
 
     def __call__(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
         return self._differentiable(*inputs)
 
     def launch(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
-        """Run the region specialized on the live layout of every input.
-
-        Under a transformation the inputs are tracers with no storage yet, so
-        array inputs are packed and the layout follows from the shape alone.
-        """
-        if any(value.is_tracer for value in inputs):
-            inputs = tuple(
-                value if value.ndim == 0 else mx.contiguous(value) for value in inputs
-            )
-            profiles = tuple(
-                (tuple(value.shape), dense_strides(tuple(value.shape)))
-                for value in inputs
-            )
-            lowered = specialize(self.function, self.schedule, profiles)
-        else:
-            lowered = self.lower(*inputs)
         if not mx.cuda.is_available():
             raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
-        shapes = lowered.output_shapes
-        if prod(lowered.graph.shape) == 0:
-            outputs = [
-                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for shape in shapes
-            ]
+        lowered = self.lower(*inputs)
+        if isinstance(lowered, Program):
+            if any(stage.stream.device != mx.gpu for stage in lowered.stages):
+                raise BackendUnavailableError(
+                    "compiled program stages require GPU streams"
+                )
+            executor = program_executor(lowered)
+            outputs = executor(*inputs)
         else:
-            outputs = mx.fast.precompiled_cuda_kernel(
-                name="tiki_fused",
-                compiled_source=binary(lowered).cubin,
-                inputs=list(inputs),
-                output_shapes=list(shapes),
-                output_dtypes=[mx.float32] * len(shapes),
-                scalars=[],
-                grid=lowered.grid,
-                threadgroup=(self.schedule.threads, 1, 1),
-                shared_memory=lowered.shared_memory_bytes,
-                ensure_row_contiguous=packs_views(self.schedule),
-                stream=mx.gpu,
-            )
+            outputs = launch_kernel(lowered, inputs, mx.default_stream(mx.gpu))
         return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
     def _cotangent_kernel(self, i: int, n: int) -> "Compiled":
@@ -208,35 +220,8 @@ class Compiled:
         primals, cotangents = _arrays(primals), _arrays(cotangents)
         n = len(primals)
         return tuple(
-            self._cotangent_kernel(i, n)(*primals, *cotangents) for i in range(n)
+            self._cotangent_kernel(i, n).launch(*primals, *cotangents) for i in range(n)
         )
-
-    def _vmap(
-        self,
-        primals: mx.array | tuple[mx.array, ...],
-        axes: int | None | tuple[int | None, ...],
-    ) -> tuple[mx.array | tuple[mx.array, ...], int | tuple[int, ...]]:
-        """An elementwise region is the same region over rank-plus-one arrays.
-
-        The vectorized axis moves to the front of every array input, an
-        unvectorized array input broadcasts along a stride-0 axis, and scalars
-        stay scalars; the batched arrays are tracers, so they are packed.
-        """
-        primals = _arrays(primals)
-        axes = axes if isinstance(axes, tuple) else (axes,)
-        size = next(
-            value.shape[axis] for value, axis in zip(primals, axes) if axis is not None
-        )
-        moved = []
-        for value, axis in zip(primals, axes):
-            if axis is not None:
-                moved.append(mx.moveaxis(value, axis, 0))
-            elif value.ndim == 0:
-                moved.append(value)
-            else:
-                moved.append(mx.broadcast_to(value[None], (size, *value.shape)))
-        outputs = self(*moved)
-        return outputs, 0 if isinstance(outputs, mx.array) else (0,) * len(outputs)
 
     def _jvp(
         self,
@@ -244,8 +229,7 @@ class Compiled:
         tangents: mx.array | tuple[mx.array, ...],
     ) -> mx.array | tuple[mx.array, ...]:
         """MLX passes (primals, tangents) and expects the output tangents."""
-        primals = _arrays(primals)
-        tangents = _tangents(primals, tangents)
+        primals, tangents = _arrays(primals), _arrays(tangents)
         n = len(primals)
         if self._tangent_kernel is None:
 
@@ -253,7 +237,7 @@ class Compiled:
                 return tuple(mx.jvp(self.function, list(args[:n]), list(args[n:]))[1])
 
             self._tangent_kernel = Compiled(output_tangent, self.schedule)
-        return self._tangent_kernel(*primals, *tangents)
+        return self._tangent_kernel.launch(*primals, *tangents)
 
 
 DEFAULT_SCHEDULE = Schedule()

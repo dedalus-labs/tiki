@@ -12,9 +12,9 @@ graphs, one row sum with fused arithmetic, and tiled transpose. It uses MLX's
 `export_function` callback to capture the native graph, constructs an explicit
 thread schedule, emits CuTe MLIR directly, and passes it to `CuteCompiler`.
 No reference CuTe kernel or generated Python source participates in this path.
-The prototype requires Tiki's evaluated-array `strides` property. Forward-mode
-derivatives also require the `stop_gradient` tape-pruning fix.
-Its Swizzle value comes from `mlx.tiki` and requires the Rust indexing extension.
+The C++ export callback preserves stream and collective identity for mixed programs.
+See [matrix multiplication and collectives](PROGRAMS.md) for the runnable example
+and the Python/C++/Rust implementation boundary.
 
 ```python
 # Run with experiments/cute_backend on PYTHONPATH.
@@ -35,10 +35,8 @@ print(lowered.mlir)
 mx.eval(affine(x, y))  # Requires MLX CUDA on sm_90.
 ```
 
-`lower()` runs on a Mac with a Tiki build that exposes array strides. It evaluates
-the inputs to inspect their layouts, but does not import the CuTe compiler or
-execute the generated kernel. `specialize()` accepts explicit shape/stride
-profiles for inspection without that property. CUDA execution requires CuTe and
+`lower()` runs on a Mac with MLX alone; it does not import the CuTe compiler or
+execute the generated kernel. CUDA execution requires the CuTe dependency and
 a CUDA-enabled MLX build. The provided demo writes the graph, schedule, and
 MLIR to a fresh output directory:
 
@@ -50,52 +48,29 @@ python -m unittest discover -s experiments/cute_backend -p test_compile.py
 
 ### Supported contract
 
-- Pure positional array functions returning one array or a flat tuple of arrays,
-  float32 only. Elementwise outputs share one shape. Cooperative schedules
-  retain their single-output contracts below.
+- Positional array functions, one output or a flat output tuple, float32 only.
 - The elementwise schedule supports add, subtract, multiply, negate, square,
   reciprocal square root, and scalar broadcasting. Its array inputs have the
   output shape or rank zero. Other schedules have the contracts below.
-- Elementwise schedules consume strided inputs in place. Row and transpose
-  schedules explicitly pack noncontiguous inputs before launch.
+- MLX explicitly packs noncontiguous inputs to row-major buffers before
+  launch; this can cost a copy.
 - Threads per block: 32, 64, 128, or 256. Elements per thread: 1, 2, or 4.
   Element `i` belongs to `block * threads * elements_per_thread + thread +
   i * threads`. This is scalar work unrolling, not a promise of vector loads.
 - Empty outputs launch no kernel. Nonempty launches use full thread blocks
   and guard each element, including the final partial tile.
-- Graph, binary, transform, and derivative caches each retain up to 32 entries.
-  Python globals and captured scalars are frozen per specialization. Pass
+- Graph and binary caches each retain up to 32 specializations in this process.
+  Python globals and captured scalars are frozen when a shape is traced; pass
   changing values as array arguments. Persistent caching is not implemented.
-- Reverse-mode and forward-mode derivatives use the exact frozen forward graph.
-  Replay preserves every output and cotangent in declaration order. Capture,
-  scalar lowering, and replay share one operation definition in `operations.py`.
-  An in-flight transform retains its graph across cache eviction. Derivative
-  kernels retain their own derivative rules. The graph must remain
-  within the supported operation and schedule subset at each derivative order.
-- This prototype does not provide float16/bfloat16, matrix
-  multiplication, tensor-core schedules, or autotuning. The float16 normalization
+- CuTe regions register derivatives from the original mathematical graph. Mixed
+  programs support native matrix multiplication and collectives, as described
+  in [PROGRAMS.md](PROGRAMS.md). Float16/bfloat16, generated tensor-core
+  schedules, and autotuning are not supported. The float16 normalization
   example in the root README remains a target; float32 works as shown below.
 
 These are known float32 numerical semantics, subject to normal compiler
 rounding and contraction. This is a correctness and integration experiment;
 we have not measured its overhead against direct CuTe DSL.
-
-### Transformation limits
-
-This is an eager compiler boundary, not a fully lazy replacement for MLX.
-Reading input strides evaluates them. Calling a compiled region from inside
-`mx.compile` or `mx.vmap` is not supported. Registered VJP and JVP rules work
-with concrete inputs, including strided views.
-
-Forward support does not imply that every derivative graph is supported. For
-example, a broadcast scalar can participate in an elementwise forward, but its
-cotangent requires a reduction outside that schedule. Such graphs raise
-`UnsupportedGraphError`. There is no eager-MLX derivative fallback.
-
-The allocation gate compares strided execution with a dense execution of the
-same shape, using the allocator's measured footprint. A forced-packing control
-must exceed that footprint. This avoids treating logical `nbytes` as the
-allocator's rounded allocation size.
 
 ## Cooperating on a row
 
@@ -182,9 +157,8 @@ carry, hidden = associative_scan(affine, (decay, drive), axis=1)
 has the interface of `jax.lax.associative_scan`: `fn` combines two pytrees of
 float32 leaves of one shape and must be associative. The combine is captured
 once on scalar placeholders through the same graph capture as `tk.compile`, so
-supported elementwise combines over multiple leaves lower. Recursive tile levels
-and Jacobians replay that same frozen combine graph. Mutating Python closure
-values cannot change an existing scan's forward or derivative programs.
+any elementwise combine over any number of leaves lowers; a non-elementwise
+combine is rejected at capture.
 
 The scan axis is split into tiles of `threads * elements_per_thread`
 positions. The tile kernel folds each thread's contiguous chunk in registers,
