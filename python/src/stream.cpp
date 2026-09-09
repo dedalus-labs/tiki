@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <functional>
 #include <sstream>
 
 #include <nanobind/nanobind.h>
@@ -50,6 +51,9 @@ void init_stream(nb::module_& m) {
       A stream for running operations on a given device.
       )pbdoc")
       .def_ro("device", &mx::Stream::device)
+      .def(
+          "__hash__",
+          [](const mx::Stream& s) { return std::hash<int>{}(s.index); })
       .def(
           "__repr__",
           [](const mx::Stream& s) {
