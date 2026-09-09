@@ -6,6 +6,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/distributed/primitives.h"
 #include "mlx/export.h"
 #include "mlx/mlx.h"
 
@@ -16,6 +17,75 @@ std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name).string();
 }
 } // namespace
+
+TEST_CASE("export preserves collective identity") {
+  using namespace mlx::core::distributed;
+  auto fun = [](const Args& inputs) -> Args {
+    return {array(
+        inputs[0].shape(),
+        inputs[0].dtype(),
+        std::make_shared<AllReduce>(
+            default_stream(Device::cpu), Group(nullptr), AllReduce::Sum),
+        inputs)};
+  };
+  std::vector<ExportCallbackInput> events;
+  export_function(
+      [&events](const ExportCallbackInput& event) { events.push_back(event); },
+      fun,
+      {array({1.0f, 2.0f})});
+  CHECK(std::get<std::string>(events.back().at("name")) == "AllReduce");
+  CHECK(
+      std::get<Stream>(events.back().at("stream")) ==
+      default_stream(Device::cpu));
+  CHECK(std::get<Group>(events.back().at("group")).raw_group() == nullptr);
+  CHECK(std::get<int>(events.back().at("group_index")) == 0);
+  CHECK(
+      std::get<int>(std::get<std::vector<StateT>>(
+          events.back().at("arguments"))[0]) == AllReduce::Sum);
+  CHECK_THROWS_AS(
+      export_function(get_temp_file("collective.mlxfn"), fun, {array({1.0f})}),
+      std::invalid_argument);
+}
+
+TEST_CASE("export distinguishes reduce scatter from local reduction") {
+  using namespace mlx::core::distributed;
+  auto stream = new_stream(Device::cpu);
+  auto fun = [stream](const Args& inputs) -> Args {
+    auto reduced = array(
+        inputs[0].shape(),
+        inputs[0].dtype(),
+        std::make_shared<ReduceScatter>(
+            stream, Group(nullptr), ReduceScatter::Sum),
+        inputs);
+    return {array(
+        reduced.shape(),
+        reduced.dtype(),
+        std::make_shared<AllGather>(stream, Group(nullptr)),
+        {reduced})};
+  };
+  std::vector<ExportCallbackInput> events;
+  export_function(
+      [&events](const ExportCallbackInput& event) {
+        if (std::get<std::string>(event.at("type")) == "primitive") {
+          events.push_back(event);
+        }
+      },
+      fun,
+      {array({1.0f, 2.0f})});
+  REQUIRE(events.size() == 2);
+  CHECK(std::get<std::string>(events[0].at("name")) == "ReduceScatter");
+  CHECK(
+      std::get<int>(std::get<std::vector<StateT>>(
+          events[0].at("arguments"))[0]) == ReduceScatter::Sum);
+  CHECK(std::get<std::string>(events[1].at("name")) == "AllGather");
+  CHECK(std::get<Stream>(events[1].at("stream")) == stream);
+  CHECK(
+      std::get<int>(events[0].at("group_index")) ==
+      std::get<int>(events[1].at("group_index")));
+  CHECK_THROWS_AS(
+      export_function(get_temp_file("scatter.mlxfn"), fun, {array({1.0f})}),
+      std::invalid_argument);
+}
 
 TEST_CASE("test export basic functions") {
   std::string file_path = get_temp_file("model.mlxfn");
