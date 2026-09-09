@@ -12,7 +12,9 @@ graphs, one row sum with fused arithmetic, and tiled transpose. It uses MLX's
 `export_function` callback to capture the native graph, constructs an explicit
 thread schedule, emits CuTe MLIR directly, and passes it to `CuteCompiler`.
 No reference CuTe kernel or generated Python source participates in this path.
-MLX's C++ source is unchanged.
+The C++ export callback preserves stream and collective identity for mixed programs.
+See [matrix multiplication and collectives](PROGRAMS.md) for the runnable example
+and the Python/C++/Rust implementation boundary.
 
 ```python
 # Run with experiments/cute_backend on PYTHONPATH.
@@ -46,7 +48,7 @@ python -m unittest discover -s experiments/cute_backend -p test_compile.py
 
 ### Supported contract
 
-- Pure positional array functions, one output, float32 only.
+- Positional array functions, one output or a flat output tuple, float32 only.
 - The elementwise schedule supports add, subtract, multiply, negate, square,
   reciprocal square root, and scalar broadcasting. Its array inputs have the
   output shape or rank zero. Other schedules have the contracts below.
@@ -60,8 +62,10 @@ python -m unittest discover -s experiments/cute_backend -p test_compile.py
 - Graph and binary caches each retain up to 32 specializations in this process.
   Python globals and captured scalars are frozen when a shape is traced; pass
   changing values as array arguments. Persistent caching is not implemented.
-- This prototype does not provide autodiff, float16/bfloat16, matrix
-  multiplication, tensor-core schedules, or autotuning. The float16 normalization
+- CuTe regions register derivatives from the original mathematical graph. Mixed
+  programs support native matrix multiplication and collectives, as described
+  in [PROGRAMS.md](PROGRAMS.md). Float16/bfloat16, generated tensor-core
+  schedules, and autotuning are not supported. The float16 normalization
   example in the root README remains a target; float32 works as shown below.
 
 These are known float32 numerical semantics, subject to normal compiler

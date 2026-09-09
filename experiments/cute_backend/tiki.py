@@ -14,8 +14,9 @@ from graph import (
     Profile,
     Shape,
     UnsupportedGraphError,
-    capture,
     dense_strides,
+    from_events,
+    trace,
 )
 from lowering import (  # noqa: F401 - Public schedule types.
     Lowered,
@@ -26,6 +27,7 @@ from lowering import (  # noqa: F401 - Public schedule types.
     UnsupportedScheduleError,
     lower,
 )
+from program import NATIVE_OPERATIONS, Program, partition
 
 
 class BackendUnavailableError(RuntimeError):
@@ -49,10 +51,23 @@ def specialize(
     function: ArrayFunction,
     schedule: Schedule | RowSchedule | TransposeSchedule,
     profiles: tuple[Profile, ...],
-) -> Lowered:
+    stream: mx.Stream,
+) -> Lowered | Program:
     if packs_views(schedule):
         profiles = tuple((shape, dense_strides(shape)) for shape, _ in profiles)
-    graph = capture(function, profiles)
+    with mx.stream(stream):
+        events = trace(function, profiles)
+    if any(
+        event["name"] in NATIVE_OPERATIONS or event["stream"] != stream
+        for event in events
+        if event["type"] == "primitive"
+    ):
+        if not isinstance(schedule, Schedule):
+            raise UnsupportedScheduleError(
+                "native operations and stream boundaries require an elementwise Schedule"
+            )
+        return partition(events, profiles, schedule)
+    graph = from_events(events, profiles)
     if isinstance(schedule, RowSchedule):
         from row_reduction import lower_row
 
@@ -97,6 +112,37 @@ def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
     return (value,) if isinstance(value, mx.array) else tuple(value)
 
 
+def launch_kernel(
+    lowered: Lowered, inputs: tuple[mx.array, ...], stream: mx.Stream
+) -> tuple[mx.array, ...]:
+    shapes = lowered.output_shapes
+    if prod(lowered.graph.shape) == 0:
+        return tuple(
+            mx.zeros(shape, dtype=mx.float32, stream=stream) for shape in shapes
+        )
+    return tuple(
+        mx.fast.precompiled_cuda_kernel(
+            name="tiki_fused",
+            compiled_source=binary(lowered).cubin,
+            inputs=list(inputs),
+            output_shapes=list(shapes),
+            output_dtypes=[mx.float32] * len(shapes),
+            scalars=[],
+            grid=lowered.grid,
+            threadgroup=(lowered.schedule.threads, 1, 1),
+            shared_memory=lowered.shared_memory_bytes,
+            ensure_row_contiguous=packs_views(lowered.schedule),
+            stream=stream,
+        )
+    )
+
+
+@lru_cache(maxsize=32)
+def program_executor(program: Program) -> Callable[..., tuple[mx.array, ...]]:
+    """Cache native graph replay after specializing the CuTe regions."""
+    return mx.compile(lambda *inputs: program.launch(inputs, launch_kernel))
+
+
 class Compiled:
     """A specialized array function with registered reverse and forward derivatives.
 
@@ -119,7 +165,7 @@ class Compiled:
         self._cotangent_kernels: dict[int, Compiled] = {}
         self._tangent_kernel: Compiled | None = None
 
-    def lower(self, *inputs: mx.array) -> Lowered:
+    def lower(self, *inputs: mx.array) -> Lowered | Program:
         if not inputs:
             raise UnsupportedGraphError("at least one array input is required")
         if any(
@@ -128,37 +174,30 @@ class Compiled:
         ):
             raise UnsupportedGraphError("all arguments must be float32 MLX arrays")
         return specialize(
-            self.function, self.schedule, tuple(profile(value) for value in inputs)
+            self.function,
+            self.schedule,
+            tuple(profile(value) for value in inputs),
+            mx.default_stream(mx.default_device()),
         )
 
-    def __call__(self, *inputs: mx.array) -> mx.array:
+    def __call__(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
         return self._differentiable(*inputs)
 
-    def launch(self, *inputs: mx.array) -> mx.array:
+    def launch(self, *inputs: mx.array) -> mx.array | tuple[mx.array, ...]:
         if not mx.cuda.is_available():
             raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
         if mx.device_info(mx.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
         lowered = self.lower(*inputs)
-        shapes = lowered.output_shapes
-        if prod(lowered.graph.shape) == 0:
-            outputs = [
-                mx.zeros(shape, dtype=mx.float32, stream=mx.gpu) for shape in shapes
-            ]
+        if isinstance(lowered, Program):
+            if any(stage.stream.device != mx.gpu for stage in lowered.stages):
+                raise BackendUnavailableError(
+                    "compiled program stages require GPU streams"
+                )
+            executor = program_executor(lowered)
+            outputs = executor(*inputs)
         else:
-            outputs = mx.fast.precompiled_cuda_kernel(
-                name="tiki_fused",
-                compiled_source=binary(lowered).cubin,
-                inputs=list(inputs),
-                output_shapes=list(shapes),
-                output_dtypes=[mx.float32] * len(shapes),
-                scalars=[],
-                grid=lowered.grid,
-                threadgroup=(self.schedule.threads, 1, 1),
-                shared_memory=lowered.shared_memory_bytes,
-                ensure_row_contiguous=packs_views(self.schedule),
-                stream=mx.gpu,
-            )
+            outputs = launch_kernel(lowered, inputs, mx.default_stream(mx.gpu))
         return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
     def _cotangent_kernel(self, i: int, n: int) -> "Compiled":
