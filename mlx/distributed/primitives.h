@@ -28,6 +28,10 @@ class AllReduce : public DistPrimitive {
   AllReduce(Stream stream, Group group, ReduceType reduce_type)
       : DistPrimitive(stream, group), reduce_type_(reduce_type) {}
 
+  ReduceType reduce_type() const {
+    return reduce_type_;
+  }
+
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -132,6 +136,10 @@ class ReduceScatter : public DistPrimitive {
   enum ReduceType { Sum, Min, Max };
   ReduceScatter(Stream stream, Group group, ReduceType reduce_type)
       : DistPrimitive(stream, group), reduce_type_(reduce_type) {}
+
+  ReduceType reduce_type() const {
+    return reduce_type_;
+  }
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;

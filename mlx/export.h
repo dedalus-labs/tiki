@@ -8,6 +8,7 @@
 #include <variant>
 #include "mlx/api.h"
 #include "mlx/array.h"
+#include "mlx/distributed/distributed.h"
 
 namespace mlx::core {
 
@@ -38,6 +39,9 @@ using ExportCallbackInput = std::unordered_map<
         std::vector<std::pair<std::string, array>>,
         std::vector<std::pair<std::string, std::string>>,
         std::vector<StateT>,
+        Stream,
+        distributed::Group,
+        int,
         std::string>>;
 using ExportCallback = std::function<void(const ExportCallbackInput&)>;
 
