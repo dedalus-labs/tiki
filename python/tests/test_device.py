@@ -65,6 +65,11 @@ class TestDevice(mlx_tests.MLXTestCase):
 
 
 class TestStream(mlx_tests.MLXTestCase):
+    def test_equal_streams_share_cache_keys(self):
+        first = mx.default_stream(mx.default_device())
+        second = mx.default_stream(mx.default_device())
+        self.assertEqual({first: "cached"}[second], "cached")
+
     def test_stream(self):
         s1 = mx.default_stream(mx.default_device())
         self.assertEqual(s1.device, mx.default_device())
