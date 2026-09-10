@@ -18,8 +18,8 @@ class Schedule:
     elements_per_thread: int = 1
 
     def __post_init__(self) -> None:
-        if self.arch != "sm_90":
-            raise UnsupportedScheduleError("only sm_90 is validated")
+        if self.arch not in ("sm_89", "sm_90"):
+            raise UnsupportedScheduleError("only sm_89 and sm_90 are supported")
         if type(self.threads) is not int or type(self.elements_per_thread) is not int:
             raise UnsupportedScheduleError("schedule dimensions must be integers")
         if self.threads not in (32, 64, 128, 256):

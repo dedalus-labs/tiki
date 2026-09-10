@@ -2,6 +2,7 @@
 #include "mlx/export.h"
 #include <map>
 #include "mlx/compile_impl.h"
+#include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
@@ -285,8 +286,14 @@ constexpr bool has_state<T, std::void_t<decltype(std::declval<T>().state())>> =
 
 template <typename T>
 void serialize_primitive(Writer& os, const Primitive& p) {
+  auto* typed = dynamic_cast<const T*>(&p);
+  if (!typed) {
+    throw std::invalid_argument(
+        "[export_function] Unable to serialize primitive " +
+        std::string(p.name()));
+  }
   if constexpr (has_state<T>) {
-    serialize(os, static_cast<const T&>(p).state());
+    serialize(os, typed->state());
   }
 }
 
@@ -311,9 +318,15 @@ void extract_state(const T state, std::vector<StateT>& unpacked_state) {
 
 template <typename T>
 std::vector<StateT> primitive_state(const Primitive& p) {
+  auto* typed = dynamic_cast<const T*>(&p);
+  if (!typed) {
+    throw std::invalid_argument(
+        "[export_function] Unable to get state for primitive " +
+        std::string(p.name()));
+  }
   std::vector<StateT> state;
   if constexpr (has_state<T>) {
-    extract_state(static_cast<const T&>(p).state(), state);
+    extract_state(typed->state(), state);
   }
   return state;
 }
@@ -522,6 +535,15 @@ struct PrimitiveFactory {
 
   std::pair<std::string, std::vector<StateT>> extract_state(
       const std::shared_ptr<Primitive>& p) {
+    if (auto* collective = dynamic_cast<distributed::AllReduce*>(p.get())) {
+      return {"AllReduce", {static_cast<int>(collective->reduce_type())}};
+    }
+    if (dynamic_cast<distributed::AllGather*>(p.get())) {
+      return {"AllGather", {}};
+    }
+    if (auto* collective = dynamic_cast<distributed::ReduceScatter*>(p.get())) {
+      return {"ReduceScatter", {static_cast<int>(collective->reduce_type())}};
+    }
     std::string name = p->name();
     name = name.substr(0, name.find(' '));
     if (auto it = name_remap.find(name); it != name_remap.end()) {
@@ -765,6 +787,7 @@ void FunctionExporter::export_with_callback(
     callback({{"type", "constants"}, {"constants", new_constants}});
   }
   auto factory = PrimitiveFactory();
+  std::unordered_map<const distributed::detail::GroupImpl*, int> groups;
 
   // Callback for each primitive in the tape
   for (auto& arr : tape) {
@@ -772,12 +795,22 @@ void FunctionExporter::export_with_callback(
       continue;
     }
     auto [name, state] = factory.extract_state(arr.primitive_ptr());
-    callback(
-        {{"type", "primitive"},
-         {"inputs", to_vector_data(arr.inputs())},
-         {"outputs", to_vector_data(arr.outputs())},
-         {"name", name},
-         {"arguments", state}});
+    ExportCallbackInput event{
+        {"type", "primitive"},
+        {"inputs", to_vector_data(arr.inputs())},
+        {"outputs", to_vector_data(arr.outputs())},
+        {"name", name},
+        {"arguments", state},
+        {"stream", arr.primitive().stream()}};
+    if (auto* collective = dynamic_cast<distributed::DistPrimitive*>(
+            arr.primitive_ptr().get())) {
+      const auto& group = collective->group();
+      auto [entry, inserted] =
+          groups.emplace(group.raw_group().get(), groups.size());
+      event.emplace("group", group);
+      event.emplace("group_index", entry->second);
+    }
+    callback(event);
   }
 }
 
