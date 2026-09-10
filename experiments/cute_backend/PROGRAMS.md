@@ -2,17 +2,19 @@
 
 `tk.compile` now lowers a float32 function into fused CuTe arithmetic regions and explicit native MLX operations. Matrix multiplication uses MLX's existing CUDA implementation. All-reduce, all-gather, and sum-scatter use the captured communication group. Their input and output dependencies remain in the lazy MLX graph, so CUDA can overlap independent work.
 
-This is available in the modified Tiki checkout. The experimental `tiki` module lives in `experiments/cute_backend`; it is separate from the layout API in `mlx.tiki`. The code requires a CUDA build of this checkout and CuTe DSL 4.7.1. The accepted kernel targets are L4 (`sm_89`) and Hopper (`sm_90`).
+This is available in the modified Tiki checkout. The experimental `tiki` module lives in `experiments/cute_backend`; it is separate from the layout API in `mlx.tiki`. The code requires Python 3.14, a CUDA build of this checkout, and CuTe DSL 4.7.1. The accepted kernel targets are L4 (`sm_89`) and Hopper (`sm_90`). The [compiler module map](tiki_compiler/README.md) describes its typed boundaries and enforced limits.
 
 ```python
 import mlx.core as mx
 import tiki as tk
 
 group = mx.distributed.init(strict=True, backend="nccl")
-schedule = tk.Schedule(arch=mx.device_info(mx.gpu)["architecture"])
+arch = mx.device_info(mx.gpu)["architecture"]
+assert isinstance(arch, str)
+schedule = tk.Schedule(arch=arch)
 
 @tk.compile(schedule=schedule)
-def step(a, b, x):
+def step(a: mx.array, b: mx.array, x: mx.array) -> tuple[mx.array, mx.array]:
     return a @ b, mx.distributed.all_sum(x * 0.5, group=group) + 1.0
 
 x = mx.full((1024, 1024), group.rank() + 1, dtype=mx.float32)
@@ -31,7 +33,18 @@ PYTHONPATH=python:experiments/cute_backend \
 
 The launcher selects GPUs 0 and 1 and sets the NCCL rank and rendezvous environment. It requires two NVIDIA GPUs. A Mac can run the local graph-lowering tests, but it cannot execute these CuTe CUDA kernels.
 
-Call `step.lower(a, b, x)` to inspect its `Program`. Its `stages` show `Matmul`, `CuTe`, `AllReduce`, and `CuTe`. Each CuTe stage exposes its `lowered.mlir`; native stages retain their operation, stream, and communication-group index. Unsupported primitives fail during lowering. They do not select another backend.
+Call `step.lower(a, b, x)` to inspect its `Program`. Its `stages` show `Matmul`, `CuTe`, `AllSum`, and `CuTe`. Each CuTe stage exposes its `lowered.mlir`. Collective stages retain their operation, stream, group, and group index; matrix stages have two inputs and a stream. Unsupported primitives fail during lowering.
+
+## CuTe device collectives
+
+The collective stage currently executes NCCL through MLX. NVIDIA's
+[all_reduce_simple.py](https://github.com/NVIDIA/cutlass/blob/147295a3d4b75f3aeff247c25b8927cea9a7006a/examples/python/CuTeDSL/cute/blackwell/kernel/distributed/all_reduce_simple.py)
+implements the reduction inside a CuTe kernel: it loads peer-accessible tensors,
+accumulates their values in registers, and stores the result. That version uses
+NVSHMEM to allocate and obtain peer tensors; PyTorch distributed handles setup
+and barriers. Lowering to that kernel family would require explicit peer-buffer
+and synchronization contracts. This program's CuTe regions contain the arithmetic
+before and after the native collective.
 
 The first supported programs use the elementwise `Schedule`, float32 arrays, and positional arguments. They can return one array or a flat tuple. Local sum reductions and tiled transposes retain their separate cooperative-schedule contracts. Automatic row chunking, CuTe-generated matrix multiplication, and GPU-initiated network kernels are outside this change. Mixed-program differentiation is limited by the operations supported when lowering the derivative graph; unsupported derivative primitives raise an error.
 

@@ -14,6 +14,8 @@ from cutlass import testing
 
 import tiki as tk
 from demo_cooperative import rms_norm
+from tiki_compiler.artifact import CudaIo, binary
+from tiki_compiler.lowered import Lowered
 
 
 def checked(result):
@@ -58,7 +60,8 @@ def benchmark_case(
     lowered = tk.compile(schedule=schedule)(rms_norm).lower(
         mx.zeros(shape), mx.zeros((width,))
     )
-    cute_binary = tk.binary(lowered)
+    assert isinstance(lowered, Lowered)
+    cute_binary = binary(CudaIo(), lowered)
     prefix = f"{rows}x{width}-t{schedule.threads_per_row}-r{schedule.rows_per_block}"
     (output / f"{prefix}.mlir").write_text(lowered.mlir)
     (output / f"{prefix}.ptx").write_text(cute_binary.ptx)

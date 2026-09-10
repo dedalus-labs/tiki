@@ -8,6 +8,9 @@ from pathlib import Path
 import mlx.core as mx
 
 import tiki as tk
+from tiki_compiler.arrays import single
+from tiki_compiler.artifact import CudaIo, binary
+from tiki_compiler.lowered import Lowered
 
 
 def rms_norm(x: mx.array, weight: mx.array) -> mx.array:
@@ -26,6 +29,7 @@ def save_case(
     execute: bool,
 ) -> None:
     lowered = function.lower(*inputs)
+    assert isinstance(lowered, Lowered)
     directory = output / name
     directory.mkdir()
     report = {
@@ -34,15 +38,13 @@ def save_case(
         "shared_memory_bytes": lowered.shared_memory_bytes,
     }
     (directory / "kernel.mlir").write_text(lowered.mlir)
-    (directory / "graph.json").write_text(
-        json.dumps(asdict(lowered.graph), indent=2) + "\n"
-    )
+    (directory / "graph.json").write_text(json.dumps(asdict(lowered.graph), indent=2) + "\n")
     if execute:
-        artifact = tk.binary(lowered)
+        artifact = binary(CudaIo(), lowered)
         (directory / "kernel.ptx").write_text(artifact.ptx)
         (directory / "kernel.cubin").write_bytes(artifact.cubin)
-        actual = function(*inputs)
-        expected = function.function(*inputs)
+        actual = single(function(*inputs))
+        expected = single(function.function(*inputs))
         if not mx.allclose(actual, expected, atol=2e-6, rtol=2e-5):
             raise AssertionError(f"incorrect output: {name}")
         report["max_error"] = mx.max(mx.abs(actual - expected)).item()
