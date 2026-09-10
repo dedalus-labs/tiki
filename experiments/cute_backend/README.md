@@ -1,5 +1,9 @@
 # CuTe compiler boundary
 
+Use Python 3.14 or newer for the lowering package. Its
+[module map and enforced contracts](tiki_compiler/README.md) describe ownership,
+type checking, and the limits on module and function size.
+
 Current hardware results and diagnostic limitations are in
 [COOPERATIVE_PROOF.md](COOPERATIVE_PROOF.md).
 The [exemplar audit](EXEMPLAR_AUDIT.md) adds measured NVCC comparisons and
@@ -20,6 +24,7 @@ and the Python/C++/Rust implementation boundary.
 # Run with experiments/cute_backend on PYTHONPATH.
 import mlx.core as mx
 import tiki as tk
+from tiki_compiler.lowered import Lowered
 
 
 @tk.compile(schedule=tk.Schedule(threads=128, elements_per_thread=4))
@@ -30,6 +35,7 @@ def affine(x: mx.array, y: mx.array) -> mx.array:
 x = mx.arange(513, dtype=mx.float32)
 y = mx.array(3.0)
 lowered = affine.lower(x, y)
+assert isinstance(lowered, Lowered)
 print(lowered.schedule)
 print(lowered.mlir)
 mx.eval(affine(x, y))  # Requires MLX CUDA on sm_90.
@@ -52,8 +58,8 @@ python -m unittest discover -s experiments/cute_backend -p test_compile.py
 - The elementwise schedule supports add, subtract, multiply, negate, square,
   reciprocal square root, and scalar broadcasting. Its array inputs have the
   output shape or rank zero. Other schedules have the contracts below.
-- MLX explicitly packs noncontiguous inputs to row-major buffers before
-  launch; this can cost a copy.
+- Elementwise kernels consume strided views in place. Cooperative schedules
+  explicitly pack noncontiguous inputs to row-major buffers before launch.
 - Threads per block: 32, 64, 128, or 256. Elements per thread: 1, 2, or 4.
   Element `i` belongs to `block * threads * elements_per_thread + thread +
   i * threads`. This is scalar work unrolling, not a promise of vector loads.
@@ -195,7 +201,8 @@ python -m unittest discover -s experiments/cute_backend -p 'test_*.py'
 
 Every demo case saves its graph, schedule, launch dimensions, shared-memory
 size, and CuTe MLIR. With execution enabled it also saves PTX and the cubin.
-`tk.binary(lowered).ptx` exposes the actual compiler output for inspection.
+`binary(affine.io, lowered).ptx`, imported from `tiki_compiler.artifact`, exposes
+the actual compiler output for inspection.
 
 The optional layout inspector uses the monorepo's existing
 `packages/python/tiki/src/tiki/kernels/cute/lib/debug.py` directly. Its

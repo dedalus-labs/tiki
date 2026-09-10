@@ -1,0 +1,12 @@
+[environment]
+python-version = "3.14"
+# The check command runs from the repository root against its generated MLX stubs.
+extra-paths = ["python", "experiments/cute_backend", "experiments/cute_backend/typings", "experiments/associative_scan"]
+
+[rules]
+possibly-missing-attribute = "error"
+possibly-missing-implicit-call = "error"
+possibly-missing-import = "error"
+possibly-unresolved-reference = "error"
+redundant-cast = "error"
+unused-ignore-comment = "error"

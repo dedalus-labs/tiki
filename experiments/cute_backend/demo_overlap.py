@@ -16,10 +16,12 @@ def main() -> None:
     group = mx.distributed.init(strict=True, backend="nccl")
     if group.size() < 2:
         raise RuntimeError("launch this example with --backend nccl -n 2")
-    schedule = tk.Schedule(arch=mx.device_info(mx.gpu)["architecture"])
+    arch = mx.device_info(mx.gpu)["architecture"]
+    assert isinstance(arch, str)
+    schedule = tk.Schedule(arch=arch)
 
     @tk.compile(schedule=schedule)
-    def step(a, b, x):
+    def step(a: mx.array, b: mx.array, x: mx.array) -> tuple[mx.array, mx.array]:
         return a @ b, mx.distributed.all_sum(x * 0.5, group=group) + 1.0
 
     a = mx.full((1024, 1024), group.rank() + 1, dtype=mx.float32)
