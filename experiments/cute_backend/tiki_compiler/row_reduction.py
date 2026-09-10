@@ -2,12 +2,14 @@
 
 import struct
 
-from graph import Graph, Node, Shape, UnsupportedGraphError, Value
-from lowering import Lowered, RowSchedule, expression, memref
+from .graph import Graph, Node, Shape, Symbol, UnsupportedGraphError, Value
+from .lowered import Lowered
+from .scalar import expression, memref
+from .schedule import RowSchedule
 
 
 def scalar_code(
-    graph: Graph, target: str, coordinates: dict[Shape, str], known: dict[str, str]
+    graph: Graph, target: Symbol, coordinates: dict[Shape, str], known: dict[Symbol, str]
 ) -> tuple[list[str], str]:
     nodes = {node.output.name: node for node in graph.nodes}
     inputs = {value.name: (i, value) for i, value in enumerate(graph.inputs)}
@@ -15,16 +17,20 @@ def scalar_code(
     names = dict(known)
     lines = []
 
-    def emit(name: str) -> str:
+    def emit(name: Symbol) -> str:
         if name in names:
-            return names[name]
+            result = names[name]
+            return result
         result = f"%v{len(names)}"
         if name in inputs:
             index, value = inputs[name]
             coord = coordinates[value.shape]
-            rhs = f'cute.memref.load(%arg{index}, {coord}) : ({memref(value)}, !cute.coord<"?">) -> f32'
+            rhs = (
+                f"cute.memref.load(%arg{index}, {coord}) : ({memref(value)}, "
+                f'!cute.coord<"?">) -> f32'
+            )
         elif name in constants:
-            bits = struct.unpack("<I", struct.pack("<f", constants[name]))[0]
+            bits = int.from_bytes(struct.pack("<f", constants[name]), "little")
             rhs = f"arith.constant 0x{bits:08X} : f32"
         else:
             node = nodes[name]
@@ -40,7 +46,8 @@ def scalar_code(
         return result
 
     result = emit(target)
-    return lines, result
+    emitted = lines, result
+    return emitted
 
 
 def warp_sum(value: str, prefix: str, threads: int = 32) -> tuple[list[str], str]:
@@ -49,25 +56,21 @@ def warp_sum(value: str, prefix: str, threads: int = 32) -> tuple[list[str], str
         offset = 1 << shift
         lines.append(f"%{prefix}offset{offset} = arith.constant {offset} : i32")
         lines.append(
-            f"%{prefix}shuffle{offset} = nvvm.shfl.sync bfly %mask, {value}, %{prefix}offset{offset}, %clamp : f32 -> f32"
+            f"%{prefix}shuffle{offset} = nvvm.shfl.sync bfly %mask, {value}, "
+            f"%{prefix}offset{offset}, %clamp : f32 -> f32"
         )
-        lines.append(
-            f"%{prefix}sum{offset} = arith.addf {value}, %{prefix}shuffle{offset} : f32"
-        )
+        lines.append(f"%{prefix}sum{offset} = arith.addf {value}, %{prefix}shuffle{offset} : f32")
         value = f"%{prefix}sum{offset}"
-    return lines, value
+    reduced = lines, value
+    return reduced
 
 
 def validate_row(graph: Graph) -> Node | None:
     if len(graph.shape) != 2 or graph.shape[1] == 0:
-        raise UnsupportedGraphError(
-            "row schedule requires a nonzero width and a 2D output"
-        )
+        raise UnsupportedGraphError("row schedule requires a nonzero width and a 2D output")
     rows, cols = graph.shape
     values = (*graph.inputs, *(node.output for node in graph.nodes))
-    if any(
-        value.shape not in ((), (cols,), (rows, 1), (rows, cols)) for value in values
-    ):
+    if any(value.shape not in ((), (cols,), (rows, 1), (rows, cols)) for value in values):
         raise UnsupportedGraphError("unsupported row broadcast shape")
     reductions = [node for node in graph.nodes if node.operation == "ReduceSum"]
     if any(node.operation == "Transpose" for node in graph.nodes):
@@ -93,19 +96,24 @@ def coordinates(graph: Graph) -> tuple[list[str], dict[Shape, str]]:
         '%full_coord = cute.make_coord(%flat) : (i32) -> !cute.coord<"?">',
         '%column_coord = cute.make_coord(%column) : (i32) -> !cute.coord<"?">',
     ]
-    return lines, {
-        (): "%scalar_coord",
-        (cols,): "%column_coord",
-        (rows, 1): "%row_coord",
-        (rows, cols): "%full_coord",
-    }
+    coordinates = (
+        lines,
+        {
+            (): "%scalar_coord",
+            (cols,): "%column_coord",
+            (rows, 1): "%row_coord",
+            (rows, cols): "%full_coord",
+        },
+    )
+    return coordinates
 
 
 def reduction_loop(graph: Graph, reduction: Node) -> list[str]:
     coords, mapping = coordinates(graph)
     code, result = scalar_code(graph, reduction.inputs[0], mapping, {})
-    return [
-        "%partial = scf.for %column = %local_thread to %width step %row_threads iter_args(%sum = %zero_f) -> (f32) : i32 {",
+    lines = [
+        "%partial = scf.for %column = %local_thread to %width step "
+        "%row_threads iter_args(%sum = %zero_f) -> (f32) : i32 {",
         "  %next = scf.if %row_valid -> (f32) {",
         *("    " + line for line in (*coords, *code)),
         f"    %added = arith.addf %sum, {result} : f32",
@@ -116,12 +124,14 @@ def reduction_loop(graph: Graph, reduction: Node) -> list[str]:
         "  scf.yield %next : f32",
         "}",
     ]
+    return lines
 
 
 def block_sum(schedule: RowSchedule, value: str) -> tuple[list[str], str]:
     warps = schedule.threads_per_row // 32
     if warps <= 1:
-        return [], value
+        reduced = [], value
+        return reduced
     shared = f'!cute.memref<f32, smem, align<4>, "({schedule.rows_per_block},{warps}):({warps},1)">'
     lines = [
         f"%shared = cute.memref.alloca() : {shared}",
@@ -129,7 +139,8 @@ def block_sum(schedule: RowSchedule, value: str) -> tuple[list[str], str]:
         "%leader = arith.cmpi eq, %lane, %zero : i32",
         "scf.if %leader {",
         '  %coord = cute.make_coord(%local_row, %warp) : (i32, i32) -> !cute.coord<"(?,?)">',
-        f'  cute.memref.store(%shared, %coord, {value}) : ({shared}, !cute.coord<"(?,?)">, f32) -> ()',
+        f"  cute.memref.store(%shared, %coord, {value}) : ({shared}, "
+        f'!cute.coord<"(?,?)">, f32) -> ()',
         "}",
         "nvvm.barrier",
         f"%warps = arith.constant {warps} : i32",
@@ -143,30 +154,36 @@ def block_sum(schedule: RowSchedule, value: str) -> tuple[list[str], str]:
         "}",
     ]
     shuffles, total = warp_sum("%summary", "block")
-    return [*lines, *shuffles], total
+    reduced = [*lines, *shuffles], total
+    return reduced
 
 
-def output_loop(graph: Graph, known: dict[str, str]) -> list[str]:
+def output_loop(graph: Graph, known: dict[Symbol, str]) -> list[str]:
     coords, mapping = coordinates(graph)
     code, result = scalar_code(graph, graph.output, mapping, known)
-    output = Value(graph.output, graph.shape)
-    return [
+    output = Value.dense(name=graph.output, shape=graph.shape)
+    lines = [
         "scf.if %row_valid {",
         "  scf.for %column = %local_thread to %width step %row_threads : i32 {",
         *("    " + line for line in (*coords, *code)),
-        f'    cute.memref.store(%arg{len(graph.inputs)}, %full_coord, {result}) : ({memref(output)}, !cute.coord<"?">, f32) -> ()',
+        f"    cute.memref.store(%arg{len(graph.inputs)}, %full_coord, "
+        f'{result}) : ({memref(output)}, !cute.coord<"?">, f32) -> ()',
         "  }",
         "}",
     ]
+    return lines
 
 
 def lower_row(graph: Graph, schedule: RowSchedule) -> Lowered:
     reduction = validate_row(graph)
     if graph.shape[0] == 0:
-        return Lowered(graph, schedule, "module {}\n")
+        lowered = Lowered(graph=graph, schedule=schedule, mlir="module {}\n")
+        return lowered
     params = ", ".join(
         f"%arg{i}: {memref(value)}"
-        for i, value in enumerate((*graph.inputs, Value(graph.output, graph.shape)))
+        for i, value in enumerate(
+            (*graph.inputs, Value.dense(name=graph.output, shape=graph.shape))
+        )
     )
     prologue = [
         "%thread = nvvm.read.ptx.sreg.tid.x : i32",
@@ -194,28 +211,28 @@ def lower_row(graph: Graph, schedule: RowSchedule) -> Lowered:
     lines = [
         "module attributes {gpu.container_module} {",
         "  gpu.module @kernels {",
-        f"    cuda.kernel @tiki_fused({params}) attributes {{cute.kernel, gpu.kernel, nvvm.reqntid = array<i32: {schedule.threads}, 1, 1>}} {{",
+        f"    cuda.kernel @tiki_fused({params}) attributes "
+        f"{{cute.kernel, gpu.kernel, nvvm.reqntid = array<i32: {schedule.threads}, 1, 1>}} {{",
         *("      " + line for line in body),
         "      return",
         "    }",
         "  }",
         "}",
     ]
-    return Lowered(graph, schedule, "\n".join(lines) + "\n")
+    lowered = Lowered(graph=graph, schedule=schedule, mlir="\n".join(lines) + "\n")
+    return lowered
 
 
-def cooperative_body(
-    graph: Graph, schedule: RowSchedule, reduction: Node | None
-) -> list[str]:
+def cooperative_body(graph: Graph, schedule: RowSchedule, reduction: Node | None) -> list[str]:
     if reduction is None:
-        return output_loop(graph, {})
-    warp_lines, partial = warp_sum(
-        "%partial", "warp", min(32, schedule.threads_per_row)
-    )
+        body = output_loop(graph, {})
+        return body
+    warp_lines, partial = warp_sum("%partial", "warp", min(32, schedule.threads_per_row))
     block_lines, total = block_sum(schedule, partial)
-    return [
+    body = [
         *reduction_loop(graph, reduction),
         *warp_lines,
         *block_lines,
         *output_loop(graph, {reduction.output.name: total}),
     ]
+    return body
