@@ -2,15 +2,17 @@
 
 from math import prod
 
-from graph import Graph, UnsupportedGraphError, Value
-from lowering import Lowered, TransposeSchedule, memref
+from .graph import Graph, UnsupportedGraphError, Value
+from .lowered import Lowered
+from .scalar import memref
+from .schedule import TransposeSchedule
 
 
 def transfer(graph: Graph, shared: str, store: bool) -> list[str]:
     if store:
         row_base, col_base = "%tile_column", "%tile_row"
         rows, cols = graph.shape
-        value = Value(graph.output, graph.shape)
+        value = Value.dense(name=graph.output, shape=graph.shape)
         memory = "%arg1"
     else:
         row_base, col_base = "%tile_row", "%tile_column"
@@ -37,21 +39,23 @@ def transfer(graph: Graph, shared: str, store: bool) -> list[str]:
         ]
     )
     coords = "%tile_c, %tile_r" if store else "%tile_r, %tile_c"
-    lines.append(
-        f'  %local = cute.make_coord({coords}) : (i32, i32) -> !cute.coord<"(?,?)">'
-    )
+    lines.append(f'  %local = cute.make_coord({coords}) : (i32, i32) -> !cute.coord<"(?,?)">')
     if store:
         lines.extend(
             [
-                f'  %value = cute.memref.load(%shared, %local) : ({shared}, !cute.coord<"(?,?)">) -> f32',
-                f'  cute.memref.store({memory}, %global, %value) : ({memref(value)}, !cute.coord<"?">, f32) -> ()',
+                f"  %value = cute.memref.load(%shared, %local) : ({shared}, "
+                f'!cute.coord<"(?,?)">) -> f32',
+                f"  cute.memref.store({memory}, %global, %value) : "
+                f'({memref(value)}, !cute.coord<"?">, f32) -> ()',
             ]
         )
     else:
         lines.extend(
             [
-                f'  %value = cute.memref.load({memory}, %global) : ({memref(value)}, !cute.coord<"?">) -> f32',
-                f'  cute.memref.store(%shared, %local, %value) : ({shared}, !cute.coord<"(?,?)">, f32) -> ()',
+                f"  %value = cute.memref.load({memory}, %global) : "
+                f'({memref(value)}, !cute.coord<"?">) -> f32',
+                f"  cute.memref.store(%shared, %local, %value) : ({shared}, "
+                f'!cute.coord<"(?,?)">, f32) -> ()',
             ]
         )
     lines.append("}")
@@ -70,15 +74,18 @@ def validate_transpose(graph: Graph) -> None:
 def lower_transpose(graph: Graph, schedule: TransposeSchedule) -> Lowered:
     validate_transpose(graph)
     if prod(graph.shape) == 0:
-        return Lowered(graph, schedule, "module {}\n")
+        lowered = Lowered(graph=graph, schedule=schedule, mlir="module {}\n")
+        return lowered
     swizzle = schedule.swizzle
     layout = f"S<{swizzle.bits},{swizzle.base},{swizzle.shift}> o 0 o (32,32):(32,1)"
     shared = f'!cute.memref<f32, smem, align<128>, "{layout}">'
-    output = Value(graph.output, graph.shape)
+    output = Value.dense(name=graph.output, shape=graph.shape)
     lines = [
         "module attributes {gpu.container_module} {",
         "  gpu.module @kernels {",
-        f"    cuda.kernel @tiki_fused(%arg0: {memref(graph.inputs[0])}, %arg1: {memref(output)}) attributes {{cute.kernel, gpu.kernel, nvvm.reqntid = array<i32: {schedule.threads}, 1, 1>}} {{",
+        f"    cuda.kernel @tiki_fused(%arg0: {memref(graph.inputs[0])}, %arg1: "
+        f"{memref(output)}) attributes "
+        f"{{cute.kernel, gpu.kernel, nvvm.reqntid = array<i32: {schedule.threads}, 1, 1>}} {{",
         "      %thread = nvvm.read.ptx.sreg.tid.x : i32",
         "      %block = nvvm.read.ptx.sreg.ctaid.x : i32",
         "      %tile_size = arith.constant 32 : i32",
@@ -102,4 +109,5 @@ def lower_transpose(graph: Graph, schedule: TransposeSchedule) -> Lowered:
         "  }",
         "}",
     ]
-    return Lowered(graph, schedule, "\n".join(lines) + "\n")
+    lowered = Lowered(graph=graph, schedule=schedule, mlir="\n".join(lines) + "\n")
+    return lowered

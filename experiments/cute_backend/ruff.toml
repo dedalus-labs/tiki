@@ -1,0 +1,11 @@
+target-version = "py314"
+line-length = 100
+required-version = "==0.16.5"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ANN", "RET"]
+# python.mdx requires naming return values to make their meaning inspectable.
+ignore = ["RET504"]
+
+[lint.isort]
+known-first-party = ["tiki", "tiki_compiler", "associative_scan"]
