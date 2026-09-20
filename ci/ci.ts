@@ -31,7 +31,7 @@ function nativeJob(
     name,
     needs: ["affected", "workflows"],
     if: changed("native"),
-    environment: "occ-ci",
+    environment: "dedalus-machines-ci",
     "runs-on": runner,
     "timeout-minutes": 60,
     steps: [checkout, uses(native, { with: { mode } })],
