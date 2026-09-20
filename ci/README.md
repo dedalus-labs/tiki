@@ -36,6 +36,29 @@ complete CI result. It accepts a skipped job only when path detection succeeded
 and marked that lane irrelevant. A failed, cancelled, or unexpectedly skipped
 selected job fails this check. No branch-settings update is required.
 
+## Runner approval
+
+Selected native builds wait on the `occ-ci` GitHub environment before GitHub
+assigns a runner. Its sole required reviewer is `@windsornguyen`. Self-approval
+is allowed so the maintainer can approve runs on their own PRs. Environment
+bypass is disabled. The main-branch administrator merge bypass is unchanged.
+
+Each new workflow run, including a new PR commit or merge-group revision,
+requires approval through **Review deployments** in the Actions run. Rejecting
+or cancelling native work cannot make the required result check pass. Changes
+that do not select native builds do not request approval. Cheap path detection,
+workflow validation, formatting, and dependency review can run first.
+
+GitHub also requires workflow approval for every external contributor. That
+repository setting is independent of the maintainer-only native build gate.
+
+OCC routing is not active yet. Tiki has no registered OCC capacity, and the
+published Linux VM coordinator currently supports ARM64. The existing native
+runner assignments remain behind approval until Tiki-scoped registration and
+x86_64 capacity are available. No coordinator credential belongs in this public
+repository. Registration, execution, cancellation, and cleanup must be verified
+before changing the runner assignments.
+
 ## Migration scope
 
 The active sanitizer and Fedora jobs now execute through Hollywood actions.

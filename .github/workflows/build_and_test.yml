@@ -86,6 +86,7 @@ jobs:
       - affected
       - workflows
     if: ${{ needs.affected.outputs.native == 'true' }}
+    environment: occ-ci
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 60
     steps:
@@ -102,6 +103,7 @@ jobs:
       - affected
       - workflows
     if: ${{ needs.affected.outputs.native == 'true' }}
+    environment: occ-ci
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 60
     steps:
@@ -118,6 +120,7 @@ jobs:
       - affected
       - workflows
     if: ${{ needs.affected.outputs.native == 'true' }}
+    environment: occ-ci
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 60
     steps:
@@ -134,6 +137,7 @@ jobs:
       - affected
       - workflows
     if: ${{ needs.affected.outputs.native == 'true' }}
+    environment: occ-ci
     runs-on: ubuntu-22.04-arm
     timeout-minutes: 60
     steps:
