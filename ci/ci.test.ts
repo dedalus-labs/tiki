@@ -73,6 +73,14 @@ test("required check names exist on every PR and merge-group workflow", async ()
   assert.equal(native.localActionPath, "ci/native");
 });
 
+test("every native build waits for the operator approval environment", () => {
+  for (const id of nativeIds) {
+    const candidate = ci.jobs[id];
+    assert.equal(candidate.environment, "occ-ci", id);
+    assert.deepEqual(candidate.needs, ["affected", "workflows"]);
+  }
+});
+
 test("native actions execute structured commands and retire their container after failure", async () => {
   const commands: Command[] = [];
   const container = "a".repeat(64);
