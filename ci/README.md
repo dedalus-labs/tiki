@@ -52,12 +52,19 @@ workflow validation, formatting, and dependency review can run first.
 GitHub also requires workflow approval for every external contributor. That
 repository setting is independent of the maintainer-only native build gate.
 
-OCC routing is not active yet. Tiki has no registered OCC capacity, and the
-published Linux VM coordinator currently supports ARM64. The existing native
-runner assignments remain behind approval until Tiki-scoped registration and
-x86_64 capacity are available. No coordinator credential belongs in this public
-repository. Registration, execution, cancellation, and cleanup must be verified
-before changing the runner assignments.
+OCC routing is not active yet. Linux x64 capacity supports repository-scoped,
+one-job registrations. It runs unprivileged containers with a read-only root
+and no Docker socket. Tiki's existing native actions require package installation
+or nested Docker, so their runner assignments remain behind approval until a
+prepared build image and per-run registration owner are integrated. No coordinator
+credential belongs in this public repository.
+
+The requested provider order is OCC, Blacksmith, then GitHub-hosted. Follow the
+Dedalus ownership rule: only unavailable capacity before workload assignment can
+advance to another provider. Confirm cancellation and resource cleanup first.
+Once execution starts, a test failure, timeout, or out-of-memory error remains a
+failure. Preserve OS, architecture, tool availability, and memory requirements
+across every eligible route. Registration alone does not activate this policy.
 
 ## Migration scope
 
