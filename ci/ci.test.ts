@@ -76,7 +76,7 @@ test("required check names exist on every PR and merge-group workflow", async ()
 test("every native build waits for the operator approval environment", () => {
   for (const id of nativeIds) {
     const candidate = ci.jobs[id];
-    assert.equal(candidate.environment, "occ-ci", id);
+    assert.equal(candidate.environment, "dedalus-machines-ci", id);
     assert.deepEqual(candidate.needs, ["affected", "workflows"]);
   }
 });

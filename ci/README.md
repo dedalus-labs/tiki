@@ -38,7 +38,7 @@ selected job fails this check. No branch-settings update is required.
 
 ## Runner approval
 
-Selected native builds wait on the `occ-ci` GitHub environment before GitHub
+Selected native builds wait on the `dedalus-machines-ci` GitHub environment before GitHub
 assigns a runner. Its sole required reviewer is `@windsornguyen`. Self-approval
 is allowed so the maintainer can approve runs on their own PRs. Environment
 bypass is disabled. The main-branch administrator merge bypass is unchanged.
@@ -52,14 +52,14 @@ workflow validation, formatting, and dependency review can run first.
 GitHub also requires workflow approval for every external contributor. That
 repository setting is independent of the maintainer-only native build gate.
 
-OCC routing is not active yet. Linux x64 capacity supports repository-scoped,
+Dedalus Machines routing is not active yet. Linux x64 capacity supports repository-scoped,
 one-job registrations. It runs unprivileged containers with a read-only root
 and no Docker socket. Tiki's existing native actions require package installation
 or nested Docker, so their runner assignments remain behind approval until a
 prepared build image and per-run registration owner are integrated. No coordinator
 credential belongs in this public repository.
 
-The requested provider order is OCC, Blacksmith, then GitHub-hosted. Follow the
+The requested provider order is Dedalus Machines, Blacksmith, then GitHub-hosted. Follow the
 Dedalus ownership rule: only unavailable capacity before workload assignment can
 advance to another provider. Confirm cancellation and resource cleanup first.
 Once execution starts, a test failure, timeout, or out-of-memory error remains a
