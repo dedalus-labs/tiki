@@ -553,7 +553,10 @@ array rope(
       offset = expand_dims(offset, {-1, -2}, s);
     }
     auto positions = multiply(
-        add(arange(x.shape(2), float32, s), offset, s),
+        astype(
+            add(arange(x.shape(2), int64, s), astype(offset, int64, s), s),
+            float32,
+            s),
         array(scale, float32),
         s);
 
