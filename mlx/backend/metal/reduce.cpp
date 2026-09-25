@@ -982,7 +982,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  if (reduce_type_ == Reduce::Prod &&
+  if ((reduce_type_ == Reduce::Sum || reduce_type_ == Reduce::Prod) &&
       (in.dtype() == float16 || in.dtype() == bfloat16)) {
     // Two conversion passes keep the reduction in float32 until the final
     // store.
