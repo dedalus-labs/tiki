@@ -103,6 +103,30 @@ class TestFast(mlx_tests.MLXTestCase):
                     )
                     self.assertTrue(mx.allclose(actual, expected, rtol=1e-6, atol=1e-6))
 
+    def test_rope_vjp_applies_the_transpose_rotation(self):
+        for traditional, tokens in product((False, True), (1, 3)):
+            with self.subTest(traditional=traditional, tokens=tokens):
+                values = mx.array([[[1.0, 0.0]] * tokens])
+                cotangent = mx.array([[[1.0, 0.0]] * tokens])
+
+                def rotate(value):
+                    return mx.fast.rope(
+                        value,
+                        2,
+                        traditional=traditional,
+                        base=10000,
+                        scale=1.0,
+                        offset=mx.array(-3, dtype=mx.int32),
+                    )
+
+                _, gradients = mx.vjp(rotate, [values], [cotangent])
+                expected = mx.array(
+                    [[[math.cos(-3 + i), -math.sin(-3 + i)] for i in range(tokens)]]
+                )
+                self.assertTrue(
+                    mx.allclose(gradients[0], expected, atol=1e-6, rtol=1e-6)
+                )
+
     def test_rope_broadcasts_singleton_offset_views_across_batches(self):
         parent = mx.array([2, 37], dtype=mx.int32)
         offset = parent[:1]
