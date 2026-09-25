@@ -2541,6 +2541,64 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.as_strided(x, (-2, 3), (3, 1), 0)
 
+    def test_as_strided_rejects_views_outside_the_allocation(self):
+        base = mx.array([1.0])
+        cases = (((2,), (1024,), 0), ((2,), (-1,), 0), ((2,), (1,), 1024))
+        for shape, strides, offset in cases:
+            with self.subTest(strides=strides, offset=offset):
+                view = mx.as_strided(base, shape, strides, offset)
+                # Only evaluate view metadata; never copy or read an invalid view.
+                with self.assertRaisesRegex(ValueError, "backing allocation"):
+                    mx.eval(view)
+
+    def test_as_strided_validates_rank_before_constructing_metadata(self):
+        base = mx.array([1.0])
+        for shape, strides in (((2, 2), (1,)), ((2,), (1, 1))):
+            with self.subTest(shape=shape, strides=strides):
+                with self.assertRaisesRegex(ValueError, "same rank"):
+                    mx.as_strided(base, shape, strides)
+
+    def test_as_strided_rejects_unrepresentable_metadata_without_evaluation(self):
+        base = mx.array([1.0])
+        cases = (
+            ((3,), (2**63 - 1,), 0),
+            ((3,), (-(2**63),), 0),
+            ((1,), (1,), 2**63 - 1),
+            ((2**31 - 1,) * 3, (0, 0, 0), 0),
+        )
+        for shape, strides, offset in cases:
+            with self.subTest(shape=shape, strides=strides, offset=offset):
+                with self.assertRaises(OverflowError):
+                    mx.as_strided(base, shape, strides, offset)
+        with self.assertRaises(OverflowError):
+            mx.as_strided(base, (2**31 - 1,) * 4)
+
+    def test_as_strided_empty_views_keep_a_bounded_origin(self):
+        base = mx.array([1.0])
+        view = mx.as_strided(base, (0,), (1024,), 1)
+        mx.eval(view)
+        self.assertEqual(view.shape, (0,))
+        outside = mx.as_strided(base, (0,), (0,), 1024)
+        with self.assertRaisesRegex(ValueError, "backing allocation"):
+            mx.eval(outside)
+
+    def test_as_strided_preserves_parent_backed_offsets_and_reversals(self):
+        base = mx.array([1.0, 2.0, 3.0, 4.0])
+        tail = mx.as_strided(base[1:2], (3,), (1,), 0)
+        prefix = mx.as_strided(base[2:4], (3,), (-1,), 0)
+        self.assertEqual(tail.tolist(), [2.0, 3.0, 4.0])
+        self.assertEqual(prefix.tolist(), [3.0, 2.0, 1.0])
+
+    def test_as_strided_preserves_unaligned_reinterpretation_byte_offsets(self):
+        data = mx.array([0, 0, 0, 128, 63, 0, 0, 0, 64], dtype=mx.uint8)
+        unaligned = data[1:].view(mx.float32)
+        view = mx.as_strided(unaligned, (2,), (1,), 0)
+        # Read bytes so the CPU oracle never dereferences an unaligned float.
+        self.assertEqual(view.view(mx.uint8).tolist(), data[1:].tolist())
+        invalid = mx.as_strided(data, (4,), (1,), 1024).view(mx.float32)
+        with self.assertRaisesRegex(ValueError, "backing allocation"):
+            mx.eval(invalid)
+
     def test_logcumsumexp(self):
         npop = np.logaddexp.accumulate
         mxop = mx.logcumsumexp

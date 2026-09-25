@@ -9,6 +9,7 @@
 #include <set>
 #include <sstream>
 
+#include "mlx/as_strided.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/fast_primitives.h"
@@ -322,10 +323,7 @@ array as_strided(
     Strides strides,
     size_t offset,
     StreamOrDevice s /* = {} */) {
-  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
-    throw std::invalid_argument(
-        "[as_strided] Negative dimensions not allowed.");
-  }
+  as_strided_detail::layout(shape, strides, offset, a.itemsize());
   auto copied_shape = shape; // |shape| will be moved
   auto dtype = a.dtype(); // |a| will be moved
   return array(

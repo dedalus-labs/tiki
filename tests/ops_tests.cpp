@@ -7,6 +7,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/as_strided.h"
 #include "mlx/backend/cuda/cuda.h"
 #include "mlx/mlx.h"
 
@@ -2841,6 +2842,55 @@ TEST_CASE("test complex ops") {
     CHECK_EQ(sum(x).item<complex64_t>(), complex64_t{1, 1});
     CHECK_EQ(prod(x).item<complex64_t>(), complex64_t{0, 0});
   }
+}
+
+TEST_CASE("test as_strided checked metadata") {
+  namespace checked = as_strided_detail;
+  constexpr auto low = std::numeric_limits<int64_t>::min();
+  constexpr auto high = std::numeric_limits<int64_t>::max();
+  CHECK_EQ(checked::add(low, 1), low + 1);
+  CHECK_EQ(checked::subtract(high, 1), high - 1);
+  CHECK_EQ(checked::scale(low, 1), low);
+  CHECK_EQ(checked::scale(low, 0), 0);
+  CHECK_THROWS_AS(checked::add(high, 1), std::overflow_error);
+  CHECK_THROWS_AS(checked::add(low, -1), std::overflow_error);
+  CHECK_THROWS_AS(checked::subtract(0, low), std::overflow_error);
+  CHECK_THROWS_AS(checked::subtract(low, 1), std::overflow_error);
+  CHECK_THROWS_AS(checked::scale(low, 2), std::overflow_error);
+  CHECK_THROWS_AS(checked::scale(high, 2), std::overflow_error);
+  CHECK_THROWS_AS(checked::layout({3}, {high}, 0, 4), std::overflow_error);
+  CHECK_THROWS_AS(checked::layout({3}, {low}, 0, 4), std::overflow_error);
+  CHECK_THROWS_AS(checked::layout({1}, {1}, high, 4), std::overflow_error);
+  CHECK_THROWS_AS(checked::layout({2, 2}, {1}, 0, 4), std::invalid_argument);
+  CHECK_THROWS_AS(checked::layout({-1}, {1}, 0, 4), std::invalid_argument);
+}
+
+TEST_CASE("test as_strided allocation intervals") {
+  namespace checked = as_strided_detail;
+  auto reverse = checked::layout({3}, {-1}, 0, 4);
+  CHECK_EQ(reverse.data_size, 3);
+  CHECK_NOTHROW(checked::check_storage(reverse, 8, 16));
+  CHECK_THROWS_AS(
+      checked::check_storage(reverse, 0, 16), std::invalid_argument);
+  auto unaligned = checked::layout({2}, {1}, 0, 4);
+  CHECK_NOTHROW(checked::check_storage(unaligned, 1, 9));
+  CHECK_THROWS_AS(
+      checked::check_storage(unaligned, 2, 9), std::invalid_argument);
+  CHECK_THROWS_AS(
+      checked::check_storage(
+          unaligned, std::numeric_limits<int64_t>::max(), 16),
+      std::overflow_error);
+  auto empty =
+      checked::layout({0}, {std::numeric_limits<int64_t>::min()}, 1, 4);
+  CHECK_EQ(empty.data_size, 0);
+  CHECK_NOTHROW(checked::check_storage(empty, 0, 4));
+  CHECK_THROWS_AS(checked::check_storage(empty, 1, 4), std::invalid_argument);
+  auto extent = std::numeric_limits<ShapeElem>::max();
+  CHECK_NOTHROW(
+      checked::layout({extent, extent, extent, 0}, {0, 0, 0, 0}, 0, 4));
+  CHECK_THROWS_AS(
+      checked::layout({0, extent, extent, extent}, {0, 0, 0, 0}, 0, 4),
+      std::overflow_error);
 }
 
 TEST_CASE("test as_strided op") {

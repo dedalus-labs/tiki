@@ -13,6 +13,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "mlx/as_strided.h"
 #include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
@@ -3571,7 +3572,8 @@ void init_ops(nb::module_& m) {
         } else {
           a_strides = mx::Strides(a_shape.size(), 1);
           for (int i = a_shape.size() - 1; i > 0; i--) {
-            a_strides[i - 1] = a_shape[i] * a_strides[i];
+            a_strides[i - 1] =
+                mx::as_strided_detail::scale(a_strides[i], a_shape[i]);
           }
         }
         return mx::as_strided(a, a_shape, a_strides, offset, s);
@@ -3592,18 +3594,18 @@ void init_ops(nb::module_& m) {
         strides.
 
         .. note::
-           Note that this function should be used with caution as it changes
-           the shape and strides of the array directly. This can lead to the
-           resulting array pointing to invalid memory locations which can
-           result into crashes.
+           Shape and strides must have the same rank. Every reachable element
+           must remain within the backing allocation. Out-of-bounds views raise
+           ``ValueError`` when evaluated. Unrepresentable address arithmetic
+           raises ``OverflowError`` when the view is constructed or evaluated.
 
         Args:
           a (array): Input array
           shape (list(int), optional): The shape of the resulting array. If
-            None it defaults to ``a.shape()``.
+            None it defaults to ``a.shape``.
           strides (list(int), optional): The strides of the resulting array. If
             None it defaults to the reverse exclusive cumulative product of
-            ``a.shape()``.
+            the resulting shape.
           offset (int): Skip that many elements from the beginning of the input
             array.
 
