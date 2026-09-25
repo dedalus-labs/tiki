@@ -404,6 +404,7 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
       if (m <= 0) {
         return false;
       }
+      offset += m;
       buffer += m;
       size -= m;
     }
