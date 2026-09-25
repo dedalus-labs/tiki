@@ -106,9 +106,10 @@ class TestFast(mlx_tests.MLXTestCase):
     def test_rope_broadcasts_singleton_offset_views_across_batches(self):
         parent = mx.array([2, 37], dtype=mx.int32)
         offset = parent[:1]
-        values = mx.array([[[1.0, 0.0]], [[1.0, 0.0]]])
-        for supplied in (False, True):
-            with self.subTest(supplied=supplied):
+        for tokens, supplied in product((1, 3), (False, True)):
+            values = mx.broadcast_to(mx.array([1.0, 0.0]), (2, tokens, 2))
+            values = mx.contiguous(values)
+            with self.subTest(tokens=tokens, supplied=supplied):
                 actual = mx.fast.rope(
                     values,
                     2,
@@ -118,7 +119,15 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                     freqs=mx.array([1.0]) if supplied else None,
                 )
-                expected = mx.array([[[math.cos(2), math.sin(2)]]] * 2)
+                expected = mx.array(
+                    [
+                        [
+                            [math.cos(2 + token), math.sin(2 + token)]
+                            for token in range(tokens)
+                        ]
+                    ]
+                    * 2
+                )
                 self.assertTrue(mx.allclose(actual, expected, rtol=1e-6, atol=1e-6))
         self.assertEqual(parent.tolist(), [2, 37])
 
