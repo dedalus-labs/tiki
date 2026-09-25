@@ -36,15 +36,17 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto out_ptr = malloc(nbytes);
   reader_->read(static_cast<char*>(out_ptr), nbytes, offset_);
   if (swap_endianness_) {
-    switch (out.itemsize()) {
+    auto scalar_size = out.dtype() == complex64 ? 4 : out.itemsize();
+    auto scalar_count = nbytes / scalar_size;
+    switch (scalar_size) {
       case 2:
-        swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), size);
+        swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), scalar_count);
         break;
       case 4:
-        swap_endianness<4>(reinterpret_cast<uint8_t*>(out_ptr), size);
+        swap_endianness<4>(reinterpret_cast<uint8_t*>(out_ptr), scalar_count);
         break;
       case 8:
-        swap_endianness<8>(reinterpret_cast<uint8_t*>(out_ptr), size);
+        swap_endianness<8>(reinterpret_cast<uint8_t*>(out_ptr), scalar_count);
         break;
     }
   }

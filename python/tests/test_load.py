@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import itertools
 import os
 import platform
 import struct
@@ -87,6 +88,20 @@ class TestLoad(mlx_tests.MLXTestCase):
         np.save(save_file, c)
         with self.assertRaises(Exception):
             out = mx.load(save_file, stream=mx.cpu)
+
+    def test_npy_byte_order_preserves_scalar_components(self):
+        cases = itertools.product(self.dtypes, ("<", ">"), ((), (0,), (2, 2)))
+        for dtype, byte_order, shape in cases:
+            with self.subTest(dtype=dtype, byte_order=byte_order, shape=shape):
+                values = [1 + 2j, -3 + 4j] if dtype == "complex64" else [1, 7]
+                expected = np.resize(np.array(values, dtype=dtype), shape)
+                storage = expected.astype(expected.dtype.newbyteorder(byte_order))
+                filename = Path(self.test_dir) / "byte_order.npy"
+                np.save(filename, storage)
+                actual = mx.load(filename)
+                mx.eval(actual)
+                self.assertEqual(actual.shape, expected.shape)
+                np.testing.assert_array_equal(np.array(actual), expected)
 
     def test_load_npy_read_error(self):
         save_file = os.path.join(self.test_dir, "truncated.npy")

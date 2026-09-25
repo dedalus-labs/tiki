@@ -30,14 +30,15 @@ namespace mlx::core {
 void Load::eval_cpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc(out.nbytes()));
   auto read_task = [out_ptr = out.data<char>(),
-                    size = out.size(),
-                    itemsize = out.itemsize(),
+                    nbytes = out.nbytes(),
+                    scalar_size = out.dtype() == complex64 ? 4 : out.itemsize(),
                     offset = offset_,
                     reader = reader_,
                     swap_endianness_ = swap_endianness_]() mutable {
-    reader->read(out_ptr, size * itemsize, offset);
+    reader->read(out_ptr, nbytes, offset);
     if (swap_endianness_) {
-      switch (itemsize) {
+      auto size = nbytes / scalar_size;
+      switch (scalar_size) {
         case 2:
           swap_endianness<2>(reinterpret_cast<uint8_t*>(out_ptr), size);
           break;
