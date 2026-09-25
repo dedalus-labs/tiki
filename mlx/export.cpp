@@ -828,6 +828,13 @@ void FunctionExporter::export_function(const Args& args, const Kwargs& kwargs) {
   auto [tape, parents_map] =
       detail::compile_dfs(trace_inputs, trace_outputs, inputs);
 
+  // File loads contain frozen data, not serializable computation.
+  for (auto& arr : tape) {
+    if (arr.has_primitive() && typeid(arr.primitive()) == typeid(Load)) {
+      arr.eval();
+    }
+  }
+
   detail::compile_simplify(tape, parents_map, trace_outputs, /* passes */ 3);
 
   // Update the table entry
