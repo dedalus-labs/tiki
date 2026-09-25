@@ -24,6 +24,22 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
+    def test_exported_singleton_slice_preserves_its_derivative(self):
+        path = os.path.join(self.test_dir, "singleton-slice.mlxfn")
+        sample = mx.array([2.0, 5.0])
+        cotangent = mx.array([1.0])
+        for step, gradient in ((2, [1.0, 0.0]), (-2, [0.0, 1.0])):
+            with self.subTest(step=step):
+
+                def select(value):
+                    return value[::step]
+
+                mx.export_function(path, select, sample)
+                imported = mx.import_function(path)
+                output, derivative = mx.vjp(imported, [sample], [cotangent])
+                self.assertTrue(mx.array_equal(output[0], select(sample)))
+                self.assertTrue(mx.array_equal(derivative[0], mx.array(gradient)))
+
     def test_basic_export_import(self):
         path = os.path.join(self.test_dir, "fn.mlxfn")
 

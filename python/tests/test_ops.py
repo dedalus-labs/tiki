@@ -52,6 +52,26 @@ def np_cumlogaddexp(x1: np.ndarray, axis: int = -1):
 
 
 class TestOps(mlx_tests.MLXTestCase):
+    def test_singleton_slice_vjp_updates_only_the_selected_position(self):
+        cases = (
+            (slice(0, 2, 2), 0),
+            (slice(0, 3, 3), 0),
+            (slice(1, 3, 2), 1),
+            (slice(1, 3, 3), 1),
+            (slice(2, 0, -2), 2),
+            (slice(2, 0, -3), 2),
+        )
+        for selection, index in cases:
+            with self.subTest(selection=selection):
+                values = mx.array([2.0, 3.0, 5.0])
+                output, gradients = mx.vjp(
+                    lambda value: value[selection], [values], [mx.array([7.0])]
+                )
+                self.assertEqual(output[0].tolist(), [values[index].item()])
+                expected = [0.0, 0.0, 0.0]
+                expected[index] = 7.0
+                self.assertEqual(gradients[0].tolist(), expected)
+
     def test_full_ones_zeros(self):
         x = mx.full(2, 3.0)
         self.assertEqual(x.shape, (2,))
