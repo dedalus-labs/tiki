@@ -15,6 +15,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
 
   threadgroup AccT local_max[SIMD_SIZE];
   threadgroup AccT local_normalizer[SIMD_SIZE];
+  threadgroup bool local_nan[SIMD_SIZE];
 
   AccT ld[N_READS];
 
@@ -32,21 +33,27 @@ template <typename T, typename AccT = float, int N_READS = 4>
   if (simd_group_id == 0) {
     local_max[simd_lane_id] = Limits<AccT>::min;
     local_normalizer[simd_lane_id] = 0;
+    local_nan[simd_lane_id] = false;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // Get the max
   AccT maxval = Limits<AccT>::finite_min;
+  bool has_nan = false;
   for (int i = 0; i < N_READS; i++) {
     maxval = (maxval < ld[i]) ? ld[i] : maxval;
+    has_nan |= isnan(ld[i]);
   }
   maxval = simd_max(maxval);
+  has_nan = simd_any(has_nan);
   if (simd_lane_id == 0) {
     local_max[simd_group_id] = maxval;
+    local_nan[simd_group_id] = has_nan;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (simd_group_id == 0) {
     maxval = simd_max(local_max[simd_lane_id]);
+    has_nan = simd_any(local_nan[simd_lane_id]);
     if (simd_lane_id == 0) {
       local_max[0] = maxval;
     }
@@ -67,7 +74,9 @@ template <typename T, typename AccT = float, int N_READS = 4>
   if (simd_group_id == 0) {
     normalizer = simd_sum(local_normalizer[simd_lane_id]);
     if (simd_lane_id == 0) {
-      out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
+      out[gid] = has_nan  ? T(NAN)
+          : isinf(maxval) ? T(maxval)
+                          : T(log(normalizer) + maxval);
     }
   }
 }
@@ -88,11 +97,13 @@ template <typename T, typename AccT = float, int N_READS = 4>
 
   threadgroup AccT local_max[SIMD_SIZE];
   threadgroup AccT local_normalizer[SIMD_SIZE];
+  threadgroup bool local_nan[SIMD_SIZE];
 
   // Get the max and the normalizer in one go
   AccT prevmax;
   AccT maxval = Limits<AccT>::finite_min;
   AccT normalizer = 0;
+  bool has_nan = false;
   for (int r = 0; r < static_cast<int>(ceildiv(axis_size, N_READS * lsize));
        r++) {
     int offset = r * lsize * N_READS + lid * N_READS;
@@ -110,6 +121,7 @@ template <typename T, typename AccT = float, int N_READS = 4>
     prevmax = maxval;
     for (int i = 0; i < N_READS; i++) {
       maxval = (maxval < vals[i]) ? vals[i] : maxval;
+      has_nan |= isnan(vals[i]);
     }
     normalizer *= fast::exp(prevmax - maxval);
     for (int i = 0; i < N_READS; i++) {
@@ -118,15 +130,18 @@ template <typename T, typename AccT = float, int N_READS = 4>
   }
   prevmax = maxval;
   maxval = simd_max(maxval);
+  has_nan = simd_any(has_nan);
   normalizer *= fast::exp(prevmax - maxval);
   normalizer = simd_sum(normalizer);
 
   prevmax = maxval;
   if (simd_lane_id == 0) {
     local_max[simd_group_id] = maxval;
+    local_nan[simd_group_id] = has_nan;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   maxval = simd_max(local_max[simd_lane_id]);
+  has_nan = simd_any(local_nan[simd_lane_id]);
   normalizer *= fast::exp(prevmax - maxval);
   if (simd_lane_id == 0) {
     local_normalizer[simd_group_id] = normalizer;
@@ -135,6 +150,8 @@ template <typename T, typename AccT = float, int N_READS = 4>
   normalizer = simd_sum(local_normalizer[simd_lane_id]);
 
   if (lid == 0) {
-    out[gid] = isinf(maxval) ? T(maxval) : T(log(normalizer) + maxval);
+    out[gid] = has_nan  ? T(NAN)
+        : isinf(maxval) ? T(maxval)
+                        : T(log(normalizer) + maxval);
   }
 }

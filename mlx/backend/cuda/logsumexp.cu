@@ -3,6 +3,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/device/cast_op.cuh"
 #include "mlx/backend/cuda/kernel_utils.cuh"
+#include "mlx/backend/cuda/reduce/reduce_ops.cuh"
 #include "mlx/backend/gpu/copy.h"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
@@ -35,7 +36,7 @@ __global__ void logsumexp(const T* in, T* out, int axis_size) {
 
   in += grid.block_rank() * axis_size;
 
-  cg::greater<AccT> max_op;
+  Max max_op;
   cg::plus<AccT> plus_op;
 
   // Thread reduce.
