@@ -52,6 +52,53 @@ def np_cumlogaddexp(x1: np.ndarray, axis: int = -1):
 
 
 class TestOps(mlx_tests.MLXTestCase):
+    def test_product_preserves_empty_identities_and_storage_dtypes(self):
+        shapes = (((0,), 0, ()), ((0, 3), 0, (3,)), ((0, 3), 1, (0,)))
+        for dtype, (shape, axis, output_shape) in product(
+            (mx.float16, mx.bfloat16, mx.float32, mx.int64, mx.complex64), shapes
+        ):
+            with self.subTest(dtype=dtype, shape=shape, axis=axis):
+                actual = mx.prod(mx.zeros(shape, dtype=dtype), axis=axis)
+                self.assertEqual(actual.dtype, dtype)
+                self.assertEqual(actual.shape, output_shape)
+                self.assertEqual(actual.tolist(), mx.ones(output_shape, dtype).tolist())
+
+    def test_low_precision_reductions_preserve_long_axis_totals(self):
+        cases = product(
+            (mx.float16, mx.bfloat16, mx.float32),
+            ("contiguous", "transposed", "gapped", "reversed"),
+            ("sum", "prod"),
+        )
+        for dtype, layout, operation in cases:
+            with self.subTest(dtype=dtype, layout=layout, operation=operation):
+                width = 4099 if operation == "sum" else 1027
+                step = 2**-7 if dtype == mx.bfloat16 else 2**-10
+                sample = 1.0 if operation == "sum" else 1.0 + step
+                scalar = mx.array(sample, dtype=dtype).item()
+                rows = [scalar] * 5 + [math.nan, math.inf, -math.inf]
+                length = width * 2 if layout == "gapped" else width
+                values = mx.contiguous(
+                    mx.broadcast_to(mx.array(rows, dtype=dtype), (length, 8))
+                )
+                if layout == "gapped":
+                    values = values[::2]
+                elif layout == "reversed":
+                    values = values[::-1]
+                values = values.T
+                if layout == "contiguous":
+                    values = mx.contiguous(values)
+                reduce = mx.sum if operation == "sum" else mx.prod
+                actual = reduce(values, axis=-1)
+                total = scalar * width if operation == "sum" else scalar**width
+                expected = mx.array(
+                    [total] * 5 + [math.nan, math.inf, -math.inf], dtype=dtype
+                )
+                self.assertEqual(actual.dtype, dtype)
+                self.assertEqual(actual.shape, (8,))
+                self.assertTrue(
+                    mx.allclose(actual, expected, rtol=1e-5, atol=1e-5, equal_nan=True)
+                )
+
     def test_singleton_slice_vjp_updates_only_the_selected_position(self):
         cases = (
             (slice(0, 2, 2), 0),
