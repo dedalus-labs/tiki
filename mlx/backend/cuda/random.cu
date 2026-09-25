@@ -135,6 +135,12 @@ __global__ void rbits(
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("RandomBits::eval_gpu");
   assert(inputs.size() == 1);
+  auto& s = stream();
+  auto& encoder = cu::get_command_encoder(s);
+  out.set_data(cu::malloc_async(out.nbytes(), encoder));
+  if (out.size() == 0) {
+    return;
+  }
 
   // keys has shape (N1, ..., NK, 2)
   // out has shape (N1, ..., NK, M1, M2, ...)
@@ -143,12 +149,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t elems_per_key = out.size() / num_keys;
   size_t bytes_per_key = out.itemsize() * elems_per_key;
-  auto& s = stream();
-  auto& encoder = cu::get_command_encoder(s);
-  out.set_data(cu::malloc_async(out.nbytes(), encoder));
-  if (out.size() == 0) {
-    return;
-  }
 
   size_t out_per_key = (bytes_per_key + 4 - 1) / 4;
   size_t half_size = out_per_key / 2;
