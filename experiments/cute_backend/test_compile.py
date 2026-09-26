@@ -1,10 +1,27 @@
 """Contracts for native MLX graph lowering and CuTe execution."""
 
 import unittest
+from unittest.mock import patch
 
 import mlx.core as mx
 
 import tiki as tk
+
+
+class CallbackTests(unittest.TestCase):
+    def test_inactive_compiled_tangents_are_zero(self):
+        # A fixed multiplier has zero tangent, whichever input is active.
+        with patch.object(
+            tk.Compiled, "launch", lambda kernel, *args: kernel.function(*args)
+        ):
+            compiled = tk.compile()(lambda x, y: x * y)
+            x, y = mx.array([2.0, 3.0]), mx.array([4.0, 5.0])
+            for active in range(2):
+                function = lambda value: (
+                    compiled(value, y) if active == 0 else compiled(x, value)
+                )
+                got = mx.jvp(function, [(x, y)[active]], [mx.ones_like(x)])[1][0]
+                self.assertTrue(mx.allclose(got, (y, x)[active]).item())
 
 
 class CaptureTests(unittest.TestCase):
