@@ -41,6 +41,33 @@ class TestRandom(mlx_tests.MLXTestCase):
         keys = mx.random.split(key, 10)
         self.assertEqual(keys.shape, (10, 2))
 
+    def test_vmap_preserves_empty_key_batch_shapes(self):
+        for batch_shape in ((0,), (2, 0)):
+            keys = mx.zeros((*batch_shape, 2), dtype=mx.uint32)
+            for sample_shape in ((), (3,), (0, 3)):
+
+                def draw(key, shape=sample_shape):
+                    return mx.random.uniform(shape=shape, key=key)
+
+                for _ in batch_shape:
+                    draw = mx.vmap(draw)
+                values = draw(keys)
+                mx.eval(values)
+                self.assertEqual(values.shape, (*batch_shape, *sample_shape))
+                self.assertEqual(values.dtype, mx.float32)
+                self.assertEqual(values.size, 0)
+
+            def split(key):
+                return mx.random.split(key, 3)
+
+            for _ in batch_shape:
+                split = mx.vmap(split)
+            values = split(keys)
+            mx.eval(values)
+            self.assertEqual(values.shape, (*batch_shape, 3, 2))
+            self.assertEqual(values.dtype, mx.uint32)
+            self.assertEqual(values.size, 0)
+
     def test_uniform(self):
         key = mx.random.key(0)
         a = mx.random.uniform(key=key)
