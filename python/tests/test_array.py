@@ -893,6 +893,19 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.shape, (3,))
         self.assertEqual(x.tolist(), cvals)
 
+    @unittest.skipUnless(mx.cuda.is_available(), "requires CUDA")
+    def test_numpy_export_waits_for_device_copy(self) -> None:
+        # Compute Sanitizer checks that host export finishes before device free.
+        for size in (5, 262144):
+            with self.subTest(size=size), mx.stream(mx.gpu):
+                x = mx.arange(size, dtype=mx.float32) + 1
+                mx.eval(x)
+                # Isolate the host copy from event-query tracking in the sanitizer.
+                mx.synchronize(mx.default_stream(mx.gpu))
+                np.testing.assert_array_equal(
+                    np.asarray(x), np.arange(1, size + 1, dtype=np.float32)
+                )
+
     def test_array_np_dtype_conversion(self):
         dtypes_list = [
             (mx.bool_, np.bool_),

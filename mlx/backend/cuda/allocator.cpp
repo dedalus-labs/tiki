@@ -294,6 +294,8 @@ void CudaAllocator::move_to_unified_memory(
     free_async(buf, stream);
   } else {
     CHECK_CUDA_ERROR(cudaMemcpy(data, buf.data, buf.size, kind));
+    // Device-to-managed copies can return before the default stream completes.
+    CHECK_CUDA_ERROR(cudaStreamSynchronize(nullptr));
     free_async(buf);
   }
   buf.data = data;
