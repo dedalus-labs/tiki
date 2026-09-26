@@ -34,6 +34,7 @@ try:
         is_torch_212
         and hasattr(torch.backends, "mps")
         and torch.backends.mps.is_available()
+        and mx.metal.is_available()
     )
 except ImportError:
     torch = None
