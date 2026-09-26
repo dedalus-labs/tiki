@@ -44,10 +44,11 @@ in a tensor, but the two are different nouns for two reasons.
   inside one kernel, and no user composes them.
 
 A tensor reads coordinate ``c`` as ``accessor(layout(c))``. The layout turns a
-coordinate into an offset, and the accessor turns the offset into a value. An
-accessor is usually a pointer into one memory space. It can also be a
-function: the accessor that returns its offset unchanged gives a coordinate
-tensor, which kernels use to mask partial tiles.
+coordinate into an offset, and the accessor turns the offset into a value.
+Most accessors are a ``Pointer`` into one memory space. The others read no
+memory: a register fragment is indexed, because registers have no addresses,
+and the coordinate accessor returns its offset unchanged, which gives the
+coordinate tensors kernels use to mask partial tiles.
 
 The word tensor follows CuTe. In mathematics and physics a tensor is a
 multilinear object, and an array of numbers is its components in one basis.
@@ -177,7 +178,8 @@ capability, and each target supplies its instructions for it.
      - ``red``, ``atom``
 
 Everything else is a composition of these, and the layout algebra does the
-index arithmetic for each one:
+index arithmetic for each one. :ref:`tiki-kernels` defines each structure and
+operation and writes every kernel below in ``tk``.
 
 - **Partition.** A thread's share of a tile is the tile composed with a
   thread-value layout, sliced at the thread's index.
