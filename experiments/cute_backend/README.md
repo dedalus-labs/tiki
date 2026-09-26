@@ -14,6 +14,7 @@ thread schedule, emits CuTe MLIR directly, and passes it to `CuteCompiler`.
 No reference CuTe kernel or generated Python source participates in this path.
 The prototype requires Tiki's evaluated-array `strides` property. Forward-mode
 derivatives also require the `stop_gradient` tape-pruning fix.
+Its Swizzle value comes from `mlx.tiki` and requires the Rust indexing extension.
 
 ```python
 # Run with experiments/cute_backend on PYTHONPATH.

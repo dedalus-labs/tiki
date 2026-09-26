@@ -24,7 +24,7 @@ class SharedLayout:
 
     def __getitem__(self, coordinate: tuple[int, int]) -> int:
         row, col = coordinate
-        return self.swizzle.offset(row * 32 + col)
+        return self.swizzle(row * 32 + col)
 
 
 def positions(tv: ThreadValueLayout) -> list[list[int]]:
@@ -87,8 +87,8 @@ def main() -> None:
         fig.savefig(args.output / f"{name}.png", bbox_inches="tight")
         plt.close(fig)
     for name, swizzle in (
-        ("banks_plain", tk.Swizzle(bits=0)),
-        ("banks_xor", tk.Swizzle(bits=5)),
+        ("banks_plain", tk.Swizzle(0, 0, 5)),
+        ("banks_xor", tk.Swizzle(5, 0, 5)),
     ):
         fig, ax = debug.visualize_layout(
             SharedLayout(swizzle),
