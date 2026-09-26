@@ -52,6 +52,22 @@ def np_cumlogaddexp(x1: np.ndarray, axis: int = -1):
 
 
 class TestOps(mlx_tests.MLXTestCase):
+    def test_low_precision_sums_round_after_accumulation(self) -> None:
+        for dtype, step in ((mx.float16, 2**-12), (mx.bfloat16, 2**-9)):
+            values = mx.array([0.25, step] * 16383 + [0.25], dtype=dtype)
+            rows = mx.stack((values, values, values))
+            expected = mx.array(16384 * 0.25 + 16383 * step, dtype=dtype)
+            layouts = (
+                (values, None),
+                (rows, -1),
+                (mx.contiguous(rows.T), 0),
+            )
+            for inputs, axis in layouts:
+                with self.subTest(dtype=dtype, axis=axis):
+                    actual = mx.sum(inputs, axis=axis)
+                    self.assertEqual(actual.dtype, dtype)
+                    self.assertTrue(mx.all(actual == expected))
+
     def test_product_preserves_empty_identities_and_storage_dtypes(self):
         shapes = (((0,), 0, ()), ((0, 3), 0, (3,)), ((0, 3), 1, (0,)))
         for dtype, (shape, axis, output_shape) in product(
