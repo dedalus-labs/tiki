@@ -770,10 +770,6 @@ normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
 
       out_shape[i] = (ed - start[i] + strides[i] - 1) / strides[i];
     }
-    // Simplify the stride if it's unused
-    if (out_shape[i] == 1) {
-      strides[i] = 1;
-    }
   }
 
   return std::make_pair(has_neg_strides, out_shape);
