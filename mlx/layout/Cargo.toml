@@ -1,0 +1,21 @@
+[package]
+name = "tiki-layout"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "Checked, storage-independent indexing transforms"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[features]
+default = []
+cxx-bridge = ["dep:cxx", "dep:cxx-build"]
+
+[dependencies]
+thiserror = "2"
+cxx = { version = "=1.0.200", optional = true }
+
+[build-dependencies]
+cxx-build = { version = "=1.0.200", optional = true }
