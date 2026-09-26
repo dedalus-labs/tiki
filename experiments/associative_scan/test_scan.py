@@ -3,7 +3,7 @@
 import importlib.util
 import unittest
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import mlx.core as mx
 import numpy as np
@@ -82,6 +82,51 @@ def assert_close(actual: Any, expected: Any, name: str) -> None:
 
 
 class TestScanStructure(unittest.TestCase):
+    # Invariant: scan preserves sequence types, even without a combine.
+    # Witness: a singleton tuple at empty, singleton, and recursive lengths.
+    def test_tuple_structure(self) -> None:
+        for n in (0, 1, 2, 5):
+            elems = (mx.arange(n),)
+            got = associative_scan(lambda left, right: (left[0] + right[0],), elems)
+            self.assertIs(type(got), tuple)
+            self.assertEqual(len(got), 1)
+            self.assertEqual(got[0].tolist(), mx.cumsum(elems[0]).tolist())
+
+    # Invariant: callbacks and results retain nested container types.
+    # Witness: a namedtuple inside a dictionary, list, and tuple uses field access.
+    def test_nested_namedtuple_structure(self) -> None:
+        class Pair(NamedTuple):
+            a: mx.array
+            b: mx.array
+
+        Tree = dict[str, list[tuple[Pair]]]
+
+        def combine(left: Tree, right: Tree) -> Tree:
+            self.assertIs(type(left["pairs"]), list)
+            self.assertIs(type(right["pairs"]), list)
+            self.assertIs(type(left["pairs"][0]), tuple)
+            self.assertIs(type(right["pairs"][0]), tuple)
+            l, r = left["pairs"][0][0], right["pairs"][0][0]
+            self.assertIs(type(l), Pair)
+            self.assertIs(type(r), Pair)
+            return {"pairs": [(Pair(l.a + r.a, l.b + r.b),)]}
+
+        for n in (0, 1, 2, 5):
+            for reverse in (False, True):
+                pair = Pair(mx.arange(n), mx.arange(n) * 10)
+                got = associative_scan(combine, {"pairs": [(pair,)]}, reverse=reverse)
+                self.assertIs(type(got), dict)
+                self.assertIs(type(got["pairs"]), list)
+                self.assertIs(type(got["pairs"][0]), tuple)
+                result = got["pairs"][0][0]
+                self.assertIs(type(result), Pair)
+                self.assertEqual(
+                    result.a.tolist(), mx.cumsum(pair.a, reverse=reverse).tolist()
+                )
+                self.assertEqual(
+                    result.b.tolist(), mx.cumsum(pair.b, reverse=reverse).tolist()
+                )
+
     # Invariant: dictionary leaves stay with their keys.
     # Witness: addition returns b before a at each combine.
     def test_reordered_dictionary(self) -> None:

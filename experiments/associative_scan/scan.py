@@ -21,7 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 import mlx.core as mx
-from mlx.utils import tree_flatten, tree_unflatten
+from mlx.utils import tree_flatten, tree_map
 
 Leaves = list[mx.array]
 
@@ -43,13 +43,15 @@ def associative_scan(
         raise TypeError("associative_scan: fn must be callable")
     flat = tree_flatten(elems)
     keys = [key for key, _ in flat]
+    indices = iter(range(len(flat)))
+    structure = tree_map(lambda _: next(indices), elems)
     leaves = [_to_front(leaf, axis) for _, leaf in flat]
     _check_lengths(leaves)
     if reverse:
         leaves = [leaf[::-1] for leaf in leaves]
 
     def combine(a: Leaves, b: Leaves) -> Leaves:
-        c = fn(tree_unflatten(list(zip(keys, a))), tree_unflatten(list(zip(keys, b))))
+        c = fn(tree_map(a.__getitem__, structure), tree_map(b.__getitem__, structure))
         outputs = dict(tree_flatten(c))
         if outputs.keys() != set(keys):
             raise ValueError("associative_scan: fn must preserve the leaf paths")
@@ -59,7 +61,7 @@ def associative_scan(
     if reverse:
         scans = [scan[::-1] for scan in scans]
     scans = [_from_front(scan, axis) for scan in scans]
-    return tree_unflatten(list(zip(keys, scans)))
+    return tree_map(scans.__getitem__, structure)
 
 
 def _scan(combine: Callable[[Leaves, Leaves], Leaves], elems: Leaves) -> Leaves:
