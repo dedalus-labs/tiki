@@ -18,19 +18,19 @@ the matrix-vector products. This is how JAX derives its native ``cumsum``
 gradient, generalized from ``J = 1`` to the combine's Jacobians.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from functools import lru_cache, reduce
 from math import prod
 from operator import add
-from typing import Any
 
 import mlx.core as mx
-from mlx.utils import tree_flatten, tree_unflatten
 
 from graph import Graph, Profile, UnsupportedGraphError, capture
 from scan_lowering import ScanLowered, ScanSchedule, lower_apply, lower_tile_scan
 from tiki import BackendUnavailableError, Compiled, Schedule, _arrays, binary, profile
 
+Tree = mx.array | list["Tree"] | tuple["Tree", ...] | dict[str, "Tree"]
 Leaves = tuple[mx.array, ...]
 FlatCombine = Callable[..., tuple[mx.array, ...]]
 DEFAULT_SCAN_SCHEDULE = ScanSchedule()
@@ -38,6 +38,36 @@ DEFAULT_SCAN_SCHEDULE = ScanSchedule()
 
 class ScanContractError(ValueError):
     """The leaves are outside the scan contract."""
+
+
+@dataclass(frozen=True)
+class TreeDef:
+    kind: type
+    children: tuple["TreeDef", ...] = ()
+    keys: tuple[str, ...] = ()
+
+    @classmethod
+    def flatten(cls, tree: Tree) -> tuple["TreeDef", Leaves]:
+        if isinstance(tree, mx.array):
+            return cls(mx.array), (tree,)
+        if type(tree) not in (tuple, list, dict):
+            raise ScanContractError("elems must be arrays in tuples, lists, or dicts")
+        keys = tuple(sorted(tree)) if isinstance(tree, dict) else ()
+        values = (tree[key] for key in keys) if isinstance(tree, dict) else tree
+        children, leaves = [], []
+        for value in values:
+            child, arrays = cls.flatten(value)
+            children.append(child)
+            leaves.extend(arrays)
+        return cls(type(tree), tuple(children), keys), tuple(leaves)
+
+    def unflatten(self, leaves: Iterator[mx.array]) -> Tree:
+        if self.kind is mx.array:
+            return next(leaves)
+        values = [child.unflatten(leaves) for child in self.children]
+        if self.kind is dict:
+            return dict(zip(self.keys, values, strict=True))
+        return self.kind(values)
 
 
 def view(
@@ -284,8 +314,16 @@ class ScanOp:
             for column in range(size)
         )
 
-    def _jvp(self, primals: mx.array | Leaves, tangents: mx.array | Leaves) -> Leaves:
+    def _jvp(
+        self,
+        primals: mx.array | Leaves,
+        tangents: mx.array | tuple[mx.array | None, ...],
+    ) -> Leaves:
         x, dx = _arrays(primals), _arrays(tangents)
+        dx = tuple(
+            mx.zeros_like(primal) if tangent is None else tangent
+            for primal, tangent in zip(x, dx, strict=True)
+        )
         size, axis = self.leaves, self.axis
         length = x[0].shape[axis]
         y = self.forward(*x)
@@ -307,41 +345,40 @@ class ScanOp:
 
 @lru_cache(maxsize=32)
 def operation(
-    fn: Callable[[Any, Any], Any],
-    paths: tuple[str, ...],
+    fn: Callable[[Tree, Tree], Tree],
+    structure: TreeDef,
+    size: int,
     axis: int,
     schedule: ScanSchedule,
 ) -> ScanOp:
-    size = len(paths)
 
     def combine(*args: mx.array) -> tuple[mx.array, ...]:
-        left = tree_unflatten(list(zip(paths, args[:size])))
-        right = tree_unflatten(list(zip(paths, args[size:])))
-        result = tree_flatten(fn(left, right))
-        if tuple(path for path, _ in result) != paths:
+        leaves = iter(args)
+        left = structure.unflatten(leaves)
+        right = structure.unflatten(leaves)
+        result_structure, result = TreeDef.flatten(fn(left, right))
+        if result_structure != structure:
             raise ScanContractError("fn must return the structure of elems")
-        return tuple(leaf for _, leaf in result)
+        return result
 
     return ScanOp(combine, size, axis, schedule)
 
 
 def associative_scan(
-    fn: Callable[[Any, Any], Any],
-    elems: Any,
+    fn: Callable[[Tree, Tree], Tree],
+    elems: Tree,
     *,
     reverse: bool = False,
     axis: int = 0,
     schedule: ScanSchedule = DEFAULT_SCAN_SCHEDULE,
-) -> Any:
+) -> Tree:
     """Scan ``elems`` along ``axis`` with the associative operation ``fn``."""
-    flat = tree_flatten(elems)
-    if not flat:
+    structure, leaves = TreeDef.flatten(elems)
+    if not leaves:
         raise ScanContractError("elems must contain at least one array")
-    paths = tuple(path for path, _ in flat)
-    leaves = tuple(leaf for _, leaf in flat)
     ndim = leaves[0].ndim
     if not -ndim <= axis < ndim:
         raise ScanContractError(f"axis {axis} is out of range for {ndim} dimensions")
-    op = operation(fn, paths, axis % ndim, schedule)
+    op = operation(fn, structure, len(leaves), axis % ndim, schedule)
     results = op.reverse(*leaves) if reverse else op(*leaves)
-    return tree_unflatten(list(zip(paths, results)))
+    return structure.unflatten(iter(results))

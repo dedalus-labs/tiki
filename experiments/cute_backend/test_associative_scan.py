@@ -9,6 +9,7 @@ chunk, one warp, one block, one tile, and several levels of tile recursion.
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import mlx.core as mx
 import numpy as np
@@ -16,12 +17,15 @@ import numpy as np
 from associative_scan import (
     ScanContractError,
     ScanOp,
+    TreeDef,
     affine_combine,
     associative_scan,
     operation,
 )
 from graph import capture
+from lowering import UnsupportedScheduleError
 from scan_lowering import ScanSchedule, lower_apply, lower_tile_scan
+from tiki import Compiled
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "associative_scan"))
 from scan import associative_scan as tree_scan  # noqa: E402
@@ -54,13 +58,13 @@ def close(a, b, tolerance=1e-4):
 
 class LoweringTest(unittest.TestCase):
     def test_combine_graph_is_scalar_and_elementwise(self):
-        op = operation(affine, ("0", "1"), 1, SMALL)
+        op = operation(affine, TreeDef(tuple, (TreeDef(mx.array),) * 2), 2, 1, SMALL)
         self.assertEqual(len(op.graph.inputs), 4)
         self.assertEqual(len(op.graph.outputs), 2)
         self.assertTrue(all(value.shape == () for value in op.graph.inputs))
 
     def test_tile_kernel_addresses_through_axis_layouts(self):
-        op = operation(mx.add, ("",), 0, LARGE)
+        op = operation(mx.add, TreeDef(mx.array), 1, 0, LARGE)
         lowered = lower_tile_scan(op.graph, (((513, 4), (1, 513)),), 0, LARGE)
         self.assertIn('"((1,4),513):((0,513),1)"', lowered.mlir)
         self.assertIn('"((1,4),513):((0,1),4)"', lowered.mlir)
@@ -71,13 +75,13 @@ class LoweringTest(unittest.TestCase):
         self.assertEqual(lowered.shared_memory_bytes, 16)
 
     def test_single_warp_needs_no_shared_memory(self):
-        op = operation(mx.add, ("",), 0, SMALL)
+        op = operation(mx.add, TreeDef(mx.array), 1, 0, SMALL)
         lowered = lower_tile_scan(op.graph, (((7,), (1,)),), 0, SMALL)
         self.assertNotIn("smem", lowered.mlir)
         self.assertEqual(lowered.shared_memory_bytes, 0)
 
     def test_apply_kernel_folds_the_previous_tile(self):
-        op = operation(affine, ("0", "1"), 1, MEDIUM)
+        op = operation(affine, TreeDef(tuple, (TreeDef(mx.array),) * 2), 2, 1, MEDIUM)
         lowered = lower_apply(op.graph, (3, 300), 1, 3, MEDIUM)
         self.assertEqual(
             len(
@@ -92,14 +96,113 @@ class LoweringTest(unittest.TestCase):
         self.assertIn("%has_prefix = arith.cmpi uge, %tile, %one", lowered.mlir)
         self.assertEqual(lowered.output_shapes, ((3, 300), (3, 300)))
 
+    def test_launch_grid_fits_signed_runtime_dimensions(self):
+        # One thread block per singleton row reaches 2**31 at 16,777,216 rows.
+        graph = capture(mx.add, (((), ()),) * 2)
+        for schedule in (SMALL, LARGE):
+            rows = 2**31 // schedule.threads
+            for lower in (
+                lambda shape: lower_tile_scan(graph, ((shape, (1, 1)),), 1, schedule),
+                lambda shape: lower_apply(graph, shape, 1, 1, schedule),
+            ):
+                with self.assertRaisesRegex(UnsupportedScheduleError, "signed 32-bit"):
+                    lower((rows, 1))
+                self.assertEqual(
+                    lower((rows - 1, 1)).grid,
+                    ((rows - 1) * schedule.threads, 1, 1),
+                )
+
     def test_contract(self):
         with self.assertRaises(ScanContractError):
             associative_scan(mx.add, [])
         with self.assertRaises(ScanContractError):
             associative_scan(mx.add, mx.zeros((3, 4)), axis=2)
-        op = operation(mx.add, ("",), 0, SMALL)
+        op = operation(mx.add, TreeDef(mx.array), 1, 0, SMALL)
         with self.assertRaises(ScanContractError):
             op.check((mx.zeros((3,), dtype=mx.float16),))
+
+
+class StructureTest(unittest.TestCase):
+    def test_tuple_structure_is_preserved(self):
+        # Tuple leaves must stay tuples in fn and its result, even when nested.
+        x = mx.array([1.0, 2.0, 3.0])
+
+        def combine(left, right):
+            self.assertIsInstance(left, tuple)
+            self.assertIsInstance(right, tuple)
+            self.assertIsInstance(left[1], list)
+            return (left[0] + right[0], [left[1][0] + right[1][0]])
+
+        with patch.object(ScanOp, "__call__", lambda op, *leaves: leaves):
+            result = associative_scan(combine, (x, [x]))
+        self.assertIsInstance(result, tuple)
+        self.assertIsInstance(result[1], list)
+
+    def test_dictionary_order_does_not_change_structure(self):
+        # Keys identify leaves, even if fn inserts the same keys in reverse order.
+        x = mx.array([1.0, 2.0, 3.0])
+
+        def combine(left, right):
+            return {"b": left["b"] + right["b"], "a": left["a"] + right["a"]}
+
+        with patch.object(
+            ScanOp, "__call__", lambda op, *leaves: op.combine(*leaves, *leaves)
+        ):
+            result = associative_scan(combine, {"a": x, "b": 2 * x})
+        self.assertTrue(close(result["a"], 2 * x))
+        self.assertTrue(close(result["b"], 4 * x))
+
+    def test_changed_container_type_is_rejected(self):
+        # Matching leaf paths do not permit fn to replace a tuple with a list.
+        x = mx.array([1.0, 2.0, 3.0])
+        with self.assertRaisesRegex(ScanContractError, "structure of elems"):
+            associative_scan(lambda left, right: [left[0] + right[0]], (x,))
+
+    def test_dictionary_keys_and_empty_nodes_are_preserved(self):
+        # Literal dotted keys and empty nodes are part of the input structure.
+        x = mx.array([1.0, 2.0, 3.0])
+        elems = {"a.b": (x, []), "0": {}}
+        with patch.object(ScanOp, "__call__", lambda op, *leaves: leaves):
+            result = associative_scan(lambda left, right: left, elems)
+        self.assertEqual(set(result), set(elems))
+        self.assertIsInstance(result["a.b"], tuple)
+        self.assertEqual(result["a.b"][1], [])
+        self.assertEqual(result["0"], {})
+
+
+class CallbackTest(unittest.TestCase):
+    def test_inactive_scan_tangents_are_zero(self):
+        # Inactive leaves contribute zero, with either affine input held fixed.
+        def forward(op, *leaves):
+            return tuple(
+                tree_scan(
+                    lambda left, right: op.combine(*left, *right), leaves, axis=op.axis
+                )
+            )
+
+        a, b = random((1, 3), 1, 0.9), random((1, 3), 2)
+        with patch.object(ScanOp, "forward", forward), patch.object(
+            Compiled, "launch", lambda kernel, *args: kernel.function(*args)
+        ):
+            op = ScanOp(lambda al, bl, ar, br: affine((al, bl), (ar, br)), 2, 1, SMALL)
+            for active in range(2):
+
+                def reference(value):
+                    leaves = (value, b) if active == 0 else (a, value)
+                    a_values, b_values = leaves
+                    hidden = [b_values[:, 0]]
+                    for index in range(1, 3):
+                        hidden.append(
+                            a_values[:, index] * hidden[-1] + b_values[:, index]
+                        )
+                    return mx.stack(hidden, axis=1)
+
+                primal = (a, b)[active]
+                tangent = mx.ones_like(primal)
+                tangents = (tangent, None) if active == 0 else (None, tangent)
+                got = op._jvp((a, b), tangents)[1]
+                want = mx.jvp(reference, [primal], [tangent])[1][0]
+                self.assertTrue(close(got, want))
 
 
 @device

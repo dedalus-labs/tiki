@@ -59,6 +59,12 @@ class ScanLowered:
     output_shapes: tuple[Shape, ...]
     shared_memory_bytes: int
 
+    def __post_init__(self) -> None:
+        if any(dimension >= 2**31 for dimension in self.grid):
+            raise UnsupportedScheduleError(
+                "scan launch grid exceeds signed 32-bit dimensions"
+            )
+
 
 def axis_layout(shape: Shape, strides: Strides, axis: int) -> str:
     """``((1, batch...), n):((0, batch strides...), axis stride)``.
