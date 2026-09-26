@@ -499,7 +499,8 @@ void CommandEncoder::synchronize() {
 
 void CommandEncoder::commit_impl() {
   if (!temporaries_.empty()) {
-    add_completed_handler([temporaries = std::move(temporaries_)]() {});
+    add_completed_handler([temporaries = temporaries_]() {});
+    temporaries_.clear();
   }
   if (use_cuda_graphs() && node_count_ > 0) {
     if (!from_nodes_.empty()) {
