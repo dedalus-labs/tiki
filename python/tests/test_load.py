@@ -106,13 +106,15 @@ class TestLoad(mlx_tests.MLXTestCase):
     def test_load_npy_read_error(self):
         save_file = os.path.join(self.test_dir, "truncated.npy")
         expected = np.arange(16, dtype=np.float32)
-        np.save(save_file, expected)
-        with open(save_file, "r+b") as f:
-            f.truncate(os.path.getsize(save_file) - expected.nbytes)
+        for missing in (1, expected.itemsize, expected.nbytes):
+            with self.subTest(missing=missing):
+                np.save(save_file, expected)
+                with open(save_file, "r+b") as f:
+                    f.truncate(os.path.getsize(save_file) - missing)
 
-        out = mx.load(save_file, stream=mx.cpu)
-        with self.assertRaises(RuntimeError):
-            mx.eval(out)
+                out = mx.load(save_file, stream=mx.cpu)
+                with self.assertRaises(RuntimeError):
+                    mx.eval(out)
 
     def test_async_load_npy_read_error_across_streams(self):
         save_file = os.path.join(self.test_dir, "truncated_async.npy")
