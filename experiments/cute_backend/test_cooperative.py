@@ -12,6 +12,30 @@ def rms_norm(x, weight):
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_row_launch_grid_fits_signed_int(self):
+        # MLX requires a signed-int grid. One extra row can exceed its limit.
+        for threads, rows in ((32, 4), (64, 2), (128, 1), (256, 1)):
+            with self.subTest(threads=threads, rows=rows):
+                schedule = tk.RowSchedule(threads_per_row=threads, rows_per_block=rows)
+                compiled = tk.compile(schedule=schedule)(rms_norm)
+                limit = (2**31 - 1) // schedule.threads * rows
+                lowered = compiled.lower(mx.zeros((limit, 1)), mx.ones((1,)))
+                self.assertEqual(lowered.grid, (limit * threads, 1, 1))
+                with self.assertRaises(tk.UnsupportedScheduleError):
+                    compiled.lower(mx.zeros((limit + 1, 1)), mx.ones((1,)))
+
+    def test_transpose_launch_grid_fits_signed_int(self):
+        # MLX requires a signed-int grid. A partial tile can exceed its limit.
+        for threads in (64, 128, 256):
+            with self.subTest(threads=threads):
+                schedule = tk.TransposeSchedule(threads=threads)
+                compiled = tk.compile(schedule=schedule)(lambda x: x.T)
+                limit = (2**31 - 1) // threads * 32
+                lowered = compiled.lower(mx.zeros((1, limit)))
+                self.assertEqual(lowered.grid, (limit // 32 * threads, 1, 1))
+                with self.assertRaises(tk.UnsupportedScheduleError):
+                    compiled.lower(mx.zeros((1, limit + 1)))
+
     def test_single_column_rows_survive_reduction_simplification(self):
         compiled = tk.compile(schedule=tk.RowSchedule())(rms_norm)
         lowered = compiled.lower(mx.zeros((5, 1)), mx.ones((1,)))

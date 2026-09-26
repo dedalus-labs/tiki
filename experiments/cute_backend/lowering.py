@@ -88,6 +88,10 @@ class Lowered:
     schedule: Schedule | RowSchedule | TransposeSchedule
     mlir: str
 
+    def __post_init__(self) -> None:
+        if self.grid[0] > 2**31 - 1:
+            raise UnsupportedScheduleError("launch grid exceeds signed 32-bit range")
+
     @property
     def grid(self) -> tuple[int, int, int]:
         if isinstance(self.schedule, RowSchedule):
