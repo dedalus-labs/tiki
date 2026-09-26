@@ -15,8 +15,8 @@ One Engine, two layouts
    >>> import mlx.core as mx
    >>> import mlx.tiki as tk
    >>> engine = tk.ArrayEngine(mx.arange(16))
-   >>> base = tk.Layout((4, 4), (4, 1))
-   >>> swizzle = tk.Swizzle(2, 0, 2)
+   >>> base = tk.Layout((4, 4), stride=(4, 1))
+   >>> swizzle = tk.Swizzle(bits=2, base=0, shift=2)
    >>> ordinary = tk.Tensor(engine, base)
    >>> permuted = tk.Tensor(engine, base.swizzle(swizzle))
    >>> ordinary[1, 2], permuted[1, 2]
@@ -39,13 +39,13 @@ Compose the resulting domain with the Swizzle to preserve the address map.
 
 .. doctest:: tiki-recipes
 
-   >>> divided = tk.logical_divide(tk.Layout(16, 1), tk.Layout(4, 1))
+   >>> divided = tk.logical_divide(tk.Layout(16, stride=1), tk.Layout(4, stride=1))
    >>> divided.shape
    (4, 4)
    >>> tiled = divided.swizzle(swizzle)
    >>> tiled(2, 1), swizzle(divided(2, 1))
    (7, 7)
-   >>> coalesced = tk.coalesce(tk.Layout((2, 8), (1, 2)))
+   >>> coalesced = tk.coalesce(tk.Layout((2, 8), stride=(1, 2)))
    >>> coalesced.swizzle(swizzle)(6)
    7
 
@@ -60,7 +60,7 @@ than replacing it.
 
 .. doctest:: tiki-recipes
 
-   >>> second = tk.Swizzle(1, 0, 1)
+   >>> second = tk.Swizzle(bits=1, base=0, shift=1)
    >>> nested = base.swizzle(swizzle).swizzle(second)
    >>> nested(1, 2), second(swizzle(base(1, 2)))
    (6, 6)
@@ -75,7 +75,7 @@ Applying an affine outer map to a swizzled inner map also uses composition.
 
 .. doctest:: tiki-recipes
 
-   >>> doubled = tk.compose(tk.Layout(16, 2), base.swizzle(swizzle))
+   >>> doubled = tk.compose(tk.Layout(16, stride=2), base.swizzle(swizzle))
    >>> doubled(1, 2)
    14
 
@@ -87,7 +87,7 @@ modes remain nested. Expanding a singleton mode gives it stride zero.
 
 .. doctest:: tiki-recipes
 
-   >>> blocked = tk.Layout(((2, 3), 4), ((1, 2), 6))
+   >>> blocked = tk.Layout(((2, 3), 4), stride=((1, 2), 6))
    >>> tensor = tk.Tensor(tk.ArrayEngine(mx.arange(24)), blocked)
    >>> inserted = tk.unsqueeze(tensor, 2)
    >>> inserted.layout.shape
@@ -109,7 +109,7 @@ bounds. ``realize`` checks the addressed interval before constructing the view.
 
 .. doctest:: tiki-recipes
 
-   >>> reverse = tk.Tensor(tk.ArrayEngine(mx.arange(4), offset=3), tk.Layout(4, -1))
+   >>> reverse = tk.Tensor(tk.ArrayEngine(mx.arange(4), offset=3), tk.Layout(4, stride=-1))
    >>> tk.realize(reverse).tolist()
    [3, 2, 1, 0]
    >>> array = mx.arange(8)[::2]
@@ -127,7 +127,7 @@ constructor rejects them.
 .. doctest:: tiki-recipes
 
    >>> try:
-   ...     tk.Swizzle(2, 0, 1)
+   ...     tk.Swizzle(bits=2, base=0, shift=1)
    ... except tk.LayoutError as error:
    ...     print(error)
    swizzle fields overlap: abs(shift) must be at least bits, got bits=2, shift=1
@@ -150,14 +150,14 @@ A nonlinear layout cannot pass through an ordinary-stride boundary.
    ...     tk.realize(permuted)
    ... except tk.LayoutError as error:
    ...     print(error)
-   cannot realize a composed layout as a view: SW_2_0_2 o {0} o (4, 4):(4, 1)
+   cannot realize a composed layout as a view. Require an affine layout
 
 The same boundary rejects XOR-valued stride scalars. An ``F2`` stride adds with
 XOR, not integer addition. Coercing it to ``int`` changes the coordinate map.
 
 .. doctest:: tiki-recipes
 
-   >>> xor_layout = tk.Layout((2, 2), (tk.F2(1), tk.F2(1)))
+   >>> xor_layout = tk.Layout((2, 2), stride=(tk.F2(1), tk.F2(1)))
    >>> try:
    ...     tk.realize(tk.Tensor(engine, xor_layout))
    ... except tk.LayoutError as error:

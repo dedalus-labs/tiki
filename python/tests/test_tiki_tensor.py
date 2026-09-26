@@ -37,21 +37,25 @@ class TestArrayEngine(mlx_tests.MLXTestCase):
     def test_realize_rejects_addresses_outside_the_engine(self) -> None:
         base = mx.arange(4, dtype=mx.float32)
         for offset, layout in (
-            (0, tk.Layout(4, 100)),
-            (0, tk.Layout(4, -1)),
-            (3, tk.Layout(2, 1)),
+            (0, tk.Layout(4, stride=100)),
+            (0, tk.Layout(4, stride=-1)),
+            (3, tk.Layout(2, stride=1)),
         ):
             with self.subTest(offset=offset, layout=str(layout)):
                 with self.assertRaises(tk.LayoutError):
                     realize(tk.Tensor(tk.ArrayEngine(base, offset), layout))
 
     def test_realize_does_not_change_the_stride_algebra(self) -> None:
-        layout = tk.Layout((2, 2), (tk.F2(1), tk.F2(1)))
+        layout = tk.Layout((2, 2), stride=(tk.F2(1), tk.F2(1)))
         with self.assertRaises(tk.LayoutError):
             realize(tk.Tensor(tk.ArrayEngine(mx.arange(4)), layout))
 
     def test_composed_tensor_indexing_preserves_parent_addresses(self) -> None:
-        layout = tk.ComposedLayout(tk.Swizzle(2, 0, 2), 0, tk.Layout((4, 4), (4, 1)))
+        layout = tk.ComposedLayout(
+            outer=tk.Swizzle(bits=2, base=0, shift=2),
+            offset=0,
+            inner=tk.Layout((4, 4), stride=(4, 1)),
+        )
         tensor = tk.Tensor(tk.ArrayEngine(mx.arange(16)), layout)
         for row in range(4):
             for column in range(4):
@@ -63,10 +67,10 @@ class TestArrayEngine(mlx_tests.MLXTestCase):
     # Witness: arange(12) as 3x4, element (1, 2) is 6.
     def test_from_array(self):
         tensor = from_array(mx.arange(12, dtype=mx.float32).reshape(3, 4))
-        self.assertEqual(tensor.layout, tk.Layout((3, 4), (4, 1)))
+        self.assertEqual(tensor.layout, tk.Layout((3, 4), stride=(4, 1)))
         self.assertEqual(tensor[1, 2], 6.0)
         self.assertEqual(
-            right_major_layout((2, 3, 5)), tk.Layout((2, 3, 5), (15, 5, 1))
+            right_major_layout((2, 3, 5)), tk.Layout((2, 3, 5), stride=(15, 5, 1))
         )
 
     # Invariant: realize is a zero-copy view whose values equal the layout's
@@ -77,11 +81,11 @@ class TestArrayEngine(mlx_tests.MLXTestCase):
         array = mx.arange(12, dtype=mx.float32)
         flat = values(array)
         cases = [
-            (0, tk.Layout((3, 4), (4, 1))),
-            (0, tk.Layout((4, 3), (1, 4))),
-            (1, tk.Layout(3, 4)),
-            (0, tk.Layout(((3, 2), 2), ((4, 1), 2))),
-            (3, tk.Layout(4, -1)),
+            (0, tk.Layout((3, 4), stride=(4, 1))),
+            (0, tk.Layout((4, 3), stride=(1, 4))),
+            (1, tk.Layout(3, stride=4)),
+            (0, tk.Layout(((3, 2), 2), stride=((4, 1), 2))),
+            (3, tk.Layout(4, stride=-1)),
         ]
         for offset, layout in cases:
             tensor = tk.Tensor(tk.ArrayEngine(array, offset), layout)
@@ -103,27 +107,35 @@ class TestArrayEngine(mlx_tests.MLXTestCase):
         array = mx.arange(12, dtype=mx.float32).reshape(3, 4)
         tensor = from_array(array)
         np.testing.assert_array_equal(values(realize(tensor)), values(array))
-        transposed = tk.Tensor(tensor.accessor, tk.Layout((4, 3), (1, 4)))
+        transposed = tk.Tensor(tensor.accessor, tk.Layout((4, 3), stride=(1, 4)))
         np.testing.assert_array_equal(values(realize(transposed)), values(array.T))
 
     # Invariant: a composed layout cannot be a view.
     # Witness: a swizzled 4x4 layout.
     def test_realize_rejects_composed(self):
         engine = tk.ArrayEngine(mx.arange(16, dtype=mx.float32))
-        composed = tk.ComposedLayout(tk.Swizzle(2, 0, 2), 0, tk.Layout((4, 4), (4, 1)))
+        composed = tk.ComposedLayout(
+            outer=tk.Swizzle(bits=2, base=0, shift=2),
+            offset=0,
+            inner=tk.Layout((4, 4), stride=(4, 1)),
+        )
         with self.assertRaises(tk.LayoutError):
             realize(tk.Tensor(engine, composed))
 
 
 class TestBroadcast(mlx_tests.MLXTestCase):
     def test_axis_operations_preserve_hierarchical_modes(self) -> None:
-        layout = tk.Layout(((2, 3), 4), ((1, 2), 6))
+        layout = tk.Layout(((2, 3), 4), stride=((1, 2), 6))
         tensor = tk.Tensor(tk.ArrayEngine(mx.arange(24)), layout)
         inserted = unsqueeze(tensor, 2)
-        self.assertEqual(inserted.layout, tk.Layout(((2, 3), 4, 1), ((1, 2), 6, 0)))
+        self.assertEqual(
+            inserted.layout, tk.Layout(((2, 3), 4, 1), stride=((1, 2), 6, 0))
+        )
         self.assertEqual(squeeze(inserted, 2).layout, layout)
         expanded = expand(inserted, (6, 4, 2))
-        self.assertEqual(expanded.layout, tk.Layout(((2, 3), 4, 2), ((1, 2), 6, 0)))
+        self.assertEqual(
+            expanded.layout, tk.Layout(((2, 3), 4, 2), stride=((1, 2), 6, 0))
+        )
 
     # Invariant (zop): unsqueeze inserts an extent-1 stride-0 mode, expand
     # follows the trailing-axis rule with stride 0 on expanded axes, and squeeze
@@ -132,9 +144,9 @@ class TestBroadcast(mlx_tests.MLXTestCase):
     def test_bias_broadcast(self):
         bias = from_array(mx.array([1.0, 2.0, 3.0, 4.0]))
         with_batch = unsqueeze(bias, 0)
-        self.assertEqual(with_batch.layout, tk.Layout((1, 4), (0, 1)))
+        self.assertEqual(with_batch.layout, tk.Layout((1, 4), stride=(0, 1)))
         expanded = expand(bias, (3, 4))
-        self.assertEqual(expanded.layout, tk.Layout((3, 4), (0, 1)))
+        self.assertEqual(expanded.layout, tk.Layout((3, 4), stride=(0, 1)))
         np.testing.assert_array_equal(
             values(realize(expanded)), np.tile([1.0, 2.0, 3.0, 4.0], (3, 1))
         )

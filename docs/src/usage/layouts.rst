@@ -33,8 +33,8 @@ coordinate contributes its coordinate value multiplied by its stride.
 .. doctest:: tiki-layouts
 
    >>> import mlx.tiki as tk
-   >>> row_major = tk.Layout((4, 8), (8, 1))
-   >>> column_major = tk.Layout((4, 8), (1, 4))
+   >>> row_major = tk.Layout((4, 8), stride=(8, 1))
+   >>> column_major = tk.Layout((4, 8), stride=(1, 4))
    >>> row_major(2, 3), column_major(2, 3)
    (19, 14)
    >>> tk.Layout((4, 8)) == column_major
@@ -46,7 +46,7 @@ modes instead of flattening them into unrelated axes.
 
 .. doctest:: tiki-layouts
 
-   >>> blocked = tk.Layout((3, (2, 4)), (2, (1, 6)))
+   >>> blocked = tk.Layout((3, (2, 4)), stride=(2, (1, 6)))
    >>> blocked.shape
    (3, (2, 4))
    >>> blocked(17), blocked(2, 5), blocked(2, (1, 2))
@@ -60,7 +60,7 @@ cannot describe on the same top-level axes. They cannot describe every XOR map.
 A swizzle is a value
 --------------------
 
-``Swizzle(bits, base, shift)`` describes two disjoint bit fields:
+``Swizzle(bits=bits, base=base, shift=shift)`` describes two disjoint bit fields:
 
 * ``bits`` is the width of each field.
 * ``base`` is the number of untouched low bits below both fields.
@@ -74,7 +74,7 @@ fit a nonnegative signed 64-bit integer.
 
 .. doctest:: tiki-layouts
 
-   >>> swizzle = tk.Swizzle(2, 0, 2)
+   >>> swizzle = tk.Swizzle(bits=2, base=0, shift=2)
    >>> swizzle.bits, swizzle.base, swizzle.shift
    (2, 0, 2)
    >>> swizzle(6), swizzle(swizzle(6))
@@ -92,7 +92,7 @@ coordinate domain.
 
 .. doctest:: tiki-layouts
 
-   >>> base = tk.Layout((4, 4), (4, 1))
+   >>> base = tk.Layout((4, 4), stride=(4, 1))
    >>> tiled = tk.compose(swizzle, base)
    >>> tiled == base.swizzle(swizzle)
    True
@@ -106,13 +106,24 @@ coordinate domain.
    [5, 4, 7, 6]
    [10, 11, 8, 9]
    [15, 14, 13, 12]
-   >>> str(tiled)
+   >>> print(tiled)
+   ComposedLayout(
+       inner=Layout(shape=(4, 4), stride=(4, 1)),
+       offset=0,
+       outer=Swizzle(bits=2, base=0, shift=2),
+   )
+   >>> format(tiled, "cute")
    'SW_2_0_2 o {0} o (4, 4):(4, 1)'
 
 The column increment changes between rows. No fixed pair of integer strides
 describes this map on the same ``(4, 4)`` domain. Asking for ``tiled.stride``
 raises :class:`mlx.tiki.LayoutError`. An explicit composition remains inspectable
 even when a restricted subdomain could admit an affine simplification.
+
+A swizzle or layout prints as the keyword call that constructs it, and a
+composed layout prints one component per line in evaluation order:
+``index = outer(offset + inner(coordinate))``. ``format(value, "cute")``
+gives CuTe's notation for comparison with the CUTLASS documentation.
 
 Offsets stay inside the transform
 ---------------------------------
@@ -122,7 +133,7 @@ Moving an offset outside XOR changes the map.
 
 .. doctest:: tiki-layouts
 
-   >>> inner = tk.Layout(4, 1)
+   >>> inner = tk.Layout(4, stride=1)
    >>> shifted = tk.compose(swizzle, inner, offset=4)
    >>> [shifted(column) for column in range(4)]
    [5, 4, 7, 6]

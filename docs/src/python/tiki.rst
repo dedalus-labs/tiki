@@ -17,13 +17,13 @@ Maps and transforms
 -------------------
 
 .. autoclass:: Layout
-   :members: swizzle
+   :members: swizzle, describe
 
 .. autoclass:: Swizzle
    :special-members: __call__
 
 .. autoclass:: ComposedLayout
-   :members: swizzle
+   :members: swizzle, describe
    :special-members: __call__
 
 .. autofunction:: compose
