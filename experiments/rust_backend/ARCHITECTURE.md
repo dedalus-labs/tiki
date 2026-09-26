@@ -14,28 +14,31 @@ implementation obligations, not claims of completed verification.
 
 | Layer | Responsibility |
 | --- | --- |
-| MLX graph and Tiki operators | Tensor semantics, graph construction, and differentiation rules. |
-| Tiki scheduling and CuTe compilation | Kernel specialization, data layout, thread assignment, and device code generation. |
-| Rust CUDA runtime | Allocation ownership, access ordering, submission, completion, and resource retirement. |
-| CXX bridge | Explicit interoperation between the existing C++ core and Rust-owned runtime objects. |
-| CUDA driver and device | Module loading, command execution, and completion reporting. |
+| Rust core | Tensor semantics, graphs, differentiation |
+| Rust compiler | Graph regions to CUDA Tile IR |
+| Rust CUDA runtime | Memory, ordering, launches, retirement |
+| Rust device accessors | Every GPU load and store address |
+| Kernel arithmetic | cuTile Rust, or C++ through accessors |
+| CUDA driver and device | Module loading, execution, completion |
+
+During the migration, a CXX bridge lets remaining C++ host code call the Rust
+runtime. The bridge is removed once the host is Rust.
 
 ```mermaid
 flowchart LR
-    model[MLX graphs and Tiki operators] --> bridge[CXX runtime interface]
-    model --> compiler[Tiki scheduling and CuTe compiler]
+    model[Rust core] --> compiler[Rust compiler to CUDA Tile IR]
     compiler --> artifact[Kernel artifact and argument contract]
-    artifact --> runtime[Rust CUDA runtime]
-    bridge --> runtime
+    model --> runtime[Rust CUDA runtime]
+    artifact --> runtime
     runtime --> cuda[CUDA driver and device]
 ```
 
-Tiki emits CuTe MLIR directly for supported graph regions. Compilation produces
-a kernel artifact, including a CUDA device binary, its entry point, and the
-information required to bind arguments and launch it. The runtime consumes
-that artifact without requiring the compiler's Python execution environment on
-the submission path. CuTile Rust's CUDA Tile IR is a separate compiler target;
-using its host runtime components does not imply replacing CuTe compilation.
+The compiler lowers supported graph regions to CUDA Tile IR through
+`cutile-ir`, which builds Tile IR bytecode in Rust with no LLVM or MLIR
+dependency. `tileiras` turns that bytecode into a CUDA device binary.
+Compilation produces a kernel artifact: the binary, its entry point, and the
+information required to bind arguments and launch it. The CuTe MLIR compiler in
+`experiments/cute_backend` is the reference design for this lowering.
 
 ## Rationale for Rust
 
@@ -50,11 +53,10 @@ destruction, views can retain their backing storage, and completion objects can
 represent outstanding device use. This reduces reliance on separate raw-pointer
 conventions at individual call sites.
 
-The choice preserves native host execution and the existing GPU compiler. It
-does not depend on rewriting device kernels in Rust or on a particular GPU
-extension to the Rust language. C++ can implement the same lifetime rules; Rust
-is selected because its type system supports enforcing them across the safe
-host interface.
+C++ can implement the same lifetime rules at each call site. Rust enforces
+them in the type system, so a call site that breaks one fails to compile. GPU
+kernels keep their existing language until a Rust kernel matches their speed,
+and ADR-0001 records where each kernel family runs.
 
 ## Rust implementation model
 
@@ -165,23 +167,21 @@ require their own declared support.
 
 ## C++ interoperability and dependency policy
 
-The CXX bridge exposes opaque runtime owners and a limited set of backend
-operations. Bridge definitions belong with the Rust types they expose. C++
-does not depend on their field layout, allocator implementation, or upstream
-crate types. The bridge checks representation compatibility; its adapters must
-also uphold aliasing, error, and lifetime contracts across the language boundary.
+The finished system has one boundary between Rust and C++, on the GPU. C++
+kernels receive opaque tensor handles and call Rust device functions for every
+load and store. nvJitLink links those functions into the kernel as LTO-IR and
+inlines them. Architectures without that path use a C++ accessor header whose
+address formula is property-tested against the Rust definition.
 
-This structure limits migration coupling. The MLX core can continue constructing
-graphs while Rust assumes execution ownership. A supported operation has one
-authority for its resources; ownership is not divided between independent C++
-and Rust allocators. Other execution paths can remain under MLX ownership until
-they are migrated.
+During the migration, a CXX bridge exposes opaque runtime owners to remaining
+C++ host code. Bridge definitions belong with the Rust types they expose, and
+C++ does not depend on their field layout. A supported operation has one
+authority for its resources. Ownership is never divided between a C++ and a
+Rust allocator.
 
-CuTile runtime crates are candidates for implementation reuse. Their public
-types do not define Tiki's backend interface, and adoption requires a pinned
-revision with the verified contracts specified in ADR-0001. CXX is the selected
-interop mechanism for the current boundary. Broader generated access through
-Crubit remains an alternative if future integration requirements justify it.
+cuTile Rust and cuda-oxide crates are pinned to an exact version or commit.
+Their public types do not define Tiki's interfaces. An upgrade reruns the
+qualification suite and the F-01 program in ADR-0001 before it lands.
 
 ## Qualification requirements
 
