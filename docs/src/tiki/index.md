@@ -1,14 +1,13 @@
 # Overview
 
-Tiki adds four things to the array framework. Each one depends on the one
-before it.
+Tiki adds three things to the array framework.
 
 - Layouts. Every array carries a CuTe layout: a first-class map from
-  coordinates to storage.
-- A compiler. `compile` lowers a graph to CuTe MLIR and consumes those layouts
-  in place.
-- An associative scan. The scan is built on the compiler and has forward and
-  reverse derivatives for any length.
+  coordinates to storage. The `tiki-cute` crate implements the layout algebra
+  in Rust.
+- Kernels. Kernels are written in `tk` from seven primitives, and the compiler
+  proves their memory accesses from their layouts before it lowers them
+  through LLVM's NVPTX backend.
 - A Rust runtime. Storage and completion on CUDA are owned by a checked Rust
   runtime behind a C++ boundary.
 
@@ -33,16 +32,16 @@ CuTe layouts and index transforms as values on every array.
 Tiling, broadcasting, negative strides, nested composition, and the errors.
 :::
 
-:::{grid-item-card} Compiler
-:link: compile/README
+:::{grid-item-card} Design
+:link: ../dev/design
 :link-type: doc
-`compile` lowers graphs to CuTe MLIR with explicit thread schedules.
+The nouns the framework is built from and the processors it targets.
 :::
 
-:::{grid-item-card} Associative scan
-:link: scan/README
+:::{grid-item-card} Kernels
+:link: ../dev/kernels
 :link-type: doc
-The generic tree and the CUDA kernels, with derivatives checked against each other.
+The algebra kernels compute in, and every kernel built from the primitives.
 :::
 
 :::{grid-item-card} Rust runtime
@@ -59,7 +58,5 @@ CUDA storage and completion owned by a checked Rust runtime.
 Vision <vision>
 Layouts <../usage/layouts>
 Layout recipes <../examples/layouts>
-Compiler <compile/README>
-Associative scan <scan/README>
 Rust runtime <runtime/README>
 ```

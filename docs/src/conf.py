@@ -18,8 +18,6 @@ import tiki as tk
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 SECTIONS = {
-    "compile": "experiments/cute_backend",
-    "scan": "experiments/associative_scan",
     "runtime": "experiments/rust_backend",
 }
 

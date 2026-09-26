@@ -3,7 +3,7 @@
 """Render the layout maps in the native layouts page with the Tiki visualizer.
 
 The visualizer is ``tiki.kernels.cute.lib.debug`` from the Dedalus monorepo,
-loaded by path as ``experiments/cute_backend/inspect_layouts.py`` does::
+loaded by path::
 
     python docs/tools/render_layouts.py --visualizer PATH/TO/debug.py \\
         --output docs/src/_static/layouts

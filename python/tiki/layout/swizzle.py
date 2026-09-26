@@ -1,6 +1,6 @@
 # Copyright © 2026 Dedalus Labs, Inc.
 
-"""Rust-owned XOR transforms shared by layouts and compiler schedules."""
+"""Rust-owned XOR transforms for layouts."""
 
 from operator import index
 from typing import SupportsIndex
