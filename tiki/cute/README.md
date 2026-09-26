@@ -7,8 +7,8 @@ the layouts the kernel is given. Tiki's kernel compiler builds on it to prove
 that a kernel's addresses stay inside its buffers.
 
 The algebra follows [Cecka's formalization of CuTe][cecka] and agrees with
-[PyCuTe][pycute], the reference implementation, on every integer case in
-PyCuTe's own test suite. Extents may be dynamic, known only at launch, and every operation on
+[PyCuTe][pycute], the reference implementation, on every integer and `F2` case
+in PyCuTe's own test suite. Extents may be dynamic, known only at launch, and every operation on
 them either proves its preconditions or refuses.
 
 ## A layout and its tiles
@@ -71,6 +71,37 @@ operation that needs the answer refuses with [`Verdict::Unproven`]. It never
 guesses. [ARCHITECTURE.md](ARCHITECTURE.md) explains the representation and
 each decision in detail.
 
+## Swizzles as XOR strides
+
+A kernel that stages a tile in shared memory swizzles its offsets, so that the
+threads of a warp reach different banks. `Swizzle(bits=3, base=0, shift=3)`
+XORs bits 3 to 5 of an offset into bits 0 to 2. The same function is a layout
+whose strides add by XOR, and as a layout it passes through the whole algebra:
+
+```rust
+use tiki_cute::{Layout, Swizzle, SwizzleParams, Tiler};
+
+let swizzled: Layout = "(8, 8):(^1, ^9)".parse()?;
+let swizzle = Swizzle::try_from(SwizzleParams { bits: 3, base: 0, shift: 3 })?;
+for index in 0..64 {
+    let offset = swizzled.at(index).as_xor().map_or(0, |bits| bits.value());
+    assert_eq!(offset, swizzle.apply(index)?);
+}
+let tiles = swizzled.zipped_divide(&"(2, 4)".parse::<Tiler>()?)?;
+assert_eq!(tiles.cute().to_string(), "((2, 4), (4, 2)):((^1, ^9), (^2, ^36))");
+# Ok::<(), tiki_cute::LayoutError>(())
+```
+
+`^9` is an XOR stride, a value in F2 as [`Xor`] defines it: offsets add by
+XOR, and an integer multiplies a stride carry-lessly, so element `(r, c)` lives
+at `r ^ 9c`. The strides of one layout are all integers, all arithmetic tuples
+or all XOR values, and a layout with XOR strides has static extents, because a
+carry-less product needs every bit of the integer it multiplies.
+
+The algebra's walks multiply and add integers, which agree with their
+carry-less counterparts only where no bit carries. Each XOR result that relies
+on that is checked at every index, which static extents make exact.
+
 ## Where tiki-cute differs from PyCuTe
 
 - Composition refuses a hierarchical right layout whose modes' offsets can sum
@@ -80,9 +111,13 @@ each decision in detail.
 - A symbolic condition is decided from parameter facts. PyCuTe decides it by
   sympy's structural comparison, which can accept a condition that fails for
   some launches.
-- Strides are integers or arithmetic tuples. PyCuTe also allows F2 strides,
-  whose addition is XOR, to express swizzles as layouts. tiki-cute keeps a
-  [`Swizzle`] as a separate index transform.
+- XOR strides follow PyCuTe's `F2` paths, except where PyCuTe returns a layout
+  that is not the operation's result. PyCuTe composes `16:^1` with `4:3` as
+  `4:^3`, which maps 3 to `3 * ^3 = ^5` where `16:^1` maps `3 * 3` to `^9`.
+  tiki-cute refuses such a composition or layout sum, cuts a right inverse to
+  the whole modes that invert, refuses a left inverse that fails its contract,
+  and refuses a product whose copies lie in another codomain. PyCuTe keeps the
+  XOR zero `F0` apart from 0, and tiki-cute reads `^0` as the integer 0.
 - A tiler holes individual modes with `_`. A whole-layout hole, PyCuTe's
   `None` tiler, is spelled by not calling the operation. `zipped_divide`
   gathers every mode's tile into one mode, so it needs a layout for every mode.
@@ -95,12 +130,13 @@ Layouts print in the forms of the `tiki.layout` Python API.
 the coordinate table above. CuTe notation also parses, and every printed
 layout parses back to the same layout, so the reference cases and this crate's
 tests are written as CuTe prints them. The notation carries no parameter
-facts: a name parses as a parameter that admits every positive integer.
+facts: a name parses as a parameter that admits every positive integer. An XOR
+stride prints as `^9`, where PyCuTe prints `F9`, so no name reads as one.
 
 ## Verification
 
-- `tests/reference.rs` replays every integer layout-algebra call that PyCuTe's
-  test suite makes and requires the same result or the same refusal.
+- `tests/reference.rs` replays every integer and `F2` layout-algebra call that
+  PyCuTe's test suite makes and requires the same result or the same refusal.
   `tests/reference/record.py` regenerates the cases from a PyCuTe checkout.
 - `tests/postconditions.rs` checks each operation's contract on random layouts
   by evaluating every index.
@@ -108,6 +144,9 @@ facts: a name parses as a parameter that admits every positive integer.
   contracts after concrete values replace its parameters.
 - `tests/tensor.rs` checks that a tensor accepts exactly the placements whose
   bytes lie inside its bounds.
+- `tests/xor.rs` checks each operation's contract on random XOR layouts, that a
+  [`Swizzle`] and its XOR layout agree at every index, and each difference
+  from PyCuTe's `F2` paths.
 
 ## Build
 
