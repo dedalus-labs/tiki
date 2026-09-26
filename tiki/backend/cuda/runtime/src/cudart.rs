@@ -16,22 +16,15 @@ const STREAM_NON_BLOCKING: u32 = 0x01;
 const MEM_ATTACH_GLOBAL: u32 = 0x01;
 const MEMCPY_DEVICE_TO_HOST: i32 = 2;
 const MEMCPY_DEFAULT: i32 = 4;
-const MEM_ADVISE_SET_ACCESSED_BY: i32 = 5;
-const MEM_LOCATION_TYPE_DEVICE: i32 = 1;
 const MEM_POOL_ATTR_RESERVED_MEM_CURRENT: i32 = 5;
 pub const DEV_ATTR_CONCURRENT_MANAGED_ACCESS: i32 = 89;
 pub const DEV_ATTR_MEMORY_POOLS_SUPPORTED: i32 = 115;
-
-#[repr(C)]
-struct MemLocation {
-    kind: i32,
-    id: i32,
-}
 
 extern "C" {
     fn cudaGetErrorName(error: i32) -> *const c_char;
     fn cudaGetErrorString(error: i32) -> *const c_char;
     fn cudaGetDeviceCount(count: *mut i32) -> i32;
+    fn cudaGetDevice(device: *mut i32) -> i32;
     fn cudaSetDevice(device: i32) -> i32;
     fn cudaDeviceGetAttribute(value: *mut i32, attr: i32, device: i32) -> i32;
     fn cudaDeviceGetDefaultMemPool(pool: *mut MemPool, device: i32) -> i32;
@@ -39,6 +32,7 @@ extern "C" {
     fn cudaMemGetInfo(free: *mut usize, total: *mut usize) -> i32;
     fn cudaStreamCreateWithFlags(stream: *mut Stream, flags: u32) -> i32;
     fn cudaStreamSynchronize(stream: Stream) -> i32;
+    fn cudaStreamDestroy(stream: Stream) -> i32;
     fn cudaMalloc(ptr: *mut *mut c_void, size: usize) -> i32;
     fn cudaMallocAsync(ptr: *mut *mut c_void, size: usize, stream: Stream) -> i32;
     fn cudaMallocManaged(ptr: *mut *mut c_void, size: usize, flags: u32) -> i32;
@@ -53,7 +47,7 @@ extern "C" {
         kind: i32,
         stream: Stream,
     ) -> i32;
-    fn cudaMemAdvise(ptr: *const c_void, count: usize, advice: i32, location: MemLocation) -> i32;
+    fn tiki_cuda_mem_advise(ptr: *const c_void, count: usize, device: i32) -> i32;
 }
 
 /// A failed cudart call, named so the caller can see which primary failed.
@@ -110,6 +104,20 @@ pub fn set_device(device: i32) -> Result<(), CudaError> {
     check("cudaSetDevice", unsafe { cudaSetDevice(device) })
 }
 
+pub fn with_device(
+    device: i32,
+    operation: impl FnOnce() -> Result<(), CudaError>,
+) -> Result<(), CudaError> {
+    let mut previous = 0;
+    // SAFETY: `previous` outlives the call.
+    check("cudaGetDevice", unsafe { cudaGetDevice(&mut previous) })?;
+    set_device(device)?;
+    let result = operation();
+    // C++ caches the current device, so restore it on success and on error.
+    set_device(previous)?;
+    result
+}
+
 pub fn device_attribute(device: i32, attr: i32) -> Result<i32, CudaError> {
     let mut value = 0;
     // SAFETY: `value` outlives the call.
@@ -157,6 +165,11 @@ pub fn create_stream() -> Result<Stream, CudaError> {
         cudaStreamCreateWithFlags(&mut stream, STREAM_NON_BLOCKING)
     })?;
     Ok(stream)
+}
+
+pub fn destroy_stream(stream: Stream) -> Result<(), CudaError> {
+    // SAFETY: `stream` is no longer used after failed initialization.
+    check("cudaStreamDestroy", unsafe { cudaStreamDestroy(stream) })
 }
 
 pub fn stream_synchronize(stream: Stream) -> Result<(), CudaError> {
@@ -247,12 +260,8 @@ pub fn memcpy_async(
 }
 
 pub fn advise_accessed_by(ptr: *const c_void, count: usize, device: i32) -> Result<(), CudaError> {
-    let location = MemLocation {
-        kind: MEM_LOCATION_TYPE_DEVICE,
-        id: device,
-    };
     // SAFETY: `ptr` is a live managed allocation of at least `count` bytes.
     check("cudaMemAdvise", unsafe {
-        cudaMemAdvise(ptr, count, MEM_ADVISE_SET_ACCESSED_BY, location)
+        tiki_cuda_mem_advise(ptr, count, device)
     })
 }

@@ -89,32 +89,52 @@ impl Allocator {
     pub fn new() -> Result<Self, CudaError> {
         let count = cudart::device_count()?;
         let mut devices = Vec::with_capacity(count as usize);
-        for device in 0..count {
-            let concurrent_managed_access =
-                cudart::device_attribute(device, cudart::DEV_ATTR_CONCURRENT_MANAGED_ACCESS)? != 0;
-            let pools =
-                cudart::device_attribute(device, cudart::DEV_ATTR_MEMORY_POOLS_SUPPORTED)? != 0;
-            cudart::set_device(device)?;
-            devices.push(DeviceInfo {
-                pool: pools
-                    .then(|| cudart::default_mem_pool(device))
-                    .transpose()?,
-                concurrent_managed_access,
-                stream: cudart::create_stream()?,
-            });
-        }
-        cudart::set_device(0)?;
-        let managed = devices.iter().all(|d| d.concurrent_managed_access);
-        let total_memory = cudart::total_memory()?;
-        let memory_limit = (total_memory as f64 * 0.95) as usize;
-        let small_base = unified_malloc(managed, SMALL_POOL_SIZE)?.cast::<u8>();
-        if managed {
-            for (device, info) in devices.iter().enumerate() {
-                if info.concurrent_managed_access {
-                    cudart::advise_accessed_by(small_base.cast(), SMALL_POOL_SIZE, device as i32)?;
+        let mut managed = false;
+        let mut total_memory = 0;
+        let mut small_base = std::ptr::null_mut::<u8>();
+        let initialized = cudart::with_device(0, || {
+            for device in 0..count {
+                let concurrent_managed_access =
+                    cudart::device_attribute(device, cudart::DEV_ATTR_CONCURRENT_MANAGED_ACCESS)?
+                        != 0;
+                let pools =
+                    cudart::device_attribute(device, cudart::DEV_ATTR_MEMORY_POOLS_SUPPORTED)? != 0;
+                cudart::set_device(device)?;
+                devices.push(DeviceInfo {
+                    pool: pools
+                        .then(|| cudart::default_mem_pool(device))
+                        .transpose()?,
+                    concurrent_managed_access,
+                    stream: cudart::create_stream()?,
+                });
+            }
+            cudart::set_device(0)?;
+            managed = devices.iter().all(|d| d.concurrent_managed_access);
+            total_memory = cudart::total_memory()?;
+            small_base = unified_malloc(managed, SMALL_POOL_SIZE)?.cast::<u8>();
+            if managed {
+                for (device, info) in devices.iter().enumerate() {
+                    if info.concurrent_managed_access {
+                        cudart::advise_accessed_by(
+                            small_base.cast(),
+                            SMALL_POOL_SIZE,
+                            device as i32,
+                        )?;
+                    }
                 }
             }
+            Ok(())
+        });
+        if let Err(error) = initialized {
+            if !small_base.is_null() {
+                unified_free(managed, small_base.cast())?;
+            }
+            for info in devices {
+                cudart::destroy_stream(info.stream)?;
+            }
+            return Err(error);
         }
+        let memory_limit = (total_memory as f64 * 0.95) as usize;
         Ok(Self {
             devices,
             managed,
@@ -161,12 +181,12 @@ impl Allocator {
             device
         };
         let mut state = self.state();
-        let cached = match state.cache.reuse(size) {
+        let (size, cached) = match state.cache.reuse(size) {
             Some(cached) => cached,
             None => {
                 let (guard, cached) = self.allocate_uncached(state, size, device, stream)?;
                 state = guard;
-                cached
+                (size, cached)
             }
         };
         state.active += size;
@@ -234,11 +254,23 @@ impl Allocator {
             });
         }
         let info = self.device_info(device)?;
-        cudart::set_device(device)?;
-        let ptr = match info.pool {
-            Some(_) => cudart::malloc_async(size, stream)?,
-            None => cudart::malloc(size)?,
-        };
+        let mut ptr = std::ptr::null_mut();
+        let allocated = cudart::with_device(device, || {
+            ptr = match info.pool {
+                Some(_) => cudart::malloc_async(size, stream)?,
+                None => cudart::malloc(size)?,
+            };
+            Ok(())
+        });
+        if let Err(error) = allocated {
+            if !ptr.is_null() {
+                match info.pool {
+                    Some(_) => cudart::free_async(ptr, stream)?,
+                    None => cudart::free(ptr)?,
+                }
+            }
+            return Err(error.into());
+        }
         if ptr.is_null() {
             return Err(AllocError::OutOfMemory { bytes: size });
         }
@@ -328,27 +360,28 @@ impl Allocator {
         let info = &self.devices[device as usize];
         let blocking = stream.is_none() || info.pool.is_none();
         let stream = stream.unwrap_or(info.stream);
-        let dst = unified_malloc(self.managed, allocation.size)?;
-        let copied = cudart::set_device(device)
-            .and_then(|()| cudart::memcpy_async(dst, ptr, allocation.size, self.managed, stream))
-            .and_then(|()| {
-                if blocking {
-                    cudart::stream_synchronize(stream)
-                } else {
-                    Ok(())
-                }
-            });
-        if let Err(e) = copied {
-            unified_free(self.managed, dst)?;
-            return Err(e);
-        }
-        match info.pool {
-            Some(_) => cudart::free_async(ptr, stream)?,
-            None => cudart::free(ptr)?,
-        }
-        allocation.ptr.store(dst as usize, Ordering::Release);
-        *kind = Kind::Unified;
-        Ok(())
+        cudart::with_device(device, || {
+            let dst = unified_malloc(self.managed, allocation.size)?;
+            let copied = cudart::memcpy_async(dst, ptr, allocation.size, self.managed, stream)
+                .and_then(|()| {
+                    if blocking {
+                        cudart::stream_synchronize(stream)
+                    } else {
+                        Ok(())
+                    }
+                });
+            if let Err(e) = copied {
+                unified_free(self.managed, dst)?;
+                return Err(e);
+            }
+            match info.pool {
+                Some(_) => cudart::free_async(ptr, stream)?,
+                None => cudart::free(ptr)?,
+            }
+            allocation.ptr.store(dst as usize, Ordering::Release);
+            *kind = Kind::Unified;
+            Ok(())
+        })
     }
 
     pub fn active_memory(&self) -> usize {
