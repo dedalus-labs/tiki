@@ -12,11 +12,16 @@ namespace mlx::core {
 
 namespace cu {
 
+__device__ int64_t rotary_offset(int32_t value, bool unsigned_offset) {
+  return unsigned_offset ? static_cast<int64_t>(static_cast<uint32_t>(value))
+                         : static_cast<int64_t>(value);
+}
+
 template <typename T, bool traditional, bool forward>
 __device__ void rope_single_impl(
     const T* in,
     T* out,
-    int32_t offset,
+    int64_t offset,
     float inv_freq,
     float scale,
     int64_t stride,
@@ -60,6 +65,7 @@ __global__ void rope_single(
     const T* in,
     T* out,
     const int32_t* offset,
+    bool unsigned_offset,
     float scale,
     float base,
     int64_t stride,
@@ -74,7 +80,14 @@ __global__ void rope_single(
   float d = static_cast<float>(pos.x) / static_cast<float>(dims.x);
   float inv_freq = exp2(-d * base);
   rope_single_impl<T, traditional, forward>(
-      in, out, *offset, inv_freq, scale, stride, pos, dims);
+      in,
+      out,
+      rotary_offset(*offset, unsigned_offset),
+      inv_freq,
+      scale,
+      stride,
+      pos,
+      dims);
 }
 
 template <typename T, bool traditional, bool forward>
@@ -82,6 +95,7 @@ __global__ void rope_single_freqs(
     const T* in,
     T* out,
     const int32_t* offset,
+    bool unsigned_offset,
     const float* freqs,
     float scale,
     int64_t stride,
@@ -96,7 +110,14 @@ __global__ void rope_single_freqs(
 
   float inv_freq = 1.0 / freqs[freq_stride * pos.x];
   rope_single_impl<T, traditional, forward>(
-      in, out, *offset, inv_freq, scale, stride, pos, dims);
+      in,
+      out,
+      rotary_offset(*offset, unsigned_offset),
+      inv_freq,
+      scale,
+      stride,
+      pos,
+      dims);
 }
 
 template <typename T, bool traditional, bool forward, int N = 4>
@@ -104,6 +125,7 @@ __device__ void rope_impl(
     const T* in,
     T* out,
     const int* offset,
+    bool unsigned_offset,
     float inv_freq,
     float scale,
     const cuda::std::array<int64_t, 4> strides,
@@ -115,8 +137,10 @@ __device__ void rope_impl(
   auto n_head_up = N * ((n_head + N - 1) / N);
   auto head_idx = static_cast<int>((pos.z * N) % n_head_up);
   auto batch_idx = (pos.z * N) / n_head_up;
-  auto batch_offset = offset[batch_idx * offset_stride];
-  float L = scale * static_cast<float>(pos.y + batch_offset);
+  auto batch_offset =
+      rotary_offset(offset[batch_idx * offset_stride], unsigned_offset);
+  float L =
+      scale * static_cast<float>(static_cast<int64_t>(pos.y) + batch_offset);
 
   // Compute costheta, sintheta
   float theta = L * inv_freq;
@@ -170,6 +194,7 @@ __global__ void rope(
     const T* in,
     T* out,
     const int32_t* offset,
+    bool unsigned_offset,
     float scale,
     float base,
     const __grid_constant__ cuda::std::array<int64_t, 4> strides,
@@ -191,6 +216,7 @@ __global__ void rope(
       in,
       out,
       offset,
+      unsigned_offset,
       inv_freq,
       scale,
       strides,
@@ -206,6 +232,7 @@ __global__ void rope_freqs(
     const T* in,
     T* out,
     const int32_t* offset,
+    bool unsigned_offset,
     const float* freqs,
     float scale,
     float base,
@@ -228,6 +255,7 @@ __global__ void rope_freqs(
       in,
       out,
       offset,
+      unsigned_offset,
       inv_freq,
       scale,
       strides,
@@ -339,6 +367,7 @@ void RoPE::eval_gpu(
               gpu_ptr<DataType>(donated ? out : in),
               gpu_ptr<DataType>(out),
               gpu_ptr<int32_t>(offset),
+              offset.dtype() == uint32,
               scale_,
               std::log2(base_),
               mat_size,
@@ -355,6 +384,7 @@ void RoPE::eval_gpu(
               gpu_ptr<DataType>(donated ? out : in),
               gpu_ptr<DataType>(out),
               gpu_ptr<int32_t>(offset),
+              offset.dtype() == uint32,
               gpu_ptr<float>(inputs[2]),
               scale_,
               mat_size,
@@ -368,7 +398,7 @@ void RoPE::eval_gpu(
           uint3 dims = make_uint3(dims_ / 2, T, dimz);
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
           int64_t offset_stride = 0;
-          if (inputs[1].ndim() > 0) {
+          if (offset.size() > 1) {
             offset_stride = inputs[1].strides()[0];
           }
           encoder.add_kernel_node(
@@ -378,6 +408,7 @@ void RoPE::eval_gpu(
               gpu_ptr<DataType>(donated ? out : in),
               gpu_ptr<DataType>(out),
               gpu_ptr<int32_t>(offset),
+              offset.dtype() == uint32,
               gpu_ptr<float>(inputs[2]),
               scale_,
               std::log2(base_),
@@ -394,7 +425,7 @@ void RoPE::eval_gpu(
           uint3 dims = make_uint3(dims_ / 2, T, dimz);
           auto [grid, block] = get_grid_and_block(dims.x, dims.y, dims.z);
           int64_t offset_stride = 0;
-          if (inputs[1].ndim() > 0) {
+          if (offset.size() > 1) {
             offset_stride = inputs[1].strides()[0];
           }
           encoder.add_kernel_node(
@@ -404,6 +435,7 @@ void RoPE::eval_gpu(
               gpu_ptr<DataType>(donated ? out : in),
               gpu_ptr<DataType>(out),
               gpu_ptr<int32_t>(offset),
+              offset.dtype() == uint32,
               scale_,
               std::log2(base_),
               strides,
