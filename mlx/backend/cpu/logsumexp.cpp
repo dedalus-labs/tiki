@@ -44,9 +44,12 @@ void logsumexp(const array& in, array& out, Stream stream) {
         s -= N;
       }
 
-      AccT maximum = max(vmaximum);
+      AccT maximum = any(vmaximum != vmaximum)
+          ? numeric_limits<AccT>::quiet_NaN()
+          : max(vmaximum);
       while (s-- > 0) {
-        maximum = std::max(maximum, static_cast<AccT>(*current_in_ptr));
+        auto value = static_cast<AccT>(*current_in_ptr);
+        maximum = std::isnan(value) ? value : std::max(maximum, value);
         current_in_ptr++;
       }
 
