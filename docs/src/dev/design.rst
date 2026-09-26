@@ -14,15 +14,17 @@ does, and together they cover a program from Python down to the processor.
    * - ``Array``
      - An immutable value with a shape and a dtype, possibly not yet computed.
    * - ``Op``
-     - An operation on arrays, with the rules the transformations need.
+     - An operation on arrays, with one rule per functor.
    * - ``Function``
      - A composition of ops, traced from Python.
    * - ``Kernel``
      - A function lowered onto one processor.
    * - ``Tensor``
-     - Storage seen through a layout.
+     - An accessor composed with a layout.
    * - ``Layout``
      - A map from coordinates to offsets.
+   * - ``Accessor``
+     - A map from offsets to values: a pointer into memory, or a function.
    * - ``Target``
      - A processor: its memory spaces and its execution units.
    * - ``Device``, ``Stream``
@@ -41,24 +43,31 @@ in a tensor, but the two are different nouns for two reasons.
   fragment, an accumulator in tensor memory. They are mutable, they exist
   inside one kernel, and no user composes them.
 
-The word follows CuTe, where a tensor is an engine composed with a layout. In
-mathematics and physics a tensor is a multilinear object whose components
-change by a fixed rule when the basis changes. An array of numbers is its
-components in one basis. Tiki's tensors are such component arrays, placed in
-memory by a layout. They carry no change-of-basis rule.
+A tensor reads coordinate ``c`` as ``accessor(layout(c))``. The layout turns a
+coordinate into an offset, and the accessor turns the offset into a value. An
+accessor is usually a pointer into one memory space. It can also be a
+function: the accessor that returns its offset unchanged gives a coordinate
+tensor, which kernels use to mask partial tiles.
+
+The word tensor follows CuTe. In mathematics and physics a tensor is a
+multilinear object whose components change by a fixed rule when the basis
+changes, and an array of numbers is its components in one basis. Tiki's
+tensors are such component arrays, placed in memory by a layout. They carry no
+change-of-basis rule.
 
 Ops and their rules
 -------------------
 
-An ``Op`` has a forward computation and three optional rules:
+An ``Op`` has a forward computation and one optional rule per functor:
 
-- **backward**, the vector-Jacobian product, for reverse-mode derivatives;
-- **tangent**, the Jacobian-vector product, for forward-mode derivatives;
-- **batch**, for ``vmap``.
+- **vjp**, the vector-Jacobian product, for reverse-mode derivatives;
+- **jvp**, the Jacobian-vector product, for forward-mode derivatives;
+- **vmap**, for batching.
 
-The rules exist because the transformations below are defined op by op. Once
-an op states its rules, every function that uses it can be differentiated and
-batched, however it composes. A researcher adds an op from Python:
+The names are JAX's and Tiki's, so a researcher reads one name per rule. The
+rules exist because the functors below are defined op by op. Once an op states
+its rules, every function that uses it can be differentiated and batched,
+however it composes. A researcher adds an op from Python:
 
 .. code-block:: python
 
@@ -69,23 +78,23 @@ batched, however it composes. A researcher adds an op from Python:
        return tk.sin(x) * x
 
    @f.vjp
-   def f_backward(x, cotangent, output):
+   def f_vjp(x, cotangent, output):
        return cotangent * (tk.cos(x) * x + tk.sin(x))
 
    @f.jvp
-   def f_tangent(x, dx):
+   def f_jvp(x, dx):
        return dx * (tk.cos(x) * x + tk.sin(x))
 
    @f.vmap
-   def f_batch(x, axis):
+   def f_vmap(x, axis):
        return f(x), axis
 
-Transformations
----------------
+Functors
+--------
 
 ``grad``, ``jvp``, ``vjp`` and ``vmap`` take a function and return a function.
 They trace and never run anything, so they have no side effects. Each one
-preserves composition, which is what makes it well defined:
+preserves composition:
 
 .. code-block:: text
 
@@ -93,13 +102,13 @@ preserves composition, which is what makes it well defined:
    vmap(g ∘ f) = vmap(g) ∘ vmap(f)
    vjp(g ∘ f)  = vjp(f) ∘ vjp(g)     reversed, which is why backprop runs backward
 
-In the language of category theory the ops generate a category of functions,
-and each transformation is a functor on it. A functor is fixed by what it does
-to the generators, which is why each op carries one rule per transformation.
+The ops generate a category of functions, and each of these maps is a functor
+on it. A functor is fixed by what it does to the generators, which is why each
+op carries one rule per functor.
 
 ``vmap`` turns a function of one example into a function of a batch, with no
 loop. It is the same idea as a GPU kernel, whose body is written for one thread
-and run for every thread. Transformations compose in any order:
+and run for every thread. Functors compose in any order:
 
 .. code-block:: python
 
@@ -116,7 +125,7 @@ and run for every thread. Transformations compose in any order:
    assert per_example.shape == (8, 3)
 
 A kernel written thread by thread keeps control of its threads under ``vmap``.
-Its batch rule states where the batch goes. The default adds one mode to each
+Its vmap rule states where the batch goes. The default adds one mode to each
 tensor's layout and one dimension to the launch, so each batch element gets its
 own blocks.
 
@@ -128,6 +137,61 @@ kernels by default. Tracing and the layout algebra are cheap next to code
 generation, and code generation runs once per kernel: compiled kernels are
 cached by their content, and dynamic extents avoid a compilation per shape.
 Lazy evaluation without lowering remains available for debugging.
+
+Kernel building blocks
+----------------------
+
+A kernel is written from seven primitives. Each one is a single hardware
+capability, and each target supplies its instructions for it.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Primitive
+     - What it does
+     - Instructions
+   * - ``Layout``
+     - Maps coordinates to offsets, for data and for work.
+     - integer arithmetic
+   * - ``Tensor``
+     - Names data in one memory space.
+     - addressing
+   * - ``Copy``
+     - Moves one tensor into another.
+     - vector load and store, ``cp.async``, TMA, ``ldmatrix``, DMA
+   * - ``Mma``
+     - Multiplies and accumulates tiles on the matrix unit.
+     - ``mma.sync``, ``wgmma``, ``tcgen05.mma``, MFMA, MXU
+   * - ``Shuffle``
+     - Exchanges values between the lanes of one unit.
+     - ``shfl.sync``, DPP, vector lane rotation
+   * - ``Barrier``
+     - Orders a producer before its consumers.
+     - ``bar.sync``, ``mbarrier``, semaphores
+   * - ``Atomic``
+     - Combines a value into memory other units also write.
+     - ``red``, ``atom``
+
+Everything else is a composition of these, and the layout algebra does the
+index arithmetic for each one:
+
+- **Partition.** A thread's share of a tile is the tile composed with a
+  thread-value layout, sliced at the thread's index.
+- **Fold and scan.** A monoid is an associative combine with an identity. A
+  fold combines each thread's values, then combines across lanes with
+  ``Shuffle``, then across blocks with ``Atomic`` or a second pass. A scan does
+  the same and carries each prefix forward.
+- **Pipeline.** A ring of shared-memory tensors: ``Copy`` fills one stage while
+  ``Mma`` reads another, and a ``Barrier`` per stage orders the two.
+- **Elementwise.** Partition, copy in, compute, copy out.
+- **Transpose.** A copy through a shared tensor with a swizzled layout.
+- **Matrix multiply.** A pipeline feeding ``Mma`` on each thread's partition,
+  then a copy out.
+- **Attention.** Two matrix multiplies joined by the online softmax, which is a
+  fold whose monoid carries the running maximum, sum and output.
+
+The proofs follow the same structure: bounds from each tensor's layout,
+disjoint writes from each partition, and completion order from each barrier.
 
 Targets
 -------
