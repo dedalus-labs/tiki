@@ -9,6 +9,7 @@
 
 #include <nvtx3/nvtx3.hpp>
 
+#include <algorithm>
 #include <cassert>
 
 namespace mlx::core {
@@ -31,6 +32,7 @@ struct ConvCacheKey {
   std::array<int, MAX_NDIM> padding_lo;
   std::array<int, MAX_NDIM> padding_hi;
   std::array<int, MAX_NDIM> dilation;
+  std::array<int, MAX_NDIM> input_dilation;
   int groups;
   bool flip;
   uint8_t input_alignment;
@@ -281,6 +283,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   cache_key.pod.padding_lo = vector_key(padding_lo_);
   cache_key.pod.padding_hi = vector_key(padding_hi_);
   cache_key.pod.dilation = vector_key(kernel_dilation_);
+  cache_key.pod.input_dilation = vector_key(input_dilation_);
   cache_key.pod.groups = groups_;
   cache_key.pod.flip = flip_;
   cache_key.pod.input_alignment = get_alignment(in);
@@ -341,6 +344,14 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out_) {
   ConvBackendType backend_type;
   std::optional<DnnGraph> graph;
   for (auto try_backend : try_backends) {
+    // cuDNN cannot dilate input storage or subsample a dgrad output.
+    const auto& unit_axes =
+        try_backend == CONV_BACKWARD_INPUT ? kernel_strides_ : input_dilation_;
+    if (!std::all_of(unit_axes.begin(), unit_axes.end(), [](int step) {
+          return step == 1;
+        })) {
+      continue;
+    }
     auto [x, w, y] =
         prepare_args(encoder, try_backend, in, wt, out, groups_, s);
     auto [stride, padding_lo, padding_hi, dilation] = get_conv_settings(
