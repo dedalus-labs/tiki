@@ -863,6 +863,10 @@ class CustomTransforms : public Primitive {
   DEFINE_VMAP();
   DEFINE_NAME(CustomTransforms);
 
+  int num_outputs() const {
+    return num_outputs_;
+  }
+
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 
