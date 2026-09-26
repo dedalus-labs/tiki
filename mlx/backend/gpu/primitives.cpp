@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/primitives.h"
+#include "mlx/as_strided.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/gpu/copy.h"
@@ -22,7 +23,17 @@ namespace mlx::core {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
-  eval(inputs, out);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs, out);
+    return;
+  }
+  // Reject an invalid view before packing: the copy runs asynchronously, and a throw after it is
+  // queued would destroy its destination while the copy still writes to it.
+  as_strided_detail::check_extent(
+      as_strided_detail::layout(shape_, strides_, offset_, out.itemsize()),
+      inputs[0].nbytes());
+  auto packed = contiguous_copy_gpu(inputs[0], stream());
+  eval({packed}, out);
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {

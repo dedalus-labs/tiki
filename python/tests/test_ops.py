@@ -2646,6 +2646,24 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.as_strided(x, (-2, 3), (3, 1), 0)
 
+    def test_as_strided_uses_logical_row_order(self):
+        values = mx.arange(12, dtype=mx.float32)
+        sources = (
+            values[::2],
+            values[::-1],
+            mx.broadcast_to(mx.array(3.0), (6,)),
+            values.reshape(3, 4).T,
+        )
+        for source in sources:
+            with self.subTest(shape=source.shape):
+                expected = np.asarray(source).flatten()[::-1]
+                view = mx.as_strided(source, (source.size,), (-1,), source.size - 1)
+                np.testing.assert_array_equal(view.tolist(), expected)
+                compiled = mx.compile(
+                    lambda x: mx.as_strided(x, (x.size,), (-1,), x.size - 1)
+                )(source)
+                np.testing.assert_array_equal(compiled.tolist(), expected)
+
     def test_as_strided_rejects_views_outside_the_allocation(self):
         base = mx.array([1.0])
         cases = (((2,), (1024,), 0), ((2,), (-1,), 0), ((2,), (1,), 1024))
@@ -2700,6 +2718,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 ):
                     with self.assertRaisesRegex(ValueError, "outside its input array"):
                         mx.eval(view)
+
+    def test_as_strided_rejects_packed_inputs_before_copying(self):
+        # The strided input is packed asynchronously; rejection must happen before that copy starts.
+        strided = mx.arange(1000000)[::2]
+        for _ in range(20):
+            with self.assertRaisesRegex(ValueError, "outside its input array"):
+                mx.eval(mx.as_strided(strided, (2,), (-1,), 0))
 
     def test_as_strided_ignores_recycled_allocation_slack(self):
         # The allocator can hand back a larger freed buffer; bytes past the new array stay unreadable.
