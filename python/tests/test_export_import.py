@@ -24,6 +24,27 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
+    def test_contiguous_export_preserves_storage_order(self):
+        source = mx.arange(12).reshape(3, 4).T
+        path = os.path.join(self.test_dir, "contiguous.mlxfn")
+        for allow_col_major in (False, True):
+            with self.subTest(allow_col_major=allow_col_major):
+
+                def fun(value):
+                    return mx.contiguous(value, allow_col_major=allow_col_major)
+
+                events = []
+                mx.export_function(events.append, fun, source)
+                primitive = next(e for e in events if e.get("name") == "Contiguous")
+                self.assertEqual(primitive["arguments"], [allow_col_major])
+                mx.export_function(path, fun, source)
+                restored = mx.import_function(path)(source)[0]
+                self.assertEqual(restored.tolist(), source.tolist())
+                events.clear()
+                mx.export_function(events.append, mx.import_function(path), source)
+                primitive = next(e for e in events if e.get("name") == "Contiguous")
+                self.assertEqual(primitive["arguments"], [allow_col_major])
+
     def test_imported_constants_can_be_reexported_before_evaluation(self):
         source = os.path.join(self.test_dir, "constant-source.mlxfn")
         destination = os.path.join(self.test_dir, "constant-copy.mlxfn")
