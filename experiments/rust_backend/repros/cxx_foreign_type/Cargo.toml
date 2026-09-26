@@ -1,0 +1,11 @@
+[package]
+name = "tiki-cxx-foreign-type-repro"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+cxx = "=1.0.200"
+tiki-backend-contract = { path = "../backend_contract" }
