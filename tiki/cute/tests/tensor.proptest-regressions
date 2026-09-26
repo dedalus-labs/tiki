@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b39599389c20aef0b6b5af6386487159727de7a2d3d39831470d3811da5ec6c2 # shrinks to source = Layout(shape=(4, 1), stride=(2, 1)), fixed = 0, tile = Layout(shape=2, stride=4)

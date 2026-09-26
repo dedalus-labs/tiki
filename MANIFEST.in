@@ -1,7 +1,7 @@
 include CMakeLists.txt
 include tiki.pc.in
 recursive-include tiki *
-prune tiki/layout/target
+prune tiki/cute/target
 include cmake/*
 include python/src/*
 include python/tiki/py.typed # support type hinting as in PEP-561

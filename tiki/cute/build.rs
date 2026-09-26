@@ -5,7 +5,7 @@
 fn main() {
     #[cfg(feature = "cxx-bridge")]
     {
-        cxx_build::bridge("src/bridge.rs").std("c++17").compile("tiki-layout-bridge");
+        cxx_build::bridge("src/bridge.rs").std("c++17").compile("tiki-cute-bridge");
         println!("cargo:rerun-if-changed=src/bridge.rs");
     }
 }

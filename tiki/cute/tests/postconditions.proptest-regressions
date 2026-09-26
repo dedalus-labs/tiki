@@ -1,0 +1,12 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3c77fcfcd6d2efaf73db19ff8513ddc77c6a0ab44c2ab4c079aa708086ef0f5e # shrinks to a = Layout(shape=(3, 2), stride=(1, 6)), take = 4
+cc f90d768117bec0637e699512d41b679014fe83c1af632006b3b450f7b2e4212c # shrinks to a = Layout(shape=(4, 1), stride=(0, 1)), b = Layout(shape=(2, 3), stride=(2, 1))
+cc ca709eec3ba28a998ed3cceee36d9ef64089e307d2e5c1ceada45a84ebe6511e # shrinks to a = Layout(shape=(3, 3, 2), stride=(1, 3, 9)), b = Layout(shape=4, stride=1)
+cc ced49297342201961645d31a3df87f607a3a1cd82bdd6a1ce28822c170ac9194 # shrinks to a = Layout(shape=(3, 1), stride=(1, 6)), b = Layout(shape=(2, 2), stride=(1, 2))
+cc f253225e8c458035b55d0d85f8284a14c7210466f80a92543f5522c40a3afe31 # shrinks to a = Layout(shape=(3, 4, 2), stride=(0, 0, 1)), b = Layout(shape=(2, 3), stride=(10, 1))
+cc 8d9137126fd3ecb60df9830b7dd1128390b9ffaac29d4b4104c29810246dba34 # shrinks to a = Layout(shape=(3, 2), stride=(1, 6)), b = Layout(shape=(2, 2), stride=(1, 2))
