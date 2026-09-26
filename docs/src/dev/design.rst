@@ -50,10 +50,15 @@ function: the accessor that returns its offset unchanged gives a coordinate
 tensor, which kernels use to mask partial tiles.
 
 The word tensor follows CuTe. In mathematics and physics a tensor is a
-multilinear object whose components change by a fixed rule when the basis
-changes, and an array of numbers is its components in one basis. Tiki's
-tensors are such component arrays, placed in memory by a layout. They carry no
-change-of-basis rule.
+multilinear object, and an array of numbers is its components in one basis.
+Tiki's tensors are such component arrays, and a layout places them in memory.
+
+A layout is not a basis. A change of basis mixes components: each new component
+is a linear combination of the old ones. A change of layout moves components
+without changing a value, so row-major and column-major store the same numbers
+at different offsets. A bijective layout is a permutation of memory, the one
+basis change that only reorders. A broadcast layout, with a zero stride, sends
+many coordinates to one offset and is no basis at all.
 
 Ops and their rules
 -------------------
@@ -64,8 +69,7 @@ An ``Op`` has a forward computation and one optional rule per functor:
 - **jvp**, the Jacobian-vector product, for forward-mode derivatives;
 - **vmap**, for batching.
 
-The names are JAX's and Tiki's, so a researcher reads one name per rule. The
-rules exist because the functors below are defined op by op. Once an op states
+The rules exist because the functors below are defined op by op. Once an op states
 its rules, every function that uses it can be differentiated and batched,
 however it composes. A researcher adds an op from Python:
 
@@ -73,7 +77,7 @@ however it composes. A researcher adds an op from Python:
 
    import tiki as tk
 
-   @tk.custom_function
+   @tk.op
    def f(x):
        return tk.sin(x) * x
 
