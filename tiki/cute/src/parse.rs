@@ -3,8 +3,9 @@
 //! Parsing CuTe notation, the inverse of [`Layout::cute`] and of PyCuTe's `str`.
 //!
 //! ```text
-//! item   := "_" | group [":" group]        a hole, a shape or tuple, or a layout
-//! group   := "(" item ("," item)* [","] ")" | sum
+//! item    := "_" | group [":" group]           a hole, a shape or tuple, or a layout
+//! group   := "(" item ("," item)* [","] ")" | xor | sum
+//! xor     := "^" digits                        an XOR stride
 //! sum     := term (("+" | "-") term)*          an integer, or an arithmetic tuple
 //! term    := product ("@" digits)*
 //! product := factor ("*" factor)*
@@ -17,6 +18,20 @@
 //! positive parameter of the same name.
 //!
 //! `5@2@1` is `5 * E(1, 2)`, as PyCuTe prints it: the basis modes are written innermost first.
+//!
+//! `^9` is the XOR stride 9, a value of the XOR codomain described in [`crate::Xor`], which
+//! PyCuTe prints as `F9`. A name starts with a letter, so no parameter can read as an XOR stride.
+//! `^0` is the integer 0, which belongs to every codomain. An XOR stride is a whole leaf: it takes
+//! no sign and joins no sum, and a shape or tiler refuses it.
+//!
+//! ```
+//! use tiki_cute::Layout;
+//!
+//! let swizzled: Layout = "(8, 8):(^1, ^9)".parse()?;
+//! assert!(swizzled.stride().is_xor());
+//! assert_eq!(swizzled.cute().to_string(), "(8, 8):(^1, ^9)");
+//! # Ok::<(), tiki_cute::LayoutError>(())
+//! ```
 //!
 //! ```
 //! use tiki_cute::{Layout, Tiler};
@@ -37,6 +52,7 @@ use crate::shape::Shape;
 use crate::stride::Stride;
 use crate::tiler::Tiler;
 use crate::tuple::Tuple;
+use crate::xor::Xor;
 use std::str::FromStr;
 
 /// The function name the printer uses for an opaque quotient.
@@ -46,7 +62,7 @@ const FLOOR: &str = "floor";
 enum Item {
     /// `_`, a tiler mode left as it is.
     Hole,
-    /// A leaf value: an integer or an arithmetic tuple.
+    /// A leaf value: an integer, an arithmetic tuple or an XOR value.
     Leaf(Offset),
     /// A parenthesized tuple of items.
     Group(Vec<Item>),
@@ -126,6 +142,10 @@ impl<'a> Parser<'a> {
     }
 
     fn group(&mut self) -> Result<Item, LayoutError> {
+        if self.eat('^') {
+            // Digits are never negative, so every one names an XOR value.
+            return Ok(Item::Leaf(Offset::from(Xor::try_from(self.digits()?)?)));
+        }
         if !self.eat('(') {
             return Ok(Item::Leaf(self.sum()?));
         }

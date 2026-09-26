@@ -7,6 +7,9 @@
 //! offset `e` leaves `d / e` uncovered blocks of size `e` below it. The complement enumerates
 //! those blocks, one mode per gap, and a last mode that repeats the whole pattern. Each codomain
 //! axis of `A` is complemented separately.
+//!
+//! An XOR stride has no complement here. A gap is an integer quotient of strides, and PyCuTe
+//! refuses the XOR quotient it would form instead.
 
 use crate::LayoutError;
 use crate::error::Condition;
@@ -27,7 +30,8 @@ impl Layout {
     ///
     /// Returns [`Condition::OrderedChain`] when a mode starts before the end of the chain below
     /// it, which covers overlapping and interleaved modes, or when the parameter facts cannot
-    /// place a dynamic stride past that end.
+    /// place a dynamic stride past that end. Returns [`LayoutError::XorStride`] for an XOR stride
+    /// on a mode with more than one coordinate.
     pub fn complement(&self) -> Result<Layout, LayoutError> {
         // Every codomain axis starts with no gaps and a covered prefix that ends at offset 1.
         let profile = self.coprofile();
@@ -40,6 +44,16 @@ impl Layout {
             self.stride().steps().into_iter().zip(self.shape().extents()).collect();
         modes.sort_by(|(a, _), (b, _)| static_first(a, b));
         for (step, extent) in modes {
+            // An extent-1 mode adds no offset, whatever its stride.
+            if step.as_xor().is_some() {
+                if extent.is_one() {
+                    continue;
+                }
+                return Err(LayoutError::XorStride {
+                    operation: OPERATION,
+                    stride: step.to_string(),
+                });
+            }
             let (d, path) = step.as_basis().ok_or_else(|| LayoutError::NotBasis {
                 operation: OPERATION,
                 stride: step.to_string(),

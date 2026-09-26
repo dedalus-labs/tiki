@@ -76,7 +76,7 @@ fn composition_survives_cancelling_strides() {
     let r = a.compose(&Tiler::from(b.clone())).unwrap();
     // B's offsets are coordinates of A's two top-level modes, padded with zeros.
     for i in 0..2 {
-        let mut coordinate = b.at(i).as_tuple().modes().to_vec();
+        let mut coordinate = b.at(i).as_tuple().unwrap().modes().to_vec();
         coordinate.resize(a.rank(), Tuple::Leaf(Int::from(0)));
         assert_eq!(r.at(i), a.call(&Tuple::Node(coordinate)).unwrap(), "index {i}");
     }

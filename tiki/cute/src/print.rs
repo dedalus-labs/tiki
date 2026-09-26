@@ -6,7 +6,8 @@
 //!   integer says what it is.
 //! - [`Layout::cute`] prints CuTe's `(4, 4):(4, 1)`, for comparison with CUTLASS and PyCuTe.
 //! - [`Layout::describe`] prints one row per coordinate leaf with its extent and stride, then
-//!   the index formula.
+//!   the index formula. With XOR strides, such as `^9`, the formula's `+` is XOR and its `*` the
+//!   carry-less product of [`crate::Xor`].
 //!
 //! ```
 //! use tiki_cute::Layout;

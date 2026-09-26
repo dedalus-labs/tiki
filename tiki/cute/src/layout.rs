@@ -11,12 +11,14 @@ use crate::param::Param;
 use crate::shape::{Coord, Shape};
 use crate::stride::Stride;
 use crate::tuple::{Profile, Tuple};
+use crate::xor::Xor;
 
 /// A shape and a congruent stride.
 ///
 /// Every public constructor checks its inputs through [`Shape`] and [`Stride`], and the algebra
 /// derives new layouts only from checked ones. Every `Layout` therefore has positive extents
-/// and strides in one codomain.
+/// and strides in one codomain. A layout with XOR strides also has static extents, because a
+/// carry-less product needs every bit of the extent it multiplies.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Layout {
     /// The domain: the layout accepts the coordinates of this shape.
@@ -31,8 +33,10 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// Returns [`LayoutError::Incongruent`] when the stride is not weakly congruent to the shape.
+    /// Returns [`LayoutError::Incongruent`] when the stride is not weakly congruent to the shape,
+    /// and [`LayoutError::XorOperand`] for XOR strides beside a dynamic extent.
     pub fn new(shape: Shape, stride: Stride) -> Result<Layout, LayoutError> {
+        static_under_xor(&shape, &stride)?;
         // PERF: a congruent stride, the usual input, needs no expansion or copy.
         if shape.as_tuple().congruent(stride.as_tuple()) {
             return Ok(Layout { shape, stride });
@@ -64,10 +68,12 @@ impl Layout {
     /// # Errors
     ///
     /// Returns [`LayoutError::MixedCodomain`] when the modes' strides lie in codomains that have
-    /// no common sum, such as `1` beside `1@0`.
+    /// no common sum, such as `1` beside `1@0`, and [`LayoutError::XorOperand`] when one mode's
+    /// XOR strides meet another mode's dynamic extent.
     pub fn try_from_modes(modes: impl IntoIterator<Item = Layout>) -> Result<Layout, LayoutError> {
         let layout = Layout::from_modes(modes);
         Stride::try_from(layout.stride.as_tuple().clone())?;
+        static_under_xor(&layout.shape, &layout.stride)?;
         Ok(layout)
     }
 
@@ -118,22 +124,54 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// Returns [`LayoutError::Coordinate`] when `coord` is not weakly congruent to the shape.
+    /// Returns [`LayoutError::Coordinate`] when `coord` is not weakly congruent to the shape, and
+    /// [`LayoutError::XorOperand`] when a coordinate leaf opposite XOR strides is negative or
+    /// dynamic.
     pub fn call(&self, coord: &Coord) -> Result<Offset, LayoutError> {
         let natural = self.shape.idx2crd(coord)?;
+        if self.stride.is_xor() {
+            for leaf in natural.leaves() {
+                Xor::try_from(leaf)?;
+            }
+        }
         Ok(self.stride.inner_product(&natural))
     }
 
     /// Returns the offset of a 1-D index. Every index is a coordinate of every shape.
+    ///
+    /// # Panics
+    ///
+    /// Panics when this layout has XOR strides and `index` is negative or dynamic, which
+    /// [`Layout::call`] refuses instead.
     pub fn at(&self, index: impl Into<Int>) -> Offset {
-        self.call(&Tuple::Leaf(index.into())).expect("an index is a coordinate of every shape")
+        self.call(&Tuple::Leaf(index.into()))
+            .unwrap_or_else(|error| panic!("an index is a coordinate of every shape: {error}"))
     }
 
-    /// Returns the offset of another layout's codomain element read as a coordinate. An
-    /// arithmetic tuple is padded with zeros to this layout's rank.
-    pub(crate) fn call_offset(&self, offset: &Offset) -> Result<Offset, LayoutError> {
-        match offset.as_tuple() {
-            Tuple::Leaf(_) => self.call(offset.as_tuple()),
+    /// Returns the offset of another layout's codomain element read as a coordinate, so a
+    /// layout can be evaluated at the result of another.
+    ///
+    /// An integer is an index and an arithmetic tuple is a coordinate, padded with zeros to this
+    /// layout's rank. An XOR value is an XOR index: [`Shape::idx2crd_xor`] splits it over the
+    /// shape carry-lessly, and each XOR coordinate multiplies its stride carry-lessly, so the
+    /// result is an XOR value, as PyCuTe evaluates a layout at an `F2` index.
+    ///
+    /// # Errors
+    ///
+    /// Returns the errors of [`Layout::call`] and [`Shape::idx2crd_xor`], and for an XOR index
+    /// [`LayoutError::XorStride`] or [`LayoutError::XorOperand`] when a stride has no carry-less
+    /// product with a coordinate.
+    pub fn call_offset(&self, offset: &Offset) -> Result<Offset, LayoutError> {
+        if let Some(index) = offset.as_xor() {
+            let natural = self.shape.idx2crd_xor(index)?;
+            let mut sum = Offset::zero();
+            for (c, d) in natural.leaves().into_iter().zip(self.stride.steps()) {
+                sum = sum.add(&d.scale_xor(*c, "evaluation")?);
+            }
+            return Ok(sum);
+        }
+        match offset.as_tuple().expect("an offset that is not XOR is a tuple") {
+            index @ Tuple::Leaf(_) => self.call(index),
             Tuple::Node(components) => {
                 let mut coord = components.clone();
                 coord.resize(self.rank().max(coord.len()), Tuple::Leaf(Int::Static(0)));
@@ -160,20 +198,36 @@ impl Layout {
         Ok((offset, Layout::from_modes(free)))
     }
 
-    /// Returns the profile of the codomain: a leaf for Z, one leaf per axis of Z^n.
+    /// Returns the profile of the codomain: a leaf for Z and for the XOR codomain, one leaf per
+    /// axis of Z^n.
     pub fn coprofile(&self) -> Profile {
         self.stride.coprofile()
     }
 
     /// Returns the offset of the last coordinate plus one along each codomain axis, PyCuTe's
     /// `coshape`. With nonnegative strides this is one past the largest offset.
+    ///
+    /// XOR cancels bits instead of accumulating them, so for XOR strides the bound is the
+    /// smallest power of two above every mode's largest contribution `(s - 1) * d`, as in PyCuTe.
     pub fn coshape(&self) -> Tuple<Int> {
+        if self.stride.is_xor() {
+            let width = self.shape.extents().into_iter().zip(self.stride.steps()).fold(
+                0,
+                |width, (s, d)| {
+                    let reach = d.scale(&(s - &Int::Static(1)));
+                    width.max(reach.as_xor().map_or(0, |bits| crate::xor::bit_length(bits.value())))
+                },
+            );
+            let bound = i64::try_from(1_u64 << width).expect(crate::poly::OVERFLOW);
+            return Tuple::Leaf(Int::Static(bound));
+        }
         let extents = self.shape.extents();
         let last = extents
             .into_iter()
             .zip(self.stride.steps())
             .fold(Offset::zero(), |sum, (s, d)| sum.add(&d.scale(&(s - &Int::Static(1)))));
-        last.as_tuple().map(&mut |end| end + &Int::Static(1))
+        let last = last.as_tuple().expect("strides that are not XOR sum to a tuple");
+        last.map(&mut |end| end + &Int::Static(1))
     }
 
     /// Returns the layout with a concrete value substituted for every launch parameter.
@@ -202,6 +256,18 @@ impl Layout {
                 stride: Stride::from_derived(stride),
             }),
         }
+    }
+}
+
+/// Checks that every extent opposite XOR strides is static, so every carry-less product the
+/// layout forms is defined.
+fn static_under_xor(shape: &Shape, stride: &Stride) -> Result<(), LayoutError> {
+    if !stride.is_xor() {
+        return Ok(());
+    }
+    match shape.extents().into_iter().find(|extent| !extent.is_static()) {
+        Some(extent) => Err(LayoutError::XorOperand { operand: extent.to_string() }),
+        None => Ok(()),
     }
 }
 

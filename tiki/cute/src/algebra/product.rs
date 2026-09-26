@@ -5,6 +5,10 @@
 //! Both are built from composition and complement. A product repeats `A` at the offsets the
 //! tiler selects from the complement of `A`. A division splits `A` into the part the tiler
 //! selects, the tile, and the rest, which indexes the tiles.
+//!
+//! A product of an integer layout by an XOR tiler places integer copies at XOR offsets, whose
+//! strides lie in different codomains. PyCuTe returns such a layout, whose offsets have no sum,
+//! and a product here refuses it.
 
 use crate::LayoutError;
 use crate::layout::Layout;
@@ -16,12 +20,14 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// Returns the errors of [`Layout::complement`] and [`Layout::compose`].
+    /// Returns the errors of [`Layout::complement`] and [`Layout::compose`], and
+    /// [`LayoutError::MixedCodomain`] when the copies' offsets lie in another codomain than
+    /// `self`'s.
     pub fn logical_product(&self, tiler: &Tiler) -> Result<Layout, LayoutError> {
         match tiler {
             Tiler::Layout(_) => {
                 let copies = self.complement()?.compose(tiler)?;
-                Ok(Layout::from_modes([self.clone(), copies]))
+                Layout::try_from_modes([self.clone(), copies])
             }
             Tiler::Modes(tilers) => {
                 self.each_mode("logical product", tilers, Layout::logical_product)
@@ -66,6 +72,8 @@ impl Layout {
             });
         }
         let copies = self.complement()?.compose(&Tiler::from(tiler.clone()))?;
+        // The copies must lie in `self`'s codomain.
+        Layout::try_from_modes([self.clone(), copies.clone()])?;
         let copies: Vec<Layout> = copies.modes().collect();
         let modes: Vec<Layout> = self.modes().collect();
         Ok(modes.into_iter().zip(copies))

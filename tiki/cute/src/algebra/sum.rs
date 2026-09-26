@@ -6,6 +6,10 @@
 //! term walks its own axis of `A`, and the walks add pointwise. The sum is a layout only on a
 //! domain that refines both summands, so both are cut down to their greatest common domain
 //! first.
+//!
+//! An XOR summand is linear on the common domain only where the domain's modes split each of its
+//! modes at a power of two. PyCuTe skips that condition, so for `12:^1 + (3, 4):(^16, ^32)` it
+//! returns `(3, 4):(^17, ^35)`, which maps index 5 to `^1` where the sum is `^5`.
 
 use crate::LayoutError;
 use crate::error::{Condition, Verdict};
@@ -14,6 +18,7 @@ use crate::layout::Layout;
 use crate::poly::gcd;
 use crate::shape::Shape;
 use crate::stride::Stride;
+use crate::truth::Truth;
 use crate::tuple::Tuple;
 
 const OPERATION: &str = "layout addition";
@@ -23,8 +28,9 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// Returns [`Condition::SizeMatch`] when the sizes differ, and [`Condition::CommonDomain`]
-    /// when no common refinement covers the whole domain or an extent is dynamic.
+    /// Returns [`Condition::SizeMatch`] when the sizes differ, [`Condition::CommonDomain`] when
+    /// no common refinement covers the whole domain or an extent is dynamic, and
+    /// [`Condition::CarryFree`] when an XOR sum differs from the pointwise sum at an index.
     pub fn add(&self, other: &Layout) -> Result<Layout, LayoutError> {
         self.size().equals(&other.size()).require(OPERATION, Condition::SizeMatch)?;
 
@@ -46,7 +52,18 @@ impl Layout {
             steps.push(Tuple::Leaf(step));
         }
         let shape = Shape::from_derived(Tuple::node(extents));
-        Ok(Layout::from_parts(shape, Stride::from_derived(Tuple::Node(steps))).coalesce())
+        let sum = Layout::from_parts(shape, Stride::from_derived(Tuple::Node(steps))).coalesce();
+
+        // An XOR summand's steps add up to its offsets only where the common domain splits its
+        // modes at powers of two. Every extent is static here, so check each index.
+        if self.stride().is_xor() || other.stride().is_xor() {
+            for index in 0..covered.as_static().expect("the common domain is static") {
+                let pointwise = self.at(index).checked_add(&other.at(index));
+                Truth::from(pointwise == Some(sum.at(index)))
+                    .require(OPERATION, Condition::CarryFree)?;
+            }
+        }
+        Ok(sum)
     }
 }
 

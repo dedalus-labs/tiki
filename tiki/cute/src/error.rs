@@ -26,6 +26,10 @@ pub enum Condition {
     SizeMatch,
     /// Layout addition: both layouts refine one common domain, computed from static extents.
     CommonDomain,
+    /// XOR strides: every integer sum and product the operation relies on carries no bit, so it
+    /// equals its carry-less counterpart. An XOR index splits over a shape only when each extent
+    /// multiplies the prefix product before it without a carry.
+    CarryFree,
 }
 
 /// Why a precondition failed.
@@ -49,6 +53,7 @@ impl fmt::Display for Condition {
             Condition::RecastDivisibility => "recast divisibility",
             Condition::SizeMatch => "equal size",
             Condition::CommonDomain => "common domain",
+            Condition::CarryFree => "carry-free",
         };
         write!(f, "{name}")
     }
@@ -90,8 +95,9 @@ pub enum LayoutError {
         /// The extent, as printed.
         extent: String,
     },
-    /// A stride with both nonzero integers and arithmetic tuples, which have no common sum.
-    #[error("strides {stride} mix integers with arithmetic tuples")]
+    /// A stride whose offsets lie in codomains with no common sum: a nonzero integer, an
+    /// arithmetic tuple and an XOR value each exclude the other two.
+    #[error("strides {stride} mix codomains that have no common sum")]
     MixedCodomain {
         /// The stride, as printed.
         stride: String,
@@ -121,6 +127,22 @@ pub enum LayoutError {
         operation: &'static str,
         /// The stride, as printed.
         stride: String,
+    },
+    /// A stride an operation has no rule for because it is an XOR value, such as an XOR stride
+    /// in a complement.
+    #[error("{operation} has no rule for the XOR stride {stride}")]
+    XorStride {
+        /// The operation that received the stride.
+        operation: &'static str,
+        /// The stride, as printed.
+        stride: String,
+    },
+    /// An integer that must act on an XOR value but is negative or known only at launch, such as
+    /// a dynamic extent opposite an XOR stride. Carry-less arithmetic needs every bit.
+    #[error("XOR arithmetic needs a static nonnegative integer, got {operand}")]
+    XorOperand {
+        /// The integer, as printed.
+        operand: String,
     },
     /// Operands whose structures do not fit together, described in `detail`.
     #[error("{operation}: {detail}")]

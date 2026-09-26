@@ -9,7 +9,7 @@
 
 use proptest::prelude::*;
 use std::cmp::Ordering;
-use tiki_cute::{Int, Layout, Offset, Shape, Stride, Tuple};
+use tiki_cute::{Int, Layout, Offset, Shape, Stride, Tuple, Xor};
 
 /// Largest extent of a random leaf. Four leaves of this extent keep every domain at 256 or
 /// fewer coordinates, so the quadratic checks stay fast.
@@ -20,6 +20,10 @@ pub const MAX_STRIDE: i64 = 16;
 pub const MAX_LEAVES: usize = 4;
 /// Indices past the end of a complement at which its order is also checked, as PyCuTe does.
 pub const PAST_THE_END: i64 = 10;
+/// Largest bits of a random XOR stride, enough for strides whose bits overlap and cancel.
+pub const MAX_XOR_BITS: i64 = 64;
+/// Power-of-two extents of a random XOR layout on which an XOR index splits like an integer.
+pub const POWERS_OF_TWO: [i64; 4] = [1, 2, 4, 8];
 
 /// Nests `leaves` by `grouping`: 0 keeps them flat, 1 groups the first two, 2 groups the last
 /// two. A grouping that needs more leaves than there are keeps them flat.
@@ -49,6 +53,43 @@ pub fn layout_of(extents: &[i64], strides: &[i64], grouping: u8) -> Layout {
     let shape = Shape::try_from(nest(&extents, grouping)).expect("positive extents");
     let stride = Stride::try_from(nest(&strides, grouping)).expect("integer strides");
     Layout::new(shape, stride).expect("congruent")
+}
+
+/// Returns the XOR value with bits `value`, as an offset.
+pub fn xor(value: i64) -> Offset {
+    Offset::from(Xor::try_from(value).expect("nonnegative bits"))
+}
+
+/// Builds a layout with XOR strides from leaf extents and stride bits.
+pub fn xor_layout_of(extents: &[i64], bits: &[i64], grouping: u8) -> Layout {
+    let extents: Vec<Int> = extents.iter().map(|&e| Int::from(e)).collect();
+    let strides: Vec<Offset> = bits.iter().map(|&d| xor(d)).collect();
+    let shape = Shape::try_from(nest(&extents, grouping)).expect("positive extents");
+    let stride = Stride::try_from(nest(&strides, grouping)).expect("XOR strides");
+    Layout::new(shape, stride).expect("congruent")
+}
+
+prop_compose! {
+    /// A random layout with XOR strides: up to four leaves of extent 1 through 4, stride bits 0
+    /// through 64, flat or nested one level.
+    pub fn xor_layouts()(leaves in 1..=MAX_LEAVES)(
+        extents in prop::collection::vec(1..=MAX_EXTENT, leaves),
+        bits in prop::collection::vec(0..=MAX_XOR_BITS, leaves),
+        grouping in 0u8..3,
+    ) -> Layout {
+        xor_layout_of(&extents, &bits, grouping)
+    }
+}
+
+prop_compose! {
+    /// A random layout with XOR strides and power-of-two extents up to 8.
+    pub fn pow2_xor_layouts()(leaves in 1..=MAX_LEAVES)(
+        extents in prop::collection::vec(prop::sample::select(POWERS_OF_TWO.to_vec()), leaves),
+        bits in prop::collection::vec(0..=MAX_XOR_BITS, leaves),
+        grouping in 0u8..3,
+    ) -> Layout {
+        xor_layout_of(&extents, &bits, grouping)
+    }
 }
 
 prop_compose! {

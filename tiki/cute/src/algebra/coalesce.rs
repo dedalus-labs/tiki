@@ -6,6 +6,11 @@
 //! `d_b = s_a*d_a`: stepping off the end of the first mode lands where the second one starts.
 //! Coalescing applies that rule left to right and drops extent-1 modes, which add nothing to
 //! any offset.
+//!
+//! An XOR mode also needs `s_a` to be a power of two. With every product carry-less, the pair
+//! maps index `a + s_a*b`, for `a < s_a`, to `(a ^ s_a*b) * d_a`, and the merged mode maps it to
+//! `(a + s_a*b) * d_a`. The two agree for every `a` and `b` exactly when `s_a` is a power of two,
+//! which is what PyCuTe's second linearity check, at `(s_a - 1, 1)`, decides.
 
 use crate::LayoutError;
 use crate::int::Int;
@@ -86,6 +91,10 @@ impl Layout {
 /// so a merge is always sound. A merge that holds for only some launches is skipped, which
 /// leaves a correct layout that is less coalesced.
 pub(crate) fn flat_modes(layout: &Layout) -> Vec<FlatMode> {
+    // An XOR mode merges only across a power-of-two extent, and never across a dynamic one.
+    let joins = |extent: &Int, step: &Offset| {
+        step.as_xor().is_none() || extent.as_static().is_some_and(|s| s.count_ones() == 1)
+    };
     let mut merged: Vec<FlatMode> = Vec::new();
     for (extent, step) in layout.shape().extents().into_iter().zip(layout.stride().steps()) {
         // An extent-1 mode before this one contributes nothing and must not block a merge.
@@ -93,7 +102,8 @@ pub(crate) fn flat_modes(layout: &Layout) -> Vec<FlatMode> {
             merged.pop();
         }
         if let Some((last_extent, last_step)) = merged.last_mut()
-            && last_step.scale(last_extent) == *step
+            && last_step.checked_scale(last_extent).as_ref() == Some(step)
+            && joins(last_extent, last_step)
         {
             *last_extent = &*last_extent * extent;
             continue;
