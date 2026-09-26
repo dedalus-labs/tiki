@@ -23,8 +23,8 @@ General
 .. envvar:: MLX_ENABLE_TF32
 
    Allow reduced-precision ``float32`` matrix-multiplication family operations
-   on supported hardware. The default is ``1``. Set it to ``0`` to keep these
-   operations in full ``float32`` precision. See :doc:`precision`.
+   on supported hardware. The default is ``0``, full ``float32`` precision.
+   Set it to ``1`` to opt in. See :doc:`precision`.
 
 Distributed
 -----------
