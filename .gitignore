@@ -77,5 +77,8 @@ uv.lock
 .vscode/
 # Jetbrains
 .cache/
+node_modules/
+!.github/actions/ci/*/dist/
+!.github/actions/ci/*/dist/index.js
 # vim
 *.swp

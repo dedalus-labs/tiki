@@ -1,0 +1,46 @@
+import { workflow } from "@dedalus-labs/hollywood";
+
+export const documentation = workflow(
+  {
+    name: "Documentation",
+    on: {
+      workflow_dispatch: null,
+    },
+    permissions: {
+      contents: "read",
+    },
+    jobs: {
+      build: {
+        "runs-on": "ubuntu-22.04",
+        steps: [
+          {
+            uses: "actions/checkout@v7",
+          },
+          {
+            uses: "./.github/actions/build-docs",
+          },
+        ],
+      },
+      deploy: {
+        needs: "build",
+        permissions: {
+          pages: "write",
+          "id-token": "write",
+        },
+        "runs-on": "ubuntu-latest",
+        environment: {
+          name: "github-pages",
+          url: "${{ steps.deployment.outputs.page_url }}",
+        },
+        steps: [
+          {
+            name: "Deploy to GitHub Pages",
+            id: "deployment",
+            uses: "actions/deploy-pages@v5",
+          },
+        ],
+      },
+    },
+  },
+  { filename: "documentation.yml" },
+);
