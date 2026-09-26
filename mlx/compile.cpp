@@ -652,12 +652,19 @@ void compile_simplify(
 
   // Merge scalars
   std::vector<array> new_tape;
+  std::unordered_map<uintptr_t, array> output_map;
+  for (auto& o : outputs) {
+    output_map.insert({o.id(), o});
+  }
   for (auto& arr : tape) {
     // Check if we can merge scalars
     if (is_scalar(arr)) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
         merge(scalar->second, arr, parents_map);
+        if (auto it = output_map.find(arr.id()); it != output_map.end()) {
+          it->second = scalar->second;
+        }
         // Don't keep orphaned scalars in the tape
         continue;
       }
@@ -668,10 +675,6 @@ void compile_simplify(
 
   // Remove no-ops
   {
-    std::unordered_map<uintptr_t, array> output_map;
-    for (auto& o : outputs) {
-      output_map.insert({o.id(), o});
-    }
     for (auto& arr : tape) {
       if (!arr.has_primitive() || !is_noop(arr.primitive())) {
         new_tape.push_back(std::move(arr));

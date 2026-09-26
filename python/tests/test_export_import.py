@@ -24,6 +24,84 @@ class TestExportImport(mlx_tests.MLXTestCase):
     def tearDownClass(cls):
         cls.test_dir_fid.cleanup()
 
+    def test_imported_constants_can_be_reexported_before_evaluation(self):
+        source = os.path.join(self.test_dir, "constant-source.mlxfn")
+        destination = os.path.join(self.test_dir, "constant-copy.mlxfn")
+        sample = mx.array([1, 2])
+        for values in (3, [3, 5]):
+            constant = mx.array(values)
+
+            def fun(value):
+                return value + constant
+
+            mx.export_function(source, fun, sample)
+            for mode in ("callback", "file"):
+                with self.subTest(values=values, mode=mode):
+                    imported = mx.import_function(source)
+                    if mode == "callback":
+                        events = []
+                        mx.export_function(events.append, imported, sample)
+                        constants = next(
+                            event["constants"]
+                            for event in events
+                            if event["type"] == "constants"
+                        )
+                        self.assertEqual(len(constants), 1)
+                        self.assertTrue(mx.array_equal(constants[0][1], constant))
+                        primitives = [
+                            event["name"]
+                            for event in events
+                            if event["type"] == "primitive"
+                        ]
+                        self.assertIn("Add", primitives)
+                        self.assertNotIn("Load", primitives)
+                    else:
+                        mx.export_function(destination, imported, sample)
+                        copied = mx.import_function(destination)
+                        self.assertTrue(mx.array_equal(copied(sample)[0], fun(sample)))
+
+    def test_equal_scalar_outputs_remain_declared_after_export(self):
+        source = os.path.join(self.test_dir, "scalar-source.mlxfn")
+        destination = os.path.join(self.test_dir, "scalar-pair.mlxfn")
+        mx.export_function(source, lambda: mx.array(3))
+        for origin in ("literal", "imported"):
+            for mode in ("callback", "file"):
+                with self.subTest(origin=origin, mode=mode):
+                    left, right = mx.import_function(source), mx.import_function(source)
+
+                    def pair():
+                        if origin == "imported":
+                            return left()[0], right()[0]
+                        return mx.array(3), mx.array(3)
+
+                    if mode == "callback":
+                        events = []
+                        mx.export_function(events.append, pair)
+                        outputs = next(
+                            event["outputs"]
+                            for event in events
+                            if event["type"] == "outputs"
+                        )
+                        constants = dict(
+                            next(
+                                event["constants"]
+                                for event in events
+                                if event["type"] == "constants"
+                            )
+                        )
+                        self.assertEqual(len(outputs), 2)
+                        for name, shape, dtype in outputs:
+                            self.assertEqual(shape, ())
+                            self.assertEqual(dtype, mx.int32)
+                            self.assertIn(name, constants)
+                            self.assertEqual(constants[name].item(), 3)
+                    else:
+                        mx.export_function(destination, pair)
+                        copied = mx.import_function(destination)
+                        self.assertEqual(
+                            tuple(value.item() for value in copied()), (3, 3)
+                        )
+
     def test_exported_singleton_slice_preserves_its_derivative(self):
         path = os.path.join(self.test_dir, "singleton-slice.mlxfn")
         sample = mx.array([2.0, 5.0])
