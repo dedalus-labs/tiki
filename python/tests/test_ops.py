@@ -2646,6 +2646,24 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.as_strided(x, (-2, 3), (3, 1), 0)
 
+    def test_dtype_views_support_unaligned_byte_origins(self):
+        for dtype in (
+            mx.float16,
+            mx.bfloat16,
+            mx.float32,
+            mx.int32,
+            mx.int64,
+            mx.uint64,
+        ):
+            with self.subTest(dtype=dtype):
+                values = mx.arange(65).astype(dtype)
+                payload = values.view(mx.uint8).tolist()
+                storage = mx.array([17, *payload], dtype=mx.uint8)
+                view = storage[1:].view(dtype)
+                self.assertEqual(view.view(mx.uint8).tolist(), payload)
+                self.assertEqual(view.astype(mx.int64).tolist(), list(range(65)))
+                self.assertEqual((view + view).tolist(), list(range(0, 130, 2)))
+
     def test_as_strided_uses_logical_row_order(self):
         values = mx.arange(12, dtype=mx.float32)
         sources = (
