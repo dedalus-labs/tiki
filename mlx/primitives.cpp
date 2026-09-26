@@ -3329,15 +3329,19 @@ std::vector<array> Pad::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  assert(argnums.size() == 1 && argnums[0] == 0);
+  if (argnums.size() != 1 || argnums[0] != 0) {
+    throw std::invalid_argument(
+        "[Pad::vjp] Derivatives of the padding value are not supported.");
+  }
 
   auto& cotan = cotangents[0];
   Shape start(cotan.ndim(), 0);
   auto stop = cotan.shape();
 
-  for (auto i : axes_) {
-    start[i] = low_pad_size_[i];
-    stop[i] -= high_pad_size_[i];
+  for (size_t i = 0; i < axes_.size(); ++i) {
+    auto axis = normalize_axis_index(axes_[i], cotan.ndim(), "[Pad::vjp] ");
+    start[axis] += low_pad_size_[i];
+    stop[axis] -= high_pad_size_[i];
   }
 
   auto out = slice(cotan, start, stop, stream());
@@ -3349,7 +3353,10 @@ std::vector<array> Pad::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  assert(argnums.size() == 1 && argnums[0] == 0);
+  if (argnums.size() != 1 || argnums[0] != 0) {
+    throw std::invalid_argument(
+        "[Pad::jvp] Derivatives of the padding value are not supported.");
+  }
 
   return {
       pad(tangents[0],
