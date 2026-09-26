@@ -1477,7 +1477,7 @@ std::vector<array> Convolution::vjp(
 
         int64_t in_size = dilate_size(in.shape(1 + i), input_dilation_[i]);
         int64_t out_size = dilate_size(cotan.shape(1 + i), kernel_strides_[i]);
-        padding_hi[i] = safe_cast(in_size - out_size + padding_hi_[i], "conv");
+        padding_hi[i] = safe_cast(in_size - out_size + padding_lo_[i], "conv");
       }
 
       // Check for negative padding
@@ -1489,25 +1489,38 @@ std::vector<array> Convolution::vjp(
         has_neg_padding |= (pd < 0);
       }
 
+      auto grad_strides = input_dilation_;
+      auto grad_padding_lo = padding_lo;
+      auto grad_padding_hi = padding_hi;
+      if (has_neg_padding) {
+        for (int i = 0; i < grad_strides.size(); ++i) {
+          grad_strides[i] = 1;
+          grad_padding_lo[i] = std::max(padding_lo[i], 0);
+          grad_padding_hi[i] = std::max(padding_hi[i], 0);
+        }
+      }
+
       auto wt_trans = group_transpose(wt, 0, 1, -1);
       auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
-          /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding_lo = */ padding_lo,
-          /* std::vector<int> padding_hi = */ padding_hi,
+          /* std::vector<int> stride = */ grad_strides,
+          /* std::vector<int> padding_lo = */ grad_padding_lo,
+          /* std::vector<int> padding_hi = */ grad_padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ groups_,
           /* bool flip = */ !flip_,
           stream());
 
-      // Handle negative padding
+      // Crop in dilated coordinates before restoring the input spacing.
       if (has_neg_padding) {
         Shape starts(grad.ndim(), 0);
         auto stops = grad.shape();
+        Shape strides(grad.ndim(), 1);
 
         for (int i = 0; i < grad.ndim() - 2; i++) {
+          strides[i + 1] = input_dilation_[i];
           if (padding_lo[i] < 0) {
             starts[i + 1] = safe_cast(
                 starts[i + 1] - static_cast<int64_t>(padding_lo[i]), "conv");
@@ -1517,7 +1530,12 @@ std::vector<array> Convolution::vjp(
           }
         }
 
-        grad = slice(grad, std::move(starts), std::move(stops), stream());
+        grad = slice(
+            grad,
+            std::move(starts),
+            std::move(stops),
+            std::move(strides),
+            stream());
       }
 
       grads.push_back(grad);
