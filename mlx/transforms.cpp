@@ -609,6 +609,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   }
 
   std::vector<array> tape;
+  std::vector<array> stopped_inputs;
 
   std::function<void(array&)> recurse;
   recurse = [&](auto& a) {
@@ -622,15 +623,19 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       cache.insert(s.id());
     }
 
-    for (auto input : a.inputs()) {
-      recurse(input);
-    }
-
-    // Stop grad
+    // Nothing upstream of a stop_gradient carries a tangent, so do not tape
+    // it. Taping it would call jvp on primitives that never need one, such as
+    // the forward of a custom_function with its own jvp rule.
     if (a.has_primitive()) {
       if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
+        stopped_inputs.insert(
+            stopped_inputs.end(), a.inputs().begin(), a.inputs().end());
         return;
       }
+    }
+
+    for (auto input : a.inputs()) {
+      recurse(input);
     }
 
     // Calculate gradient if any inputs require gradient
@@ -648,6 +653,23 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
 
   for (auto out : outputs) {
     recurse(out);
+  }
+
+  // Clear stopped ancestors after live paths are taped so shared nodes still
+  // receive tangents without leaving stale tracers in the completed graph.
+  while (!stopped_inputs.empty()) {
+    auto a = stopped_inputs.back();
+    stopped_inputs.pop_back();
+    if (auto inserted = cache.insert(a.id()); !inserted.second) {
+      continue;
+    }
+    a.set_tracer(false);
+    for (auto& s : a.siblings()) {
+      s.set_tracer(false);
+      cache.insert(s.id());
+    }
+    stopped_inputs.insert(
+        stopped_inputs.end(), a.inputs().begin(), a.inputs().end());
   }
 
   std::unordered_map<std::uintptr_t, array> tan_map;
