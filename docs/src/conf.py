@@ -3,21 +3,79 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
+import shutil
 import subprocess
+from pathlib import Path
 
 import mlx.core as mx
 
+# -- Repository documents ----------------------------------------------------
+# The compiler, scan, and runtime pages are the experiment directories' own
+# Markdown, copied here before Sphinx reads the tree so their relative links
+# resolve as pages. The copies are build products, ignored by git.
+
+
+REPOSITORY = Path(__file__).resolve().parents[2]
+SECTIONS = {
+    "compile": "experiments/cute_backend",
+    "scan": "experiments/associative_scan",
+    "runtime": "experiments/rust_backend",
+}
+
+
+GITHUB = "https://github.com/dedalus-labs/tiki/blob/main"
+
+
+def repository_page(
+    source: Path, target: Path, root: Path, title: str | None = None
+) -> None:
+    """Copy one repository document as a page; links to other repository files go to GitHub."""
+    text = source.read_text()
+    if title:
+        text = text.replace(text.split("\n", 1)[0], f"# {title}", 1)
+
+    def link(match: re.Match[str]) -> str:
+        label, href = match.group(1), match.group(2)
+        if "://" in href or href.startswith("#") or href.startswith("mailto:"):
+            return match.group(0)
+        path, _, fragment = href.partition("#")
+        resolved = (source.parent / path).resolve()
+        if not resolved.exists() or root not in resolved.parents:
+            return match.group(0)
+        return f"[{label}]({GITHUB}/{resolved.relative_to(root)}{'#' + fragment if fragment else ''})"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, text))
+
+
+for section, directory in SECTIONS.items():
+    target = Path(__file__).resolve().parent / "tiki" / section
+    shutil.rmtree(target, ignore_errors=True)
+    repository_page(
+        REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY
+    )
+repository_page(
+    REPOSITORY / "README.md",
+    Path(__file__).resolve().parent / "tiki" / "vision.md",
+    REPOSITORY,
+    title="Vision",
+)
+
 # -- Project information -----------------------------------------------------
 
-project = "MLX"
-copyright = "2023, Apple"
-author = "MLX Contributors"
+project = "Tiki"
+copyright = "2026 Dedalus Labs, Inc"
+author = "Dedalus Labs"
 version = ".".join(mx.__version__.split(".")[:3])
 release = version
 
 # -- General configuration ---------------------------------------------------
 
 extensions = [
+    "myst_parser",
+    "sphinxcontrib.mermaid",
+    "sphinx_design",
     "sphinx_copybutton",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
@@ -31,8 +89,8 @@ python_use_unqualified_type_names = True
 autodoc_type_aliases = {"Coordinate": "mlx.tiki.composed.Coordinate"}
 autosummary_generate = True
 autosummary_filename_map = {
-    "mlx.core.Stream": "stream_class",
-    "mlx.core.PrintOptions": "printoptions_class",
+    "tiki.Stream": "stream_class",
+    "tiki.PrintOptions": "printoptions_class",
 }
 
 intersphinx_mapping = {
@@ -40,37 +98,63 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
-breathe_projects = {"mlx": "../build/xml"}
-breathe_default_project = "mlx"
+breathe_projects = {"tiki": "../build/xml"}
+breathe_default_project = "tiki"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]
-source_suffix = ".rst"
+html_css_files = ["tiki.css"]
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 main_doc = "index"
+myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "attrs_block"]
+myst_heading_anchors = 3
+
+myst_fence_as_directive = ["mermaid"]
 highlight_language = "python"
 pygments_style = "sphinx"
 add_module_names = False
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = "sphinx_book_theme"
+html_theme = "pydata_sphinx_theme"
+html_title = "Tiki"
+html_baseurl = "https://oss.dedaluslabs.ai/tiki/"
+html_show_sourcelink = False
+html_favicon = "_static/tiki-logo.png"
 
 html_theme_options = {
-    "show_toc_level": 2,
-    "repository_url": "https://github.com/dedalus-labs/tiki",
-    "use_repository_button": True,
-    "navigation_with_keys": False,
     "logo": {
-        "image_light": "_static/mlx_logo.png",
-        "image_dark": "_static/mlx_logo_dark.png",
+        "text": "Tiki",
+        "image_light": "_static/tiki-logo.svg",
+        "image_dark": "_static/tiki-logo.svg",
+        "alt_text": "Tiki",
     },
+    "github_url": "https://github.com/dedalus-labs/tiki",
+    "use_edit_page_button": True,
+    "show_toc_level": 2,
+    "show_nav_level": 1,
+    "navigation_depth": 1,
+    "collapse_navigation": False,
+    "navigation_with_keys": False,
+    "navbar_align": "left",
+    "navbar_end": ["theme-switcher", "navbar-icon-links"],
+    "secondary_sidebar_items": ["page-toc", "edit-this-page"],
+    "footer_start": ["copyright"],
+    "footer_end": ["sphinx-version", "theme-version"],
+    "pygments_light_style": "default",
+    "pygments_dark_style": "monokai",
 }
 
-html_favicon = html_theme_options["logo"]["image_light"]
+html_context = {
+    "github_user": "dedalus-labs",
+    "github_repo": "tiki",
+    "github_version": "main",
+    "doc_path": "docs/src",
+}
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
-htmlhelp_basename = "mlx_doc"
+htmlhelp_basename = "tiki_doc"
 
 
 def setup(app):
@@ -89,7 +173,7 @@ def setup(app):
 
 # -- Options for LaTeX output ------------------------------------------------
 
-latex_documents = [(main_doc, "MLX.tex", "MLX Documentation", author, "manual")]
+latex_documents = [(main_doc, "Tiki.tex", "Tiki Documentation", author, "manual")]
 latex_elements = {
     "preamble": r"""
     \usepackage{enumitem}

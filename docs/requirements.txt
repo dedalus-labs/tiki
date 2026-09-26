@@ -1,5 +1,7 @@
 sphinx
-breathe
-sphinx-book-theme
+pydata-sphinx-theme
+myst-parser
+sphinx-design
 sphinx-copybutton
-mlx
+sphinxcontrib-mermaid
+breathe

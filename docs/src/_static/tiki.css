@@ -1,0 +1,92 @@
+/* Tiki palette: the mark's vermilion, ember orange, and golden yellow, with
+   darker links on the light background for contrast. Body text stays neutral. */
+html[data-theme="light"] {
+  --pst-color-primary: #e5330f;
+  --pst-color-primary-highlight: #ff7a17;
+  --pst-color-secondary: #ff7a17;
+  --pst-color-link: #c92c0b;
+  --pst-color-link-hover: #ff7a17;
+  --pst-color-inline-code-links: #c92c0b;
+  --pst-color-accent: #ffc62b;
+}
+html[data-theme="dark"] {
+  --pst-color-primary: #ff7a17;
+  --pst-color-primary-highlight: #ffa04d;
+  --pst-color-secondary: #ffc62b;
+  --pst-color-link: #ffa04d;
+  --pst-color-link-hover: #ffc62b;
+  --pst-color-inline-code-links: #ffa04d;
+  --pst-color-accent: #ff3f2e;
+}
+html {
+  --pst-font-family-monospace: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+/* The torch line: the three bar colors as a stripe over the header. */
+.bd-header {
+  border-top: 4px solid transparent;
+  border-image: linear-gradient(90deg, #ff3f2e 0%, #ff7a17 50%, #ffc62b 100%) 1;
+}
+/* Wordmark order: the name, then the mark. */
+.navbar-brand {
+  flex-direction: row-reverse;
+  gap: 0.5rem;
+}
+.navbar-brand img {
+  height: 30px;
+}
+.navbar-brand .title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.bd-article p, .bd-article li {
+  max-width: 72ch;
+}
+.sd-card {
+  border-color: var(--pst-color-border);
+}
+.sd-card:hover {
+  border-color: var(--pst-color-primary);
+}
+.sd-card .sd-card-title {
+  font-weight: 600;
+}
+
+/* Primary sidebar: narrow, quiet. The page titles carry the hierarchy; the
+   theme's caption and collapse label only add width. */
+.bd-sidebar-primary:not(.pst-squeeze) {
+  flex: 0 0 15rem;
+  max-width: 15rem;
+  padding: 1.25rem 0.75rem 2rem 1rem;
+  font-size: 0.875rem;
+}
+.bd-sidebar-primary .bd-links__title {
+  display: none;
+}
+.bd-sidebar-primary .pst-collapse-sidebar-label,
+.bd-sidebar-primary .pst-expand-sidebar-label {
+  display: none;
+}
+.bd-sidebar-primary .pst-collapse-sidebar-button {
+  padding: 0.25rem;
+}
+.bd-sidebar-primary .bd-links .toctree-l1 > a,
+.bd-sidebar-primary .bd-links .caption-text {
+  font-size: 0.875rem;
+}
+.bd-sidebar-primary .bd-links li > a {
+  padding-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+.bd-sidebar-primary .bd-links .caption {
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+html {
+  --pst-sidebar-secondary: 14rem;
+}
+.bd-sidebar-secondary {
+  font-size: 0.875rem;
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="tiki-title tiki-description">
+  <title id="tiki-title">Tiki</title>
+  <desc id="tiki-description">Three centered diagonal bars in vermilion, ember orange, and golden yellow. Lengths follow a 4:3:2 ratio, with equal thickness, five-eighths-thickness gaps, and vertical end cuts. The background is transparent.</desc>
+  <g transform="translate(512 551.764501987817) matrix(1 -0.414213562373095 0 1 0 0)">
+    <path fill="#FF3F2E" d="M-384-221H384V-117H-384Z"/>
+    <path fill="#FF7A17" d="M-288-52H288V52H-288Z"/>
+    <path fill="#FFC62B" d="M-192 117H192V221H-192Z"/>
+  </g>
+</svg>

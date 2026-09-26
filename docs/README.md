@@ -37,14 +37,11 @@ python -m http.server <port>
 
 and point your browser to `http://localhost:<port>`.
 
-### Push to GitHub Pages
+### Deploy
 
-Check-out the `gh-pages` branch (`git switch gh-pages`) and build
-the docs. Then force add the `build/html` directory:
-
-`git add -f build/html`
-
-Commit and push the changes to the `gh-pages` branch.
+The Docs workflow, defined in `gha/docs.ts` and generated into
+`.github/workflows/docs.yml`, builds the site for every pull request that
+touches it and deploys `main` to GitHub Pages.
 
 ## Doc Development Setup
 
