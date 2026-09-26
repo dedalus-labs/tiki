@@ -7,6 +7,14 @@
 constant bool forward [[function_constant(1)]];
 constant bool traditional [[function_constant(2)]];
 constant bool hs_transpose [[function_constant(3)]];
+constant bool offset_is_unsigned [[function_constant(4)]];
+
+float rope_position(int offset, uint position) {
+  // Add in 64 bits so negative offsets and uint32 limits do not wrap.
+  long start = offset_is_unsigned ? static_cast<long>(as_type<uint>(offset))
+                                 : static_cast<long>(offset);
+  return static_cast<float>(start + static_cast<long>(position));
+}
 
 template <typename T>
 void rope_single_impl(
@@ -18,12 +26,12 @@ void rope_single_impl(
     constant const int64_t& stride,
     uint2 pos,
     uint2 grid) {
-  float L = scale * static_cast<float>(offset);
+  float L = scale * rope_position(offset, 0);
 
   // Compute costheta, sintheta
   float theta = L * inv_freq;
-  float costheta = metal::fast::cos(theta);
-  float sintheta = metal::fast::sin(theta);
+  float costheta = metal::precise::cos(theta);
+  float sintheta = metal::precise::sin(theta);
 
   // Compute the input and output indices
   uint index_1, index_2;
@@ -98,13 +106,13 @@ void rope_impl(
   auto head_idx = static_cast<int>((pos.z * N) % n_head_up);
   auto batch_idx = (pos.z * N) / n_head_up;
   auto batch_offset = offset[batch_idx * offset_stride];
-  float L = scale * static_cast<float>(pos.y + batch_offset);
+  float L = scale * rope_position(batch_offset, pos.y);
   auto mat_idx = batch_idx * n_head + head_idx;
 
   // Compute costheta, sintheta
   float theta = L * inv_freq;
-  float costheta = metal::fast::cos(theta);
-  float sintheta = metal::fast::sin(theta);
+  float costheta = metal::precise::cos(theta);
+  float sintheta = metal::precise::sin(theta);
   // Compute the input and output indices
   IdxT in_index_1;
   if (hs_transpose) {
