@@ -15,9 +15,10 @@ pub enum Condition {
     /// Composition: the modes of a hierarchical right layout have segregated images, so no sum
     /// of their offsets carries across a mode of the left layout (Equation 23).
     SegregatedImages,
-    /// Complement and left inverse: no two coordinates reach the same offset.
+    /// Left inverse: no two coordinates reach the same offset.
     Injective,
-    /// Left inverse: each stride is a multiple of the extents below it.
+    /// Complement and left inverse: sorted by stride, each mode starts at or past the end of the
+    /// chain below it, and for the left inverse at a multiple of that chain's size.
     OrderedChain,
     /// Recast: each stride and the scale factor divide one another.
     RecastDivisibility,
@@ -128,6 +129,14 @@ pub enum LayoutError {
         operation: &'static str,
         /// What does not fit, with the values involved.
         detail: String,
+    },
+    /// A value substituted for a launch parameter that breaks the parameter's facts.
+    #[error("parameter {param} does not admit the value {value}")]
+    Inadmissible {
+        /// The parameter, as printed.
+        param: String,
+        /// The rejected value.
+        value: i64,
     },
     /// A launch parameter declared with a divisor below 1.
     #[error("parameter {name} needs a positive divisor, got {divisor}")]

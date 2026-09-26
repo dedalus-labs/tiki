@@ -22,9 +22,10 @@ use std::sync::Arc;
 
 /// An integer the layout algebra computes with.
 ///
-/// Constant polynomials are always `Static`, so two `Int`s are structurally equal exactly when
-/// they are equal for every launch. Arithmetic panics on `i64` overflow, which only a layout
-/// spanning more than 2^63 elements reaches.
+/// Constant polynomials are always `Static`, and structurally equal `Int`s are equal for every
+/// launch. The converse fails: `floor(floor(M / 2) / 2)` and `floor(M / 4)` agree for every `M`
+/// but differ structurally, so structural inequality never proves two values differ. Arithmetic
+/// panics on `i64` overflow, which only a layout spanning more than 2^63 elements reaches.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Int {
     /// A compile-time constant.
@@ -69,7 +70,7 @@ impl Int {
             return Int::Static(floor_div(*a, *b));
         }
         let (a, b) = (self.poly(), divisor.poly());
-        if let Some(quotient) = a.exact_div(&b) {
+        if let Some(quotient) = divisor.exact_divisor().and_then(|_| a.exact_div(&b)) {
             return Int::from_poly(quotient);
         }
         // A static divisor splits the dividend into the terms it provably divides and a rest.
@@ -111,7 +112,8 @@ impl Int {
     ///
     /// A static divisor is proven from the coefficients and the parameters' divisors, so `8*N`
     /// is a multiple of 16 when `N` is a multiple of 2. A dynamic divisor is proven only by
-    /// exact polynomial division, so `N*M` is a multiple of `N`.
+    /// exact polynomial division by a divisor that is nonzero for every launch, so `N*M` is a
+    /// multiple of `N`.
     #[must_use]
     pub fn is_multiple_of(&self, divisor: &Int) -> Truth {
         match (self, divisor) {
@@ -119,9 +121,21 @@ impl Int {
             (_, Int::Static(b)) if *b != 0 && self.poly().known_multiple() % b == 0 => {
                 Truth::Proven
             }
-            _ if self.poly().exact_div(&divisor.poly()).is_some() => Truth::Proven,
+            _ if divisor.exact_divisor().and_then(|b| self.poly().exact_div(&b)).is_some() => {
+                Truth::Proven
+            }
             _ => Truth::Open,
         }
+    }
+
+    /// Returns this as a polynomial divisor when it is nonzero for every launch.
+    ///
+    /// Exact polynomial division cancels factors, and cancelling a factor that can be zero
+    /// proves too much: `floor(N / 2)` cancels against itself to 1, yet it is 0 when `N` is 1.
+    /// A parameter is never zero, but a quotient atom can be.
+    fn exact_divisor(&self) -> Option<Poly> {
+        let nonzero = self.is_positive().is_proven() || (-self).is_positive().is_proven();
+        nonzero.then(|| self.poly())
     }
 
     #[must_use]
@@ -148,6 +162,15 @@ impl Int {
     /// Returns the order of `self` and `other` when it is the same for every launch.
     pub(crate) fn compare(&self, other: &Int) -> Option<Ordering> {
         (self - other).sign()
+    }
+
+    /// Returns each term of the value as its own `Int`, in printing order. Zero has none.
+    pub(crate) fn summands(&self) -> Vec<Int> {
+        match self {
+            Int::Static(0) => Vec::new(),
+            Int::Static(value) => vec![Int::Static(*value)],
+            Int::Dynamic(poly) => poly.summands().into_iter().map(Int::from_poly).collect(),
+        }
     }
 
     /// Returns the value under a concrete assignment of every parameter.

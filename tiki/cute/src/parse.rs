@@ -4,11 +4,17 @@
 //!
 //! ```text
 //! item   := "_" | group [":" group]        a hole, a shape or tuple, or a layout
-//! group  := "(" item ("," item)* [","] ")" | sum
-//! sum    := term ("+" term)*               an integer, or an arithmetic tuple
-//! term   := factor ("*" factor)* ("@" digits)*
-//! factor := digits | name | "-" factor     a name is a positive launch parameter
+//! group   := "(" item ("," item)* [","] ")" | sum
+//! sum     := term (("+" | "-") term)*          an integer, or an arithmetic tuple
+//! term    := product ("@" digits)*
+//! product := factor ("*" factor)*
+//! factor  := digits | name | "-" factor | "(" expr ")" | "floor(" factor "/" factor ")"
+//! expr    := product (("+" | "-") product)*
 //! ```
+//!
+//! A name is a launch parameter that admits every positive integer. CuTe notation carries no
+//! divisor facts, so a layout printed from a parameter with a divisor parses back with a
+//! positive parameter of the same name.
 //!
 //! `5@2@1` is `5 * E(1, 2)`, as PyCuTe prints it: the basis modes are written innermost first.
 //!
@@ -32,6 +38,9 @@ use crate::stride::Stride;
 use crate::tiler::Tiler;
 use crate::tuple::Tuple;
 use std::str::FromStr;
+
+/// The function name the printer uses for an opaque quotient.
+const FLOOR: &str = "floor";
 
 /// One parsed item, before the caller says what it must be.
 enum Item {
@@ -136,21 +145,25 @@ impl<'a> Parser<'a> {
 
     fn sum(&mut self) -> Result<Offset, LayoutError> {
         let mut sum = self.term()?;
-        while self.eat('+') {
+        loop {
+            let negate = if self.eat('+') {
+                false
+            } else if self.eat('-') {
+                true
+            } else {
+                return Ok(sum);
+            };
             let at = self.at;
             let term = self.term()?;
+            let term = if negate { term.scale(&Int::Static(-1)) } else { term };
             sum = sum
                 .checked_add(&term)
                 .ok_or_else(|| self.error_at(at, "a term in the same codomain"))?;
         }
-        Ok(sum)
     }
 
     fn term(&mut self) -> Result<Offset, LayoutError> {
-        let mut value = self.factor()?;
-        while self.eat('*') {
-            value = &value * &self.factor()?;
-        }
+        let value = self.product()?;
         // PyCuTe writes the innermost basis mode first, so `5@2@1` is `5 * E(1, 2)`.
         let mut path = Vec::new();
         while self.eat('@') {
@@ -162,30 +175,80 @@ impl<'a> Parser<'a> {
         Ok(Offset::scaled_basis(value, &path))
     }
 
+    /// An integer expression: products joined by `+` and `-`. It appears only inside
+    /// parentheses, where no tuple can start, so it never competes with a stride sum.
+    fn expression(&mut self) -> Result<Int, LayoutError> {
+        let mut value = self.product()?;
+        loop {
+            if self.eat('+') {
+                value = &value + &self.product()?;
+            } else if self.eat('-') {
+                value = &value - &self.product()?;
+            } else {
+                return Ok(value);
+            }
+        }
+    }
+
+    fn product(&mut self) -> Result<Int, LayoutError> {
+        let mut value = self.factor()?;
+        while self.eat('*') {
+            value = &value * &self.factor()?;
+        }
+        Ok(value)
+    }
+
     fn factor(&mut self) -> Result<Int, LayoutError> {
-        self.skip_space();
         if self.eat('-') {
             return Ok(-&self.factor()?);
+        }
+        if self.eat('(') {
+            let value = self.expression()?;
+            self.expect(')')?;
+            return Ok(value);
         }
         match self.peek() {
             Some(c) if c.is_ascii_digit() => Ok(Int::Static(self.digits()?)),
             Some(c) if c.is_ascii_alphabetic() => {
-                let start = self.at;
-                while self.peek().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_') {
-                    self.at += 1;
+                let name = self.name();
+                if name == FLOOR && self.eat('(') {
+                    return self.quotient();
                 }
-                Ok(Int::from(Param::positive(&self.text[start..self.at])))
+                Ok(Int::from(Param::positive(name)))
             }
             _ => Err(self.error("an integer or a parameter name")),
         }
     }
 
+    /// The rest of `floor(p/q)` after its opening parenthesis.
+    fn quotient(&mut self) -> Result<Int, LayoutError> {
+        let dividend = self.factor()?;
+        if !self.eat('/') {
+            return Err(self.error("the '/' of a floor quotient"));
+        }
+        let divisor = self.factor()?;
+        self.expect(')')?;
+        Ok(dividend.div_floor(&divisor))
+    }
+
+    /// Reads a parameter name. Names are ASCII letters, digits and underscores, scanned without
+    /// skipping whitespace, so `N ` and `N` are one name.
+    fn name(&mut self) -> &'a str {
+        let start = self.at;
+        let length = self.text[start..]
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(self.text.len() - start);
+        self.at += length;
+        &self.text[start..self.at]
+    }
+
     fn digits(&mut self) -> Result<i64, LayoutError> {
         self.skip_space();
         let start = self.at;
-        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
-            self.at += 1;
-        }
+        let length = self.text[start..]
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(self.text.len() - start);
+        self.at += length;
         self.text[start..self.at].parse().map_err(|_| self.error_at(start, "an integer"))
     }
 
@@ -206,10 +269,11 @@ impl<'a> Parser<'a> {
         if self.eat(expected) { Ok(()) } else { Err(self.error("a closing parenthesis")) }
     }
 
+    /// Skips whitespace by whole characters, so a multi-byte space such as U+00A0 never leaves
+    /// the cursor inside a character.
     fn skip_space(&mut self) {
-        while self.text[self.at..].starts_with(char::is_whitespace) {
-            self.at += 1;
-        }
+        let rest = &self.text[self.at..];
+        self.at += rest.len() - rest.trim_start().len();
     }
 
     fn error(&self, expected: &'static str) -> LayoutError {

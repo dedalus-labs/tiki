@@ -44,6 +44,11 @@ fn recast_mode(
     step: &Offset,
     scale: &Tuple<Int>,
 ) -> Result<(Int, Offset), LayoutError> {
+    // A broadcast mode reads one element whatever its width, so it keeps its extent and needs
+    // no factor. Its zero stride also names no codomain axis to look a factor up by.
+    if step.is_zero() {
+        return Ok((extent.clone(), step.clone()));
+    }
     let (d, path) = step
         .as_basis()
         .ok_or_else(|| LayoutError::NotBasis { operation: OPERATION, stride: step.to_string() })?;
@@ -53,19 +58,43 @@ fn recast_mode(
             detail: format!("scale {scale} has no factor for codomain axis {path:?}"),
         });
     };
-    if d.is_zero() {
-        return Ok((extent.clone(), step.clone()));
-    }
-    if d.is_one() {
-        return Ok((extent.div_ceil(factor), step.clone()));
+    if !factor.is_positive().is_proven() {
+        return Err(LayoutError::Mismatch {
+            operation: OPERATION,
+            detail: format!("scale factor {factor} for codomain axis {path:?} must be positive"),
+        });
     }
 
-    // Either the stride or the factor must divide the other, or a wide element would straddle
-    // two strided positions.
-    let stride_divides = d.is_multiple_of(factor);
-    let factor_divides = factor.is_multiple_of(&d);
+    // Recasting keeps a mode's direction, so the arithmetic below runs on the stride's
+    // magnitude and puts its sign back. A stride whose sign depends on the launch has no
+    // magnitude to divide.
+    let direction = if d.is_positive().is_proven() {
+        Int::Static(1)
+    } else if (-&d).is_positive().is_proven() {
+        Int::Static(-1)
+    } else {
+        return Err(LayoutError::Condition {
+            operation: OPERATION,
+            condition: Condition::RecastDivisibility,
+            verdict: crate::Verdict::Unproven,
+        });
+    };
+    let magnitude = &d * &direction;
+
+    // A unit stride packs `factor` consecutive elements into each wide one. Otherwise the stride
+    // or the factor must divide the other, or a wide element would straddle two strided
+    // positions: a stride that is a multiple of the factor shrinks by it, and a factor that is a
+    // multiple of the stride merges that many coordinates.
+    if magnitude.is_one() {
+        return Ok((extent.div_ceil(factor), step.clone()));
+    }
+    let stride_divides = magnitude.is_multiple_of(factor);
+    let factor_divides = factor.is_multiple_of(&magnitude);
     stride_divides.or(factor_divides).require(OPERATION, Condition::RecastDivisibility)?;
-    let merged = if factor_divides.is_proven() { factor.div_floor(&d) } else { Int::Static(1) };
-    let divided = if stride_divides.is_proven() { d.div_floor(factor) } else { Int::Static(1) };
-    Ok((extent.div_ceil(&merged), Offset::scaled_basis(divided, &path)))
+    if stride_divides.is_proven() {
+        let narrowed = &magnitude.div_floor(factor) * &direction;
+        return Ok((extent.clone(), Offset::scaled_basis(narrowed, &path)));
+    }
+    let merged = factor.div_floor(&magnitude);
+    Ok((extent.div_ceil(&merged), Offset::scaled_basis(direction, &path)))
 }

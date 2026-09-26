@@ -60,7 +60,19 @@ impl Layout {
     }
 
     /// Returns the concatenation of `modes` as the top-level modes of one layout (Equation 11).
-    pub fn from_modes(modes: impl IntoIterator<Item = Layout>) -> Layout {
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::MixedCodomain`] when the modes' strides lie in codomains that have
+    /// no common sum, such as `1` beside `1@0`.
+    pub fn try_from_modes(modes: impl IntoIterator<Item = Layout>) -> Result<Layout, LayoutError> {
+        let layout = Layout::from_modes(modes);
+        Stride::try_from(layout.stride.as_tuple().clone())?;
+        Ok(layout)
+    }
+
+    /// Concatenates modes the algebra derived in one codomain, without checking it again.
+    pub(crate) fn from_modes(modes: impl IntoIterator<Item = Layout>) -> Layout {
         let (shapes, strides): (Vec<_>, Vec<_>) = modes
             .into_iter()
             .map(|mode| (mode.shape.as_tuple().clone(), mode.stride.as_tuple().clone()))
@@ -153,7 +165,8 @@ impl Layout {
         self.stride.coprofile()
     }
 
-    /// Returns one past the largest offset along each codomain axis.
+    /// Returns the offset of the last coordinate plus one along each codomain axis, PyCuTe's
+    /// `coshape`. With nonnegative strides this is one past the largest offset.
     pub fn coshape(&self) -> Tuple<Int> {
         let extents = self.shape.extents();
         let last = extents
@@ -164,11 +177,31 @@ impl Layout {
     }
 
     /// Returns the layout with a concrete value substituted for every launch parameter.
-    #[must_use]
-    pub fn eval(&self, value: &impl Fn(&Param) -> i64) -> Layout {
-        let shape = self.shape.as_tuple().map(&mut |s| Int::Static(s.eval(value)));
-        let stride = self.stride.as_tuple().map(&mut |d| d.eval(value));
-        Layout { shape: Shape::from_derived(shape), stride: Stride::from_derived(stride) }
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LayoutError::Inadmissible`] when a value breaks its parameter's facts, the check
+    /// the launcher makes before a kernel runs. Every fact the algebra relied on then holds.
+    pub fn eval(&self, value: &impl Fn(&Param) -> i64) -> Result<Layout, LayoutError> {
+        // Evaluation takes a shared closure, so the first refusal is recorded in a cell.
+        let refused = std::cell::RefCell::new(None);
+        let checked = |param: &Param| {
+            let v = value(param);
+            let mut first = refused.borrow_mut();
+            if !param.admits(v) && first.is_none() {
+                *first = Some(LayoutError::Inadmissible { param: param.to_string(), value: v });
+            }
+            v
+        };
+        let shape = self.shape.as_tuple().map(&mut |s| Int::Static(s.eval(&checked)));
+        let stride = self.stride.as_tuple().map(&mut |d| d.eval(&checked));
+        match refused.into_inner() {
+            Some(error) => Err(error),
+            None => Ok(Layout {
+                shape: Shape::from_derived(shape),
+                stride: Stride::from_derived(stride),
+            }),
+        }
     }
 }
 
@@ -218,12 +251,13 @@ impl From<Shape> for Layout {
     }
 }
 
-/// Nests layouts as the tuple does: a node becomes a layout whose modes are its children.
-impl From<Tuple<Layout>> for Layout {
-    fn from(layouts: Tuple<Layout>) -> Self {
+impl Layout {
+    /// Nests layouts the algebra derived as the tuple does: a node becomes a layout whose modes
+    /// are its children.
+    pub(crate) fn nest(layouts: Tuple<Layout>) -> Layout {
         match layouts {
             Tuple::Leaf(layout) => layout,
-            Tuple::Node(modes) => Layout::from_modes(modes.into_iter().map(Layout::from)),
+            Tuple::Node(modes) => Layout::from_modes(modes.into_iter().map(Layout::nest)),
         }
     }
 }

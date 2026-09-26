@@ -81,8 +81,9 @@ impl Tensor {
     pub fn over(layout: Layout, element_size: u64) -> Result<Tensor, LayoutError> {
         let (lowest, highest) = element_range(&layout)?;
         let size = i128::from(element_size);
-        let end =
-            u64::try_from((highest - lowest + 1) * size).map_err(|_| LayoutError::Overflow)?;
+        let span = highest.checked_sub(lowest).and_then(|span| span.checked_add(1));
+        let end = span.and_then(|span| span.checked_mul(size)).ok_or(LayoutError::Overflow)?;
+        let end = u64::try_from(end).map_err(|_| LayoutError::Overflow)?;
         let offset = i64::try_from(-lowest).map_err(|_| LayoutError::Overflow)?;
         Tensor::new(layout, offset, element_size, Bounds { start: 0, end })
     }
@@ -125,10 +126,14 @@ impl Tensor {
     ///
     /// # Errors
     ///
-    /// Returns the errors of [`Layout::slice`] and [`Tensor::new`].
+    /// Returns [`LayoutError::TensorLayout`] when a fixed coordinate is known only at launch,
+    /// since the bounds check needs the concrete offset, and the errors of [`Layout::slice`] and
+    /// [`Tensor::new`].
     pub fn slice(&self, coord: &Tuple<Option<Int>>) -> Result<Tensor, LayoutError> {
         let (shift, layout) = self.layout.slice(coord)?;
-        let shift = shift.as_int().and_then(Int::as_static).expect("a static layout into Z");
+        let Some(shift) = shift.as_int().and_then(Int::as_static) else {
+            return Err(LayoutError::TensorLayout { layout: format!("offset {shift}") });
+        };
         let offset = self.offset.checked_add(shift).ok_or(LayoutError::Overflow)?;
         Tensor::new(layout, offset, self.element_size, self.bounds)
     }
@@ -151,11 +156,11 @@ impl Tensor {
     /// the errors of [`Layout::recast`] and [`Tensor::new`].
     pub fn recast(&self, factor: i64) -> Result<Tensor, LayoutError> {
         let from = self.element_size;
-        let to = u64::try_from(factor)
-            .ok()
-            .filter(|&factor| factor > 0)
-            .and_then(|factor| from.checked_mul(factor))
-            .ok_or(LayoutError::Overflow)?;
+        let Some(wide) = u64::try_from(factor).ok().filter(|&factor| factor > 0) else {
+            let reason = "the factor must be positive";
+            return Err(LayoutError::Recast { from, to: from, reason });
+        };
+        let to = from.checked_mul(wide).ok_or(LayoutError::Overflow)?;
         if self.offset % factor != 0 {
             let reason = "the offset must be aligned to the new element size";
             return Err(LayoutError::Recast { from, to, reason });
@@ -174,13 +179,11 @@ fn element_range(layout: &Layout) -> Result<(i128, i128), LayoutError> {
         let extent = extent.as_static().ok_or_else(not_static)?;
         let step = step.as_int().and_then(Int::as_static).ok_or_else(not_static)?;
         // A mode reaches `(extent - 1) * step` from its first element, below the origin for a
-        // negative stride and above it otherwise.
+        // negative stride and above it otherwise. Every sum is checked: a wrapped range would
+        // pass the bounds check for bytes outside the allocation.
         let reach = i128::from(extent - 1) * i128::from(step);
-        if reach < 0 {
-            lowest += reach;
-        } else {
-            highest += reach;
-        }
+        let end = if reach < 0 { &mut lowest } else { &mut highest };
+        *end = end.checked_add(reach).ok_or(LayoutError::Overflow)?;
     }
     Ok((lowest, highest))
 }
@@ -192,8 +195,11 @@ fn byte_range(layout: &Layout, offset: i64, element_size: u64) -> Result<(i64, u
     }
     let (lowest, highest) = element_range(layout)?;
     let size = i128::from(element_size);
-    let lower = (i128::from(offset) + lowest) * size;
-    let upper = (i128::from(offset) + highest + 1) * size;
+    let bytes = |elements: Option<i128>| elements.and_then(|e| e.checked_mul(size));
+    let origin = i128::from(offset);
+    let lower = bytes(origin.checked_add(lowest)).ok_or(LayoutError::Overflow)?;
+    let past = origin.checked_add(highest).and_then(|last| last.checked_add(1));
+    let upper = bytes(past).ok_or(LayoutError::Overflow)?;
     let lower = i64::try_from(lower).map_err(|_| LayoutError::Overflow)?;
     // An upper end below zero lies outside every bound, so it saturates to 0 for the check.
     let upper = u64::try_from(upper.max(0)).map_err(|_| LayoutError::Overflow)?;

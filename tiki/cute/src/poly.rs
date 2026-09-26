@@ -4,8 +4,9 @@
 //!
 //! A polynomial is a sum of monomials with nonzero integer coefficients, each monomial a sorted
 //! product of atoms. An atom is a parameter or an opaque quotient `floor(p / q)` that no exact
-//! division could remove. The representation is canonical, so equal polynomials compare equal
-//! structurally and the layout algebra needs no separate simplifier.
+//! division could remove. Polynomials are kept in a canonical form, so structurally equal ones
+//! are equal for every launch. Quotient atoms are not normalized against each other, so two
+//! equal values can still differ structurally.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -49,6 +50,11 @@ impl Poly {
         let entry = self.0.entry(monomial).or_insert(0);
         *entry = entry.checked_add(coefficient).expect(OVERFLOW);
         self.0.retain(|_, c| *c != 0);
+    }
+
+    /// Returns each term as its own polynomial, in printing order.
+    pub fn summands(&self) -> Vec<Poly> {
+        self.0.iter().rev().map(|(monomial, &c)| Poly::term(c, monomial.clone())).collect()
     }
 
     pub fn as_constant(&self) -> Option<i64> {
@@ -223,11 +229,18 @@ impl fmt::Display for Atom {
     }
 }
 
-/// A polynomial printed as an operand: parenthesized when it has more than one term.
+/// A polynomial printed as an operand of `floor(p/q)`. It is bare when it is a constant or a
+/// single atom, and parenthesized otherwise, so `floor((4*N + 1)/(4*N))` reads one way.
 struct Operand<'a>(&'a Poly);
 
 impl fmt::Display for Operand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.0.len() > 1 { write!(f, "({})", self.0) } else { write!(f, "{}", self.0) }
+        let terms: Vec<_> = self.0.0.iter().collect();
+        let bare = match terms[..] {
+            [] => true,
+            [(monomial, &c)] => monomial.is_empty() || (c == 1 && monomial.len() == 1),
+            _ => false,
+        };
+        if bare { write!(f, "{}", self.0) } else { write!(f, "({})", self.0) }
     }
 }

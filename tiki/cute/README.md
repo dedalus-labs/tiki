@@ -84,15 +84,18 @@ each decision in detail.
   whose addition is XOR, to express swizzles as layouts. tiki-cute keeps a
   [`Swizzle`] as a separate index transform.
 - A tiler holes individual modes with `_`. A whole-layout hole, PyCuTe's
-  `None` tiler, is spelled by not calling the operation.
+  `None` tiler, is spelled by not calling the operation. `zipped_divide`
+  gathers every mode's tile into one mode, so it needs a layout for every mode.
 
 ## Printing
 
 Layouts print in the forms of the `tiki.layout` Python API.
 `Layout(shape=(4, 4), stride=(4, 1))` is the default form.
 [`Layout::cute`] gives CuTe's `(4, 4):(4, 1)`, and [`Layout::describe`] gives
-the coordinate table above. CuTe notation also parses, so every layout in the
-reference and in this crate's tests is written as CuTe prints it.
+the coordinate table above. CuTe notation also parses, and every printed
+layout parses back to the same layout, so the reference cases and this crate's
+tests are written as CuTe prints them. The notation carries no parameter
+facts: a name parses as a parameter that admits every positive integer.
 
 ## Verification
 

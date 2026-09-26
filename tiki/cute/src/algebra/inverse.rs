@@ -53,7 +53,7 @@ impl Layout {
             }
             from_flat(inverse).coalesce()
         });
-        Layout::from(Tuple::from_leaves(&mut per_axis.collect::<Vec<_>>().into_iter(), &profile))
+        Layout::nest(Tuple::from_leaves(&mut per_axis.collect::<Vec<_>>().into_iter(), &profile))
     }
 
     /// Returns a layout `L` with `self(L(self(i))) = self(i)` for every `i` in `0..size`.
@@ -88,7 +88,7 @@ impl Layout {
         }
 
         let per_axis: Vec<Layout> = chains.into_iter().map(Chain::into_layout).collect();
-        Ok(Layout::from(Tuple::from_leaves(&mut per_axis.into_iter(), &profile)))
+        Ok(Layout::nest(Tuple::from_leaves(&mut per_axis.into_iter(), &profile)))
     }
 
     /// Returns the layout of the domain indices this layout sends to 0: one mode per stride-0

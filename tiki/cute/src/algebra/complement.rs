@@ -25,8 +25,9 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// Returns [`Condition::Injective`] when two modes overlap, or when the parameter facts
-    /// cannot place a dynamic stride past the modes below it.
+    /// Returns [`Condition::OrderedChain`] when a mode starts before the end of the chain below
+    /// it, which covers overlapping and interleaved modes, or when the parameter facts cannot
+    /// place a dynamic stride past that end.
     pub fn complement(&self) -> Result<Layout, LayoutError> {
         // Every codomain axis starts with no gaps and a covered prefix that ends at offset 1.
         let profile = self.coprofile();
@@ -89,7 +90,7 @@ impl Gaps {
     /// Records a mode of `extent` elements `stride` apart as the next part of the chain.
     fn cover(&mut self, stride: &Int, extent: &Int) -> Result<(), LayoutError> {
         let end = self.strides.last().expect("the chain has an end");
-        stride.is_at_least(end).require(OPERATION, Condition::Injective)?;
+        stride.is_at_least(end).require(OPERATION, Condition::OrderedChain)?;
         self.extents.push(stride.div_floor(end));
         self.strides.push(stride * extent);
         Ok(())

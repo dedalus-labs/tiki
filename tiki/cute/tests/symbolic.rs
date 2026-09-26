@@ -24,7 +24,7 @@ fn layout(text: &str) -> Layout {
 
 /// Substitutes `value` for every parameter, whatever its name.
 fn at_value(layout: &Layout, value: i64) -> Layout {
-    layout.eval(&|_: &Param| value)
+    layout.eval(&|_: &Param| value).expect("every value in VALUES is admitted")
 }
 
 // Coalescing merges through symbolic strides and extents whenever the merge is an identity of
@@ -159,9 +159,10 @@ proptest! {
     #[test]
     fn symbolic_complement_is_sound(l in symbolic_layouts()) {
         let Ok(r) = l.complement() else { return Ok(()) };
+        // A symbolic complement succeeds only when every launch's layout is an ordered chain, so
+        // every substitution must satisfy the complement's contract.
         for n in VALUES {
             let l_n = at_value(&l, n);
-            prop_assume!(l_n.left_inverse().is_ok());
             prop_assert_eq!(check_complement(&l_n, &at_value(&r, n)), Ok(()), "{} at N = {}", l.cute(), n);
         }
     }

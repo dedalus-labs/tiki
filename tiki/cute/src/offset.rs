@@ -205,16 +205,32 @@ impl From<i64> for Offset {
 
 /// Prints PyCuTe's notation: `5` for an integer, `5@2@1` for `5 * E(1, 2)`, and the components
 /// of any other tuple.
+///
+/// Every term of every coefficient carries its own basis suffix, so `(N + 1) * E(0)` prints as
+/// `N@0 + 1@0` and `1@0 + 1@1` stays a sum. Both parse back to the same offset, where a tuple
+/// such as `(1, 1)` would read as a stride with two modes.
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (&self.0, self.as_basis()) {
-            (Tuple::Leaf(value), _) => write!(f, "{value}"),
-            (_, Some((value, path))) => {
-                write!(f, "{value}")?;
-                path.iter().rev().try_for_each(|mode| write!(f, "@{mode}"))
-            }
-            (tuple, None) => write!(f, "{tuple}"),
+        if let Tuple::Leaf(value) = &self.0 {
+            return write!(f, "{value}");
         }
+        let mut first = true;
+        for (value, path) in self.terms() {
+            let suffix = path
+                .iter()
+                .rev()
+                .fold(String::new(), |suffix, mode| suffix + "@" + &mode.to_string());
+            for summand in value.summands() {
+                let text = format!("{summand}{suffix}");
+                match (first, text.strip_prefix('-')) {
+                    (true, _) => write!(f, "{text}")?,
+                    (false, Some(positive)) => write!(f, " - {positive}")?,
+                    (false, None) => write!(f, " + {text}")?,
+                }
+                first = false;
+            }
+        }
+        Ok(())
     }
 }
 

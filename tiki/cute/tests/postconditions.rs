@@ -87,7 +87,7 @@ proptest! {
     }
 
     // Invariant: a product holds one copy of A per coordinate of B, and mode 0 is A itself.
-    // Witness: rank 2, size(A) * size(B), R[0] = A, and each copy lies in A's complement.
+    // Witness: rank 2, size(A) * size(B), R[0] = A, and R[1] is exactly complement(A) o B.
     #[test]
     fn logical_product_repeats_a(a in injective_layouts(), b in injective_layouts()) {
         let Ok(r) = a.logical_product(&Tiler::from(b.clone())) else { return Ok(()) };
@@ -95,6 +95,8 @@ proptest! {
         prop_assert_eq!(size(&r), size(&a) * size(&b));
         prop_assert_eq!(r.get(&[0]), Some(a.clone()));
         prop_assert!(b.shape().is_compatible_with(r.get(&[1]).unwrap().shape()));
+        let copies = a.complement().unwrap().compose(&Tiler::from(b.clone())).unwrap();
+        prop_assert_eq!(r.get(&[1]), Some(copies));
     }
 
     // Invariant: zipped division splits A into tiles, and a division that covers A's size loses
@@ -113,6 +115,20 @@ proptest! {
         let offsets: Vec<_> = (0..size(&r)).map(|i| r.at(i)).collect();
         for i in 0..size(&a) {
             prop_assert!(offsets.contains(&a.at(i)), "A({}) missing from {}", i, r.cute());
+        }
+    }
+}
+
+proptest! {
+    // Invariant: CuTe notation printed by the crate parses back to the same layout.
+    // Witness: every random static layout and its coalesced and complemented forms.
+    #[test]
+    fn printed_layouts_parse_back(l in layouts()) {
+        let mut derived = vec![l.clone(), l.coalesce(), l.right_inverse()];
+        derived.extend(l.complement().ok());
+        for layout in derived {
+            let printed = layout.cute().to_string();
+            prop_assert_eq!(printed.parse::<Layout>(), Ok(layout), "{}", printed);
         }
     }
 }

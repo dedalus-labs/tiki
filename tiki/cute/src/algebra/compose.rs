@@ -60,7 +60,12 @@ impl Layout {
         // Flatten each codomain axis that B's strides address into one chain, so every walk
         // below sees the leaves of A in the order B steps through them. Coalescing keeps A's
         // function on every integer, so all of B's modes can share this one form of A.
-        let a = self.coalesce_z_by(&b.coprofile())?;
+        let a = self.coalesce_z_by(&b.coprofile()).map_err(|error| match error {
+            LayoutError::TilerRank { tiler, layout, .. } => {
+                LayoutError::TilerRank { operation: OPERATION, tiler, layout }
+            }
+            other => other,
+        })?;
 
         // Composing B's modes one at a time sums their walks. Check up front that the sum never
         // carries across a mode of A, and note the axes where more than one walk is summed.

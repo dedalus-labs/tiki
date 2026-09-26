@@ -43,21 +43,44 @@ impl Stride {
     }
 
     /// Returns the profile of the codomain: a leaf for Z, one leaf per axis of Z^n.
+    ///
+    /// The profile is the union of the nonzero strides' own profiles. A sum of the strides would
+    /// lose an axis whose strides cancel, such as `2@0` and `-2@0`, although each still steps
+    /// along that axis.
     pub fn coprofile(&self) -> Profile {
-        let sum = self.steps().into_iter().fold(Offset::zero(), |sum, step| sum.add(step));
-        sum.as_tuple().profile()
+        let nonzero = self.steps().into_iter().filter(|step| !step.is_zero());
+        nonzero.fold(Tuple::Leaf(()), |profile, step| union(&profile, &step.as_tuple().profile()))
     }
 }
 
-/// Checks that the strides share one codomain.
+/// Returns the smallest profile that contains both: a node's modes are unioned position by
+/// position, and a leaf stands for an empty profile that any node contains.
+fn union(left: &Profile, right: &Profile) -> Profile {
+    match (left, right) {
+        (Tuple::Node(ours), Tuple::Node(theirs)) => {
+            let modes =
+                (0..ours.len().max(theirs.len())).map(|i| match (ours.get(i), theirs.get(i)) {
+                    (Some(mode), Some(other)) => union(mode, other),
+                    (Some(only), None) | (None, Some(only)) => only.clone(),
+                    (None, None) => unreachable!("i is below the longer length"),
+                });
+            Tuple::node(modes)
+        }
+        (Tuple::Node(_), Tuple::Leaf(())) => left.clone(),
+        _ => right.clone(),
+    }
+}
+
+/// Checks that the strides share one codomain: every pair of strides has a sum. That rules out
+/// a nonzero integer beside an arithmetic tuple, and `1@0` beside `1@0@0`, whose first axis is
+/// an integer in one and a tuple in the other.
 impl TryFrom<Tuple<Offset>> for Stride {
     type Error = LayoutError;
 
     fn try_from(steps: Tuple<Offset>) -> Result<Self, LayoutError> {
-        let leaves = steps.leaves();
-        let integers = leaves.iter().any(|d| !d.is_zero() && d.as_int().is_some());
-        let tuples = leaves.iter().any(|d| d.as_int().is_none());
-        if integers && tuples {
+        let summed =
+            steps.leaves().into_iter().try_fold(Offset::zero(), |sum, step| sum.checked_add(step));
+        if summed.is_none() {
             return Err(LayoutError::MixedCodomain { stride: steps.to_string() });
         }
         Ok(Stride(steps))

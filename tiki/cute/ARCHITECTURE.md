@@ -63,9 +63,13 @@ written `floor((M + 127) / 128)`.
 
 [`Poly`](src/poly.rs) keeps every polynomial in a canonical form: a sorted map
 from monomials to nonzero coefficients. A constant polynomial is always
-`Int::Static`. Two `Int`s are therefore structurally equal exactly when they
-are equal for every launch, and the algebra needs no separate simplifier to
-compare them.
+`Int::Static`. Two structurally equal `Int`s are therefore equal for every
+launch, and the algebra proves an equality by comparing structure.
+
+The converse does not hold. `floor(floor(M / 2) / 2)` and `floor(M / 4)` agree
+for every `M` and differ structurally. The algebra therefore acts on structural
+equality only where equality is what it needs proven, such as merging two
+modes, and never reads structural inequality as proof that two values differ.
 
 Arithmetic takes the `i64` path when both operands are static. Almost every
 integer in a kernel's tile layouts is static, so the polynomial path runs only
