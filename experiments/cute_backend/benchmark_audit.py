@@ -72,11 +72,10 @@ def benchmark_case(
         / np.sqrt(np.mean(x.astype(np.float64) ** 2, axis=-1, keepdims=True) + 1e-6)
         * weight
     ).astype(np.float32)
-    pointers = [
-        checked(cuda.cuMemAlloc(size))[0]
-        for size in (x.nbytes, weight.nbytes, x.nbytes)
-    ]
+    pointers = []
     try:
+        for size in (x.nbytes, weight.nbytes, x.nbytes):
+            pointers.append(checked(cuda.cuMemAlloc(size))[0])
         checked(cuda.cuMemcpyHtoD(pointers[0], x.ctypes.data, x.nbytes))
         checked(cuda.cuMemcpyHtoD(pointers[1], weight.ctypes.data, weight.nbytes))
         results = {}

@@ -4,6 +4,7 @@ import ctypes
 import importlib.util
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -71,6 +72,36 @@ class ValidationTests(unittest.TestCase):
                         benchmark.measure(*args)
                 else:
                     self.assertEqual(benchmark.measure(*args)["max_error"], 0.0)
+
+
+class AllocationTests(unittest.TestCase):
+    def test_all_acquired_buffers_are_freed_when_allocation_fails(self):
+        # Every acquired buffer must be freed. Later allocation failures expose leaks.
+        for failed in (1, 2, 3):
+            with self.subTest(failed=failed), TemporaryDirectory() as directory:
+                benchmark = load_benchmark()
+                cuda = benchmark.cuda
+                success = cuda.CUresult.CUDA_SUCCESS
+                cuda.cuMemAlloc.side_effect = [
+                    *((success, pointer) for pointer in range(1, failed)),
+                    ("CUDA_ERROR_OUT_OF_MEMORY",),
+                ]
+                cuda.cuMemFree.return_value = (success,)
+                lowered = (
+                    benchmark.tk.compile.return_value.return_value.lower.return_value
+                )
+                lowered.mlir = "mlir"
+                benchmark.tk.binary.return_value.ptx = "ptx"
+                benchmark.compile_reference = Mock(return_value=b"cubin")
+                schedule = Mock(threads_per_row=32, rows_per_block=4)
+                with self.assertRaisesRegex(RuntimeError, "CUDA_ERROR_OUT_OF_MEMORY"):
+                    benchmark.benchmark_case(
+                        (2, 4), schedule, 0, Path(directory), False
+                    )
+                self.assertEqual(
+                    [call.args[0] for call in cuda.cuMemFree.call_args_list],
+                    list(range(1, failed)),
+                )
 
 
 if __name__ == "__main__":
