@@ -2,7 +2,7 @@
 
 Tiki's CUDA backend architecture assigns resource ownership and asynchronous
 execution to Rust, kernel compilation to the CuTe toolchain, and model
-semantics and automatic differentiation to the MLX graph layer. A CXX bridge
+semantics and automatic differentiation to the Tiki graph layer. A CXX bridge
 connects the existing C++ core to an explicit Rust runtime interface.
 
 Rust is selected to make allocation ownership, permitted access, and resource
@@ -23,7 +23,7 @@ kernel artifacts and argument contracts, allowing each to evolve independently.
 ## Implementation status
 
 The Rust runtime owns CUDA storage: the crate in
-[`mlx/backend/cuda/runtime`](../../mlx/backend/cuda/runtime) implements
+[`tiki/backend/cuda/runtime`](../../tiki/backend/cuda/runtime) implements
 allocation, size classes, the small pool, the cache, memory limits, and
 migration of device storage to unified memory. Migration enqueues the copy and
 the release of the device source on one stream, so the source outlives the
@@ -34,7 +34,7 @@ This guarantee covers the migration copy and its source release. It does not
 establish completion of producers on other streams or extend buffer ownership
 through arbitrary asynchronous work. Callers retain those responsibilities.
 
-Kernel execution still uses the MLX CUDA command encoder through the
+Kernel execution still uses the Tiki CUDA command encoder through the
 [existing CuTe compiler path](../cute_backend/README.md). Submission
 retention, completion tracking, and graph replay ownership are the next
 migration steps in ADR-0001. Adoption of cuTile runtime components requires

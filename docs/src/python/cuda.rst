@@ -1,7 +1,7 @@
 CUDA
 =====
 
-.. currentmodule:: mlx.core.cuda
+.. currentmodule:: tiki.cuda
 
 .. autosummary::
   :toctree: _autosummary

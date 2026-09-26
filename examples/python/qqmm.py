@@ -1,6 +1,6 @@
 from itertools import product
 
-import mlx.core as mx
+import tiki as tk
 
 
 # In mxfp8 mode, the results do not match exactly:
@@ -12,17 +12,17 @@ import mlx.core as mx
 # therefore I suspect that the discrepancy comes from
 # the mxfp8 matmul implementation in cuBLASLt..
 def ulp_bf16_at(x):
-    ax = mx.abs(x)
-    min_normal = mx.array(2.0**-126)
-    ax = mx.where(ax < min_normal, min_normal, ax)
-    e = mx.floor(mx.log2(ax))
-    return mx.power(2.0, e - 7.0)
+    ax = tk.abs(x)
+    min_normal = tk.array(2.0**-126)
+    ax = tk.where(ax < min_normal, min_normal, ax)
+    e = tk.floor(tk.log2(ax))
+    return tk.power(2.0, e - 7.0)
 
 
 def test_qqmm():
-    key = mx.random.key(0)
-    k1, k2 = mx.random.split(key)
-    dtypes = [mx.bfloat16, mx.float32, mx.float16]
+    key = tk.random.key(0)
+    k1, k2 = tk.random.split(key)
+    dtypes = [tk.bfloat16, tk.float32, tk.float16]
 
     tests = (
         (16, "nvfp4", 4),
@@ -51,26 +51,26 @@ def test_qqmm():
                         x_shape = (M, K)
                         w_shape = (K, N)
 
-                    x = mx.random.normal(shape=x_shape, key=k1, dtype=dtype)
-                    w = mx.random.normal(shape=w_shape, key=k2, dtype=dtype)
+                    x = tk.random.normal(shape=x_shape, key=k1, dtype=dtype)
+                    w = tk.random.normal(shape=w_shape, key=k2, dtype=dtype)
 
                     if layout == "TT":
-                        x = mx.transpose(x)
+                        x = tk.transpose(x)
                     elif layout == "TN":
-                        w = mx.transpose(w)
-                        x = mx.transpose(x)
+                        w = tk.transpose(w)
+                        x = tk.transpose(x)
                     elif layout == "NN":
-                        w = mx.transpose(w)
+                        w = tk.transpose(w)
 
-                    y_q = mx.qqmm(
+                    y_q = tk.qqmm(
                         x,
                         w,
                         group_size=group_size,
                         bits=bits,
                         mode=mode,
                     )
-                    w_q, scales_w = mx.quantize(w, group_size, bits, mode=mode)
-                    w_dq = mx.dequantize(
+                    w_q, scales_w = tk.quantize(w, group_size, bits, mode=mode)
+                    w_dq = tk.dequantize(
                         w_q,
                         scales_w,
                         group_size=group_size,
@@ -78,10 +78,10 @@ def test_qqmm():
                         mode=mode,
                         dtype=dtype,
                     )
-                    x_q, scales_x = mx.quantize(
+                    x_q, scales_x = tk.quantize(
                         x, group_size=group_size, bits=bits, mode=mode
                     )
-                    x_dq = mx.dequantize(
+                    x_dq = tk.dequantize(
                         x_q,
                         scales_x,
                         group_size=group_size,
@@ -89,10 +89,10 @@ def test_qqmm():
                         mode=mode,
                         dtype=dtype,
                     )
-                    y_hat = mx.matmul(x_dq, mx.transpose(w_dq))
+                    y_hat = tk.matmul(x_dq, tk.transpose(w_dq))
                     ulp = ulp_bf16_at(y_hat)
                     error = (y_q - y_hat).abs()
-                    if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
+                    if not (tk.logical_or(error < 1e-3, error <= ulp).all()):
                         raise AssertionError(
                             f"qqmm test failed for shape {(M, N, K)}, "
                             f"group_size={group_size}, bits={bits}, "
@@ -101,8 +101,8 @@ def test_qqmm():
 
 
 def test_qqmm_vjp():
-    key = mx.random.key(0)
-    k1, k2 = mx.random.split(key)
+    key = tk.random.key(0)
+    k1, k2 = tk.random.split(key)
     M = 64
     N = 1024
     K = 512
@@ -110,25 +110,25 @@ def test_qqmm_vjp():
         (16, "nvfp4", 4),
         (32, "mxfp8", 8),
     )
-    x = mx.random.normal(shape=(M, K), key=k1)
-    c = mx.ones(shape=(M, N))
+    x = tk.random.normal(shape=(M, K), key=k1)
+    c = tk.ones(shape=(M, N))
 
     for group_size, mode, bits in tests:
-        w = mx.random.normal(shape=(N, K), key=k2)
+        w = tk.random.normal(shape=(N, K), key=k2)
 
         def fn(x):
-            return mx.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)
+            return tk.qqmm(x, w, group_size=group_size, bits=bits, mode=mode)
 
-        _, vjp_out = mx.vjp(fn, primals=(x,), cotangents=(c,))
-        w_tq, scales_wt = mx.quantize(
-            mx.transpose(w), group_size=group_size, bits=bits, mode=mode
+        _, vjp_out = tk.vjp(fn, primals=(x,), cotangents=(c,))
+        w_tq, scales_wt = tk.quantize(
+            tk.transpose(w), group_size=group_size, bits=bits, mode=mode
         )
-        expected_out = mx.qqmm(
+        expected_out = tk.qqmm(
             c, w_tq, scales_wt, group_size=group_size, bits=bits, mode=mode
         )
         ulp = ulp_bf16_at(expected_out)
         error = (vjp_out[0] - expected_out).abs()
-        if not (mx.logical_or(error < 1e-3, error <= ulp).all()):
+        if not (tk.logical_or(error < 1e-3, error <= ulp).all()):
             raise AssertionError(
                 f"qqmm vjp test failed for shape {(M, N, K)}, "
                 f"group_size={group_size}, bits={bits}, mode={mode}"

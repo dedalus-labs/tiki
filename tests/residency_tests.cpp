@@ -4,12 +4,12 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/allocator.h"
-#include "mlx/backend/metal/device.h"
-#include "mlx/memory.h"
-#include "mlx/mlx.h"
+#include "tiki/allocator.h"
+#include "tiki/backend/metal/device.h"
+#include "tiki/memory.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 namespace {
 

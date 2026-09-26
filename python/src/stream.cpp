@@ -7,18 +7,18 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 
-#include "mlx/stream.h"
-#include "mlx/utils.h"
 #include "python/src/random.h"
+#include "tiki/stream.h"
+#include "tiki/utils.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 // Create the StreamContext on enter and delete on exit.
 class PyStreamContext {
  public:
-  PyStreamContext(mx::StreamOrDevice s) : _inner(nullptr) {
+  PyStreamContext(tk::StreamOrDevice s) : _inner(nullptr) {
     if (std::holds_alternative<std::monostate>(s)) {
       throw std::runtime_error(
           "[StreamContext] Invalid argument, please specify a stream or device.");
@@ -27,7 +27,7 @@ class PyStreamContext {
   }
 
   void enter() {
-    _inner = new mx::StreamContext(_s);
+    _inner = new tk::StreamContext(_s);
   }
 
   void exit() {
@@ -38,62 +38,62 @@ class PyStreamContext {
   }
 
  private:
-  mx::StreamOrDevice _s;
-  mx::StreamContext* _inner;
+  tk::StreamOrDevice _s;
+  tk::StreamContext* _inner;
 };
 
 void init_stream(nb::module_& m) {
-  nb::class_<mx::Stream>(
+  nb::class_<tk::Stream>(
       m,
       "Stream",
       R"pbdoc(
       A stream for running operations on a given device.
       )pbdoc")
-      .def_ro("device", &mx::Stream::device)
+      .def_ro("device", &tk::Stream::device)
       .def(
           "__repr__",
-          [](const mx::Stream& s) {
+          [](const tk::Stream& s) {
             std::ostringstream os;
             os << s;
             return os.str();
           })
-      .def("__eq__", [](const mx::Stream& s, const nb::object& other) {
-        return nb::isinstance<mx::Stream>(other) &&
-            s == nb::cast<mx::Stream>(other);
+      .def("__eq__", [](const tk::Stream& s, const nb::object& other) {
+        return nb::isinstance<tk::Stream>(other) &&
+            s == nb::cast<tk::Stream>(other);
       });
 
-  nb::class_<mx::ThreadLocalStream>(
+  nb::class_<tk::ThreadLocalStream>(
       m,
       "ThreadLocalStream",
       R"pbdoc(
       A stream that will be unique per thread and can be used to run operations on a given device.
       )pbdoc")
-      .def_ro("device", &mx::ThreadLocalStream::device)
+      .def_ro("device", &tk::ThreadLocalStream::device)
       .def(
           "__repr__",
-          [](const mx::ThreadLocalStream& s) {
+          [](const tk::ThreadLocalStream& s) {
             std::ostringstream os;
             os << "ThreadLocalStream(" << s.device << ", " << s.index << ")";
             return os.str();
           })
       .def(
           "__eq__",
-          [](const mx::ThreadLocalStream& s, const nb::object& other) {
-            return nb::isinstance<mx::ThreadLocalStream>(other) &&
-                s == nb::cast<mx::ThreadLocalStream>(other);
+          [](const tk::ThreadLocalStream& s, const nb::object& other) {
+            return nb::isinstance<tk::ThreadLocalStream>(other) &&
+                s == nb::cast<tk::ThreadLocalStream>(other);
           });
 
-  nb::implicitly_convertible<mx::Device::DeviceType, mx::Device>();
+  nb::implicitly_convertible<tk::Device::DeviceType, tk::Device>();
 
   m.def(
       "default_stream",
-      &mx::default_stream,
+      &tk::default_stream,
       "device"_a,
       nb::sig("def default_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(Get the device's default stream.)pbdoc");
   m.def(
       "set_default_stream",
-      &mx::set_default_stream,
+      &tk::set_default_stream,
       "stream"_a,
       R"pbdoc(
         Set the default stream.
@@ -106,7 +106,7 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "new_stream",
-      &mx::new_stream,
+      &tk::new_stream,
       "device"_a,
       nb::sig("def new_stream(device: Device | DeviceType) -> Stream"),
       R"pbdoc(
@@ -117,7 +117,7 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "new_thread_unsafe_stream",
-      &mx::new_thread_unsafe_stream,
+      &tk::new_thread_unsafe_stream,
       "device"_a,
       nb::sig(
           "def new_thread_unsafe_stream(device: Device | DeviceType) -> Stream"),
@@ -131,7 +131,7 @@ void init_stream(nb::module_& m) {
       )pbdoc");
   m.def(
       "new_thread_local_stream",
-      &mx::new_thread_local_stream,
+      &tk::new_thread_local_stream,
       "device"_a,
       nb::sig(
           "def new_thread_local_stream(device: Device | DeviceType) -> ThreadLocalStream"),
@@ -141,7 +141,7 @@ void init_stream(nb::module_& m) {
       []() {
         reset_random_state();
         nb::gil_scoped_release nogil;
-        mx::clear_streams();
+        tk::clear_streams();
       },
       R"pbdoc(Destroy all streams created in current thread.)pbdoc");
 
@@ -153,7 +153,7 @@ void init_stream(nb::module_& m) {
         Args:
             s: The stream or device to set as the default.
   )pbdoc")
-      .def(nb::init<mx::StreamOrDevice>(), "s"_a)
+      .def(nb::init<tk::StreamOrDevice>(), "s"_a)
       .def("__enter__", [](PyStreamContext& scm) { scm.enter(); })
       .def(
           "__exit__",
@@ -166,7 +166,7 @@ void init_stream(nb::module_& m) {
           "traceback"_a = nb::none());
   m.def(
       "stream",
-      [](mx::StreamOrDevice s) { return PyStreamContext(s); },
+      [](tk::StreamOrDevice s) { return PyStreamContext(s); },
       "s"_a,
       R"pbdoc(
         Create a context manager to set the default device and stream.
@@ -181,21 +181,21 @@ void init_stream(nb::module_& m) {
 
         .. code-block::python
 
-          import mlx.core as mx
+          import tiki as tk
 
           # Create a context manager for the default device and stream.
-          with mx.stream(mx.cpu):
-              # Operations here will use mx.cpu by default.
+          with tk.stream(tk.cpu):
+              # Operations here will use tk.cpu by default.
               pass
       )pbdoc");
   m.def(
       "synchronize",
-      [](mx::StreamOrDevice s) {
+      [](tk::StreamOrDevice s) {
         nb::gil_scoped_release nogil;
         if (std::holds_alternative<std::monostate>(s)) {
-          mx::synchronize();
+          tk::synchronize();
         } else {
-          mx::synchronize(mx::to_stream(s));
+          tk::synchronize(tk::to_stream(s));
         }
       },
       "stream"_a = nb::none(),

@@ -2,7 +2,7 @@
 
 import time
 
-import mlx.core as mx
+import tiki as tk
 
 
 def time_fn(fn, *args, **kwargs):
@@ -14,12 +14,12 @@ def time_fn(fn, *args, **kwargs):
 
     # warmup
     for _ in range(5):
-        mx.eval(fn(*args, **kwargs))
+        tk.eval(fn(*args, **kwargs))
 
     num_iters = 100
     tic = time.perf_counter()
     for _ in range(num_iters):
-        x = mx.eval(fn(*args, **kwargs))
+        x = tk.eval(fn(*args, **kwargs))
     toc = time.perf_counter()
 
     msec = 1e3 * (toc - tic) / num_iters

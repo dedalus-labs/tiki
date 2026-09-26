@@ -3,9 +3,9 @@
 Compilation
 ===========
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
-MLX has a :func:`compile` function transformation which compiles computation
+Tiki has a :func:`compile` function transformation which compiles computation
 graphs. Function compilation results in smaller graphs by merging common work
 and fusing certain operations. In many cases this can lead to big improvements
 in run-time and memory use.
@@ -21,17 +21,17 @@ Let's start with a simple example:
 .. code-block:: python
 
   def fun(x, y):
-      return mx.exp(-x) + y
+      return tk.exp(-x) + y
 
-  x = mx.array(1.0)
-  y = mx.array(2.0)
+  x = tk.array(1.0)
+  y = tk.array(2.0)
 
   # Regular call, no compilation
   # Prints: array(2.36788, dtype=float32)
   print(fun(x, y))
 
   # Compile the function
-  compiled_fun = mx.compile(fun)
+  compiled_fun = tk.compile(fun)
 
   # Prints: array(2.36788, dtype=float32)
   print(compiled_fun(x, y))
@@ -39,21 +39,21 @@ Let's start with a simple example:
 The output of both the regular function and the compiled function is the same
 up to numerical precision.
 
-The first time you call a compiled function, MLX will build the compute
+The first time you call a compiled function, Tiki will build the compute
 graph, optimize it, and generate and compile code. This can be relatively
-slow. However, MLX will cache compiled functions, so calling a compiled
+slow. However, Tiki will cache compiled functions, so calling a compiled
 function multiple times will not initiate a new compilation. This means you
 should typically compile functions that you plan to use more than once.
 
 .. code-block:: python
 
   def fun(x, y):
-      return mx.exp(-x) + y
+      return tk.exp(-x) + y
 
-  x = mx.array(1.0)
-  y = mx.array(2.0)
+  x = tk.array(1.0)
+  y = tk.array(2.0)
 
-  compiled_fun = mx.compile(fun)
+  compiled_fun = tk.compile(fun)
 
   # Compiled here
   compiled_fun(x, y)
@@ -62,7 +62,7 @@ should typically compile functions that you plan to use more than once.
   compiled_fun(x, y)
 
   # Not compiled again
-  mx.compile(fun)(x, y)
+  tk.compile(fun)(x, y)
 
 There are some important cases to be aware of that can cause a function to
 be recompiled:
@@ -82,22 +82,22 @@ function in a loop:
 
 .. code-block:: python
 
-  a = mx.array(1.0)
+  a = tk.array(1.0)
   # Don't do this, compiles lambda at each iteration
   for _ in range(5):
-      mx.compile(lambda x: mx.exp(mx.abs(x)))(a)
+      tk.compile(lambda x: tk.exp(tk.abs(x)))(a)
 
 Example Speedup
 ---------------
 
-The :func:`mlx.nn.gelu` is a nonlinear activation function commonly used with
+The :func:`tiki.nn.gelu` is a nonlinear activation function commonly used with
 Transformer-based models. The implementation involves several unary and binary
 element-wise operations:
 
 .. code-block:: python
 
   def gelu(x):
-      return x * (1 + mx.erf(x / math.sqrt(2))) / 2
+      return x * (1 + tk.erf(x / math.sqrt(2))) / 2
 
 If you use this function with small arrays, it will be overhead bound. If you
 use it with large arrays it will be memory bandwidth bound.  However, all of
@@ -115,11 +115,11 @@ handles synchronization:
   def timeit(fun, x):
       # warm up
       for _ in range(10):
-          mx.eval(fun(x))
+          tk.eval(fun(x))
 
       tic = time.perf_counter()
       for _ in range(100):
-          mx.eval(fun(x))
+          tk.eval(fun(x))
       toc = time.perf_counter()
       tpi = 1e3 * (toc - tic) / 100
       print(f"Time per iteration {tpi:.3f} (ms)")
@@ -129,9 +129,9 @@ Now make an array, and benchmark both functions:
 
 .. code-block:: python
 
-  x = mx.random.uniform(shape=(32, 1000, 4096))
+  x = tk.random.uniform(shape=(32, 1000, 4096))
   timeit(gelu, x)
-  timeit(mx.compile(gelu), x)
+  timeit(tk.compile(gelu), x)
 
 On an M1 Max the times are 15.5 and 3.1 milliseconds. The compiled ``gelu`` is
 five times faster.
@@ -145,29 +145,29 @@ contents) inside compiled functions.
 
 .. code-block:: python
 
-  @mx.compile
+  @tk.compile
   def fun(x):
       z = -x
       print(z)  # Crash
-      return mx.exp(z)
+      return tk.exp(z)
 
-  fun(mx.array(5.0))
+  fun(tk.array(5.0))
 
 For debugging, inspecting arrays can be helpful. One way to do that is to
 globally disable compilation using the :func:`disable_compile` function or
-:envvar:`MLX_DISABLE_COMPILE` flag. For example the following is okay even though
+:envvar:`TIKI_DISABLE_COMPILE` flag. For example the following is okay even though
 ``fun`` is compiled:
 
 .. code-block:: python
 
-  @mx.compile
+  @tk.compile
   def fun(x):
       z = -x
       print(z) # Okay
-      return mx.exp(z)
+      return tk.exp(z)
 
-  mx.disable_compile()
-  fun(mx.array(5.0))
+  tk.disable_compile()
+  fun(tk.array(5.0))
 
 
 Pure Functions
@@ -180,13 +180,13 @@ effects. For example:
 
   state = []
 
-  @mx.compile
+  @tk.compile
   def fun(x, y):
       z = x + y
       state.append(z)
-      return mx.exp(z)
+      return tk.exp(z)
 
-  fun(mx.array(1.0), mx.array(2.0))
+  fun(tk.array(1.0), tk.array(2.0))
   # Crash!
   print(state)
 
@@ -201,13 +201,13 @@ You have two options to deal with this. The first option is to simply return
 
    state = []
 
-   @mx.compile
+   @tk.compile
    def fun(x, y):
       z = x + y
       state.append(z)
-      return mx.exp(z), state
+      return tk.exp(z), state
 
-   _, state = fun(mx.array(1.0), mx.array(2.0))
+   _, state = fun(tk.array(1.0), tk.array(2.0))
    # Prints [array(3, dtype=float32)]
    print(state)
 
@@ -221,39 +221,39 @@ In some cases returning updated state can be pretty inconvenient. Hence,
   state = []
 
   # Tell compile to capture state as an output
-  @partial(mx.compile, outputs=state)
+  @partial(tk.compile, outputs=state)
   def fun(x, y):
       z = x + y
       state.append(z)
-      return mx.exp(z)
+      return tk.exp(z)
 
-  fun(mx.array(1.0), mx.array(2.0))
+  fun(tk.array(1.0), tk.array(2.0))
   # Prints [array(3, dtype=float32)]
   print(state)
 
 This is particularly useful for compiling a function which includes an update
 to a container of arrays, as is commonly done when training the parameters of a
-:class:`mlx.nn.Module`.
+:class:`tiki.nn.Module`.
 
 Compiled functions will also treat any inputs not in the parameter list as
 constants. For example:
 
 .. code-block:: python
 
-  state = [mx.array(1.0)]
+  state = [tk.array(1.0)]
 
-  @mx.compile
+  @tk.compile
   def fun(x):
       return x + state[0]
 
   # Prints array(2, dtype=float32)
-  print(fun(mx.array(1.0)))
+  print(fun(tk.array(1.0)))
 
   # Update state
-  state[0] = mx.array(5.0)
+  state[0] = tk.array(5.0)
 
   # Still prints array(2, dtype=float32)
-  print(fun(mx.array(1.0)))
+  print(fun(tk.array(1.0)))
 
 In order to have the change of state reflected in the outputs of ``fun`` you
 again have two options. The first option is to simply pass ``state`` as input
@@ -261,20 +261,20 @@ to the function.
 
 .. code-block:: python
 
-  state = [mx.array(1.0)]
+  state = [tk.array(1.0)]
 
-  @mx.compile
+  @tk.compile
   def fun(x, state):
       return x + state[0]
 
   # Prints array(2, dtype=float32)
-  print(fun(mx.array(1.0), state))
+  print(fun(tk.array(1.0), state))
 
   # Update state
-  state[0] = mx.array(5.0)
+  state[0] = tk.array(5.0)
 
   # Prints array(6, dtype=float32)
-  print(fun(mx.array(1.0), state))
+  print(fun(tk.array(1.0), state))
 
 In some cases this can be pretty inconvenient. Hence,
 :func:`compile` also has a parameter to capture implicit inputs:
@@ -282,44 +282,44 @@ In some cases this can be pretty inconvenient. Hence,
 .. code-block:: python
 
   from functools import partial
-  state = [mx.array(1.0)]
+  state = [tk.array(1.0)]
 
   # Tell compile to capture state as an input
-  @partial(mx.compile, inputs=state)
+  @partial(tk.compile, inputs=state)
   def fun(x):
       return x + state[0]
 
   # Prints array(2, dtype=float32)
-  print(fun(mx.array(1.0)))
+  print(fun(tk.array(1.0)))
 
   # Update state
-  state[0] = mx.array(5.0)
+  state[0] = tk.array(5.0)
 
   # Prints array(6, dtype=float32)
-  print(fun(mx.array(1.0)))
+  print(fun(tk.array(1.0)))
 
 
 Compiling Training Graphs
 -------------------------
 
 This section will step through how to use :func:`compile` with a simple example
-of a common setup: training a model with :obj:`mlx.nn.Module` using an
-:obj:`mlx.optimizers.Optimizer` with state. We will show how to compile the
+of a common setup: training a model with :obj:`tiki.nn.Module` using an
+:obj:`tiki.optimizers.Optimizer` with state. We will show how to compile the
 full forward, backward, and update with :func:`compile`.
 
 To start, here is the simple example without any compilation:
 
 .. code-block:: python
 
-  import mlx.core as mx
-  import mlx.nn as nn
-  import mlx.optimizers as optim
+  import tiki as tk
+  import tiki.nn as nn
+  import tiki.optimizers as optim
 
   # 4 examples with 10 features each
-  x = mx.random.uniform(shape=(4, 10))
+  x = tk.random.uniform(shape=(4, 10))
 
   # 0, 1 targets
-  y = mx.array([0, 1, 0, 1])
+  y = tk.array([0, 1, 0, 1])
 
   # Simple linear model
   model = nn.Linear(10, 1)
@@ -337,23 +337,23 @@ To start, here is the simple example without any compilation:
   for it in range(10):
       loss, grads = loss_and_grad_fn(model, x, y)
       optimizer.update(model, grads)
-      mx.eval(model.parameters(), optimizer.state)
+      tk.eval(model.parameters(), optimizer.state)
 
 To compile the update we can put it all in a function and compile it with the
 appropriate input and output captures. Here's the same example but compiled:
 
 .. code-block:: python
 
-  import mlx.core as mx
-  import mlx.nn as nn
-  import mlx.optimizers as optim
+  import tiki as tk
+  import tiki.nn as nn
+  import tiki.optimizers as optim
   from functools import partial
 
   # 4 examples with 10 features each
-  x = mx.random.uniform(shape=(4, 10))
+  x = tk.random.uniform(shape=(4, 10))
 
   # 0, 1 targets
-  y = mx.array([0, 1, 0, 1])
+  y = tk.array([0, 1, 0, 1])
 
   # Simple linear model
   model = nn.Linear(10, 1)
@@ -368,7 +368,7 @@ appropriate input and output captures. Here's the same example but compiled:
   # The state that will be captured as input and output
   state = [model.state, optimizer.state]
 
-  @partial(mx.compile, inputs=state, outputs=state)
+  @partial(tk.compile, inputs=state, outputs=state)
   def step(x, y):
       loss_and_grad_fn = nn.value_and_grad(model, loss_fn)
       loss, grads = loss_and_grad_fn(model, x, y)
@@ -379,27 +379,27 @@ appropriate input and output captures. Here's the same example but compiled:
   for it in range(10):
       loss = step(x, y)
       # Evaluate the model and optimizer state
-      mx.eval(state)
+      tk.eval(state)
       print(loss)
 
 
 .. note::
 
   If you are using a module which performs random sampling such as
-  :func:`mlx.nn.Dropout`, make sure you also include ``mx.random.state`` in the
+  :func:`tiki.nn.Dropout`, make sure you also include ``tk.random.state`` in the
   ``state`` captured by :func:`compile`, i.e. ``state = [model.state,
-  optimizer.state, mx.random.state]``.
+  optimizer.state, tk.random.state]``.
 
 
 .. note::
 
-   For more examples of compiling full training graphs checkout the  `MLX
+   For more examples of compiling full training graphs checkout the  `Tiki
    Examples <https://github.com/ml-explore/mlx-examples>`_ GitHub repo.
 
 Transformations with Compile
 ----------------------------
 
-In MLX function transformations are composable. You can apply any function
+In Tiki function transformations are composable. You can apply any function
 transformation to the output of any other function transformation. For more on
 this, see the documentation on :ref:`function transforms
 <function_transforms>`.
@@ -408,15 +408,15 @@ Compiling transformed functions works just as expected:
 
 .. code-block:: python
 
-  grad_fn = mx.grad(mx.exp)
+  grad_fn = tk.grad(tk.exp)
 
-  compiled_grad_fn = mx.compile(grad_fn)
+  compiled_grad_fn = tk.compile(grad_fn)
 
   # Prints: array(2.71828, dtype=float32)
-  print(grad_fn(mx.array(1.0)))
+  print(grad_fn(tk.array(1.0)))
 
   # Also prints: array(2.71828, dtype=float32)
-  print(compiled_grad_fn(mx.array(1.0)))
+  print(compiled_grad_fn(tk.array(1.0)))
 
 .. note::
 
@@ -430,16 +430,16 @@ the most opportunity to optimize the computation graph:
 
 .. code-block:: python
 
-  @mx.compile
+  @tk.compile
   def inner(x):
-      return mx.exp(-mx.abs(x))
+      return tk.exp(-tk.abs(x))
 
   def outer(x):
       inner(inner(x))
 
   # Compiling the outer function is good to do as it will likely
   # be faster even though the inner functions are compiled
-  fun = mx.compile(outer)
+  fun = tk.compile(outer)
 
 
 
@@ -457,20 +457,20 @@ recompiled.
 .. code-block:: python
 
   def fun(x, y):
-      return mx.abs(x + y)
+      return tk.abs(x + y)
 
-  compiled_fun = mx.compile(fun, shapeless=True)
+  compiled_fun = tk.compile(fun, shapeless=True)
 
-  x = mx.array(1.0)
-  y = mx.array(-2.0)
+  x = tk.array(1.0)
+  y = tk.array(-2.0)
 
   # First call compiles the function
   print(compiled_fun(x, y))
 
   # Second call with different shapes
   # does not recompile the function
-  x = mx.array([1.0, -6.0])
-  y = mx.array([-2.0, 3.0])
+  x = tk.array([1.0, -6.0])
+  y = tk.array([-2.0, 3.0])
   print(compiled_fun(x, y))
 
 
@@ -484,13 +484,13 @@ to detect. For example:
   def fun(x):
       return x.reshape(x.shape[0] * x.shape[1], -1)
 
-  compiled_fun = mx.compile(fun, shapeless=True)
+  compiled_fun = tk.compile(fun, shapeless=True)
 
-  x = mx.random.uniform(shape=(2, 3, 4))
+  x = tk.random.uniform(shape=(2, 3, 4))
 
   out = compiled_fun(x)
 
-  x = mx.random.uniform(shape=(5, 5, 3))
+  x = tk.random.uniform(shape=(5, 5, 3))
 
   # Error, can't reshape (5, 5, 3) to (6, -1)
   out = compiled_fun(x)
@@ -504,13 +504,13 @@ fix this by using :func:`flatten` to avoid hardcoding the shape of ``x``:
   def fun(x):
       return x.flatten(0, 1)
 
-  compiled_fun = mx.compile(fun, shapeless=True)
+  compiled_fun = tk.compile(fun, shapeless=True)
 
-  x = mx.random.uniform(shape=(2, 3, 4))
+  x = tk.random.uniform(shape=(2, 3, 4))
 
   out = compiled_fun(x)
 
-  x = mx.random.uniform(shape=(5, 5, 3))
+  x = tk.random.uniform(shape=(5, 5, 3))
 
   # Ok
   out = compiled_fun(x)

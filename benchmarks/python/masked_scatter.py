@@ -7,8 +7,8 @@ from copy import copy
 from functools import partial
 
 import matplotlib.pyplot as plt
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 import torch
 from matplotlib.ticker import FuncFormatter
 
@@ -75,13 +75,13 @@ def torch_sync():
         torch.mps.synchronize()
 
 
-def masked_scatter_mlx(self_arr, mask_arr, src_arr):
+def masked_scatter_tiki(self_arr, mask_arr, src_arr):
     outs = []
     for _ in range(N_ITER_FUNC):
         out = copy(self_arr)
         out[mask_arr] = src_arr
         outs.append(out)
-    mx.eval(outs)
+    tk.eval(outs)
     return outs
 
 
@@ -123,68 +123,76 @@ def build_case(length, density, np_dtype, torch_dtype):
     rng.shuffle(mask_np)
     src_np = rng.normal(0.0, 1.0, true_count).astype(np_dtype)
 
-    self_mlx = mx.array(self_np)
-    mask_mlx = mx.array(mask_np)
-    src_mlx = mx.array(src_np)
+    self_tiki = tk.array(self_np)
+    mask_tiki = tk.array(mask_np)
+    src_tiki = tk.array(src_np)
 
     self_torch = torch.from_numpy(self_np).to(device=TORCH_DEVICE, dtype=torch_dtype)
     mask_torch = torch.from_numpy(mask_np).to(device=TORCH_DEVICE)
     src_torch = torch.from_numpy(src_np).to(device=TORCH_DEVICE, dtype=torch_dtype)
 
     # Correctness check once per configuration
-    mx_out = mx.array(self_np)
-    mx_out[mask_mlx] = src_mlx
-    mx.eval(mx_out)
+    mx_out = tk.array(self_np)
+    mx_out[mask_tiki] = src_tiki
+    tk.eval(mx_out)
     torch_out = self_torch.clone()
     torch_out.masked_scatter_(mask_torch, src_torch)
 
     atol = 5e-3 if np_dtype == np.float16 else 1e-5
     if not np.allclose(np.array(mx_out), torch_out.cpu().numpy(), atol=atol):
-        raise AssertionError("masked_scatter results diverged between MLX and Torch")
+        raise AssertionError("masked_scatter results diverged between Tiki and Torch")
 
-    return (self_mlx, mask_mlx, src_mlx, self_torch, mask_torch, src_torch, true_count)
+    return (
+        self_tiki,
+        mask_tiki,
+        src_tiki,
+        self_torch,
+        mask_torch,
+        src_torch,
+        true_count,
+    )
 
 
 def bench_case(length, density, dtype):
     np_dtype = getattr(np, dtype)
     torch_dtype = getattr(torch, dtype)
     (
-        self_mlx,
-        mask_mlx,
-        src_mlx,
+        self_tiki,
+        mask_tiki,
+        src_tiki,
         self_torch,
         mask_torch,
         src_torch,
         true_count,
     ) = build_case(length, density, np_dtype, torch_dtype)
 
-    time_mlx = measure(partial(masked_scatter_mlx, self_mlx, mask_mlx, src_mlx))
+    time_tiki = measure(partial(masked_scatter_tiki, self_tiki, mask_tiki, src_tiki))
     time_torch = measure(
         partial(masked_scatter_torch, self_torch, mask_torch, src_torch)
     )
 
     total_bytes = bytes_touched(length, true_count, np_dtype().itemsize)
     bytes_per_gb = float(1024**3)
-    mlx_gbps = (total_bytes / bytes_per_gb) / time_mlx
+    tiki_gbps = (total_bytes / bytes_per_gb) / time_tiki
     torch_gbps = (total_bytes / bytes_per_gb) / time_torch
 
-    return time_mlx, time_torch, mlx_gbps, torch_gbps
+    return time_tiki, time_torch, tiki_gbps, torch_gbps
 
 
 def plot_density(ax_perf, ax_speedup, density, dtype):
-    mlx_gbps = []
+    tiki_gbps = []
     torch_gbps = []
-    mlx_times = []
+    tiki_times = []
     torch_times = []
 
     for length in VECTOR_LENGTHS:
-        t_mlx, t_torch, gbps_mlx, gbps_torch = bench_case(length, density, dtype)
-        mlx_gbps.append(gbps_mlx)
+        t_tiki, t_torch, gbps_tiki, gbps_torch = bench_case(length, density, dtype)
+        tiki_gbps.append(gbps_tiki)
         torch_gbps.append(gbps_torch)
-        mlx_times.append(t_mlx)
+        tiki_times.append(t_tiki)
         torch_times.append(t_torch)
 
-    ax_perf.plot(VECTOR_LENGTHS, mlx_gbps, "tab:blue", label="MLX")
+    ax_perf.plot(VECTOR_LENGTHS, tiki_gbps, "tab:blue", label="Tiki")
     ax_perf.plot(VECTOR_LENGTHS, torch_gbps, "tab:red", label="Torch")
     ax_perf.set_xscale("log", base=2)
     ax_perf.set_xticks(VECTOR_LENGTHS)
@@ -195,13 +203,13 @@ def plot_density(ax_perf, ax_speedup, density, dtype):
     ax_perf.grid(True, which="both", linestyle=":", alpha=0.4)
     ax_perf.legend()
 
-    speedup = np.array(torch_times) / np.array(mlx_times)
+    speedup = np.array(torch_times) / np.array(tiki_times)
     ax_speedup.plot(VECTOR_LENGTHS, speedup, "tab:green")
     ax_speedup.axhline(1.0, color="tab:gray", linestyle="--")
     ax_speedup.set_xscale("log", base=2)
     ax_speedup.set_xticks(VECTOR_LENGTHS)
     ax_speedup.xaxis.set_major_formatter(formatter)
-    ax_speedup.set_ylabel("Speedup (Torch_t / MLX_t)")
+    ax_speedup.set_ylabel("Speedup (Torch_t / TIKI_t)")
     ax_speedup.grid(True, which="both", linestyle=":", alpha=0.4)
 
 

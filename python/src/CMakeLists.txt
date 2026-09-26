@@ -6,8 +6,8 @@ nanobind_add_module(
   LTO
   NOMINSIZE
   NB_DOMAIN
-  mlx
-  ${CMAKE_CURRENT_SOURCE_DIR}/mlx.cpp
+  tiki
+  ${CMAKE_CURRENT_SOURCE_DIR}/tiki.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/convert.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
@@ -20,7 +20,7 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/cuda.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/memory.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/mlx_func.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/tiki_func.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
@@ -31,31 +31,31 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/print.cpp)
 
-if(MLX_BUILD_PYTHON_STUBS)
+if(TIKI_BUILD_PYTHON_STUBS)
   nanobind_add_stub(
     core_stub
-    # Run stubgen -m mlx.core -i python -p _stub_patterns.txt -o python/mlx
+    # Run stubgen -m tiki.core -i python -p _stub_patterns.txt -o python/tiki
     RECURSIVE
     MODULE
-    "mlx.core"
+    "tiki.core"
     PYTHON_PATH
     "$<TARGET_FILE_DIR:core>/.."
     "${CMAKE_CURRENT_SOURCE_DIR}/.."
     PATTERN_FILE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/_stub_patterns.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/_stub_patterns.txt"
     OUTPUT_PATH
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki"
     # Note that the list is passed to cmake for dependency managment and not
     # used by stubgen.
     OUTPUT
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/__init__.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/cuda.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/distributed.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fast.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/fft.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/linalg.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/metal.pyi"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mlx/core/random.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/__init__.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/cuda.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/distributed.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/fast.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/fft.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/linalg.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/metal.pyi"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../tiki/core/random.pyi"
     # Make this an optional installable component.
     EXCLUDE_FROM_ALL
     INSTALL_TIME
@@ -63,32 +63,32 @@ if(MLX_BUILD_PYTHON_STUBS)
     core_stub)
 endif()
 
-if(NOT MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY)
+if(NOT TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY)
   if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set(MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+    set(TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
   else()
-    set(MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+    set(TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
   endif()
 endif()
 
 set_target_properties(
   core
-  PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
+  PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
              # Do not append a sub-dir for multi-config generators like MSVC
              # and XCode.
              LIBRARY_OUTPUT_DIRECTORY_RELEASE
-             ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
+             ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
              LIBRARY_OUTPUT_DIRECTORY_DEBUG
-             ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
+             ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
              LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO
-             ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
+             ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY}
              LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL
-             ${MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY})
+             ${TIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY})
 
-target_link_libraries(core PRIVATE mlx)
+target_link_libraries(core PRIVATE tiki)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/mlx/layout
-                 ${CMAKE_BINARY_DIR}/mlx/layout)
+add_subdirectory(${PROJECT_SOURCE_DIR}/tiki/layout
+                 ${CMAKE_BINARY_DIR}/tiki/layout)
 
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

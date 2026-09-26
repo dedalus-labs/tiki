@@ -6,11 +6,11 @@ inputs:
     description: 'The args for generating CMake project'
     required: true
   build-frontend:
-    description: 'Build the frontend mlx package'
+    description: 'Build the frontend tiki package'
     required: false
     default: 'true'
   build-backend:
-    description: 'Build the backend mlx-cpu/mlx-cuda/mlx-metal packages'
+    description: 'Build the backend tiki-cpu/tiki-cuda/tiki-metal packages'
     required: false
     default: 'true'
   macos-target:
@@ -48,19 +48,19 @@ runs:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         python setup.py clean --all
-        MLX_BUILD_FRONTEND_PACKAGE=1 python -m build -w
+        TIKI_BUILD_FRONTEND_PACKAGE=1 python -m build -w
 
     - name: Post-process frontend package
       if: inputs.build-frontend == 'true'
       shell: bash
       run: |
         if ${{ runner.os == 'Linux' }} ; then
-          auditwheel repair dist/mlx-*.whl \
+          auditwheel repair dist/tiki-*.whl \
             --plat manylinux_2_35_${{ inputs.arch-tag }} \
-            --exclude libmlx.so* \
+            --exclude libtiki.so* \
             --only-plat
         else
-          mv dist/mlx-*.whl wheelhouse/
+          mv dist/tiki-*.whl wheelhouse/
         fi
 
     - name: Build backend package
@@ -71,19 +71,19 @@ runs:
         MACOSX_DEPLOYMENT_TARGET: ${{ inputs.macos-target }}
       run: |
         python setup.py clean --all
-        MLX_BUILD_BACKEND_PACKAGE=1 python -m build -w
+        TIKI_BUILD_BACKEND_PACKAGE=1 python -m build -w
 
     - name: Post-process backend package
       if: inputs.build-backend == 'true'
       shell: bash
       run: |
         if ${{ runner.os == 'Linux' }} ; then
-          if [ -f dist/mlx_cpu*.whl ]; then
-            auditwheel repair dist/mlx_cpu*.whl \
+          if [ -f dist/tiki_cpu*.whl ]; then
+            auditwheel repair dist/tiki_cpu*.whl \
               --plat manylinux_2_35_${{ inputs.arch-tag }}
           fi
-          if [ -f dist/mlx_cuda*.whl ]; then
-            auditwheel repair dist/mlx_cuda*.whl \
+          if [ -f dist/tiki_cuda*.whl ]; then
+            auditwheel repair dist/tiki_cuda*.whl \
               --plat manylinux_2_35_${{ inputs.arch-tag }} \
               --exclude libcublas* \
               --exclude libcuda* \
@@ -94,13 +94,13 @@ runs:
               --exclude libnvrtc*
           fi
         else
-          if [ -f dist/mlx_cpu*.whl ]; then
-            mv dist/mlx_cpu*.whl wheelhouse/
+          if [ -f dist/tiki_cpu*.whl ]; then
+            mv dist/tiki_cpu*.whl wheelhouse/
           fi
-          if [ -f dist/mlx_cuda*.whl ]; then
-            mv dist/mlx_cuda*.whl wheelhouse/
+          if [ -f dist/tiki_cuda*.whl ]; then
+            mv dist/tiki_cuda*.whl wheelhouse/
           fi
-          if [ -f dist/mlx_metal*.whl ]; then
-            mv dist/mlx_metal*.whl wheelhouse/
+          if [ -f dist/tiki_metal*.whl ]; then
+            mv dist/tiki_metal*.whl wheelhouse/
           fi
         fi

@@ -34,14 +34,14 @@ runs:
         uv pip install torch --torch-backend=cpu
         uv pip install numpy
         if ${{ inputs.toolkit == 'cpu' }} ; then
-          uv pip install wheelhouse/mlx_cpu*.whl
-          uv pip install wheelhouse/mlx-*.whl
+          uv pip install wheelhouse/tiki_cpu*.whl
+          uv pip install wheelhouse/tiki-*.whl
         elif ${{ startsWith(inputs.toolkit, 'cuda') }} ; then
-          uv pip install wheelhouse/mlx_cuda*.whl
-          uv pip install wheelhouse/mlx-*.whl
+          uv pip install wheelhouse/tiki_cuda*.whl
+          uv pip install wheelhouse/tiki-*.whl
         elif ${{ inputs.toolkit == 'metal' }} ; then
-          uv pip install wheelhouse/mlx_metal-*-macosx_26_0_arm64.whl
-          uv pip install wheelhouse/mlx-*-macosx_26_0_arm64.whl
+          uv pip install wheelhouse/tiki_metal-*-macosx_26_0_arm64.whl
+          uv pip install wheelhouse/tiki-*-macosx_26_0_arm64.whl
         else
           echo "No matching backend wheel to install"
           exit 1

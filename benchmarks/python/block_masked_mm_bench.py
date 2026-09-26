@@ -3,13 +3,13 @@
 import argparse
 import time
 
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 
-MLX_DTYPES = {
-    "float16": mx.float16,
-    "bfloat16": mx.bfloat16,
-    "float32": mx.float32,
+TIKI_DTYPES = {
+    "float16": tk.float16,
+    "bfloat16": tk.bfloat16,
+    "float32": tk.float32,
 }
 
 
@@ -35,13 +35,13 @@ def make_masks(m, n, k, block_size, sparsity, rng):
     return lhs_mask, rhs_mask, out_mask
 
 
-def mlx_naive_block_masked_mm(a, b, block_size, out_mask, lhs_mask, rhs_mask):
-    """MLX naive: expand masks and use regular matmul."""
+def tiki_naive_block_masked_mm(a, b, block_size, out_mask, lhs_mask, rhs_mask):
+    """Tiki naive: expand masks and use regular matmul."""
     M, K = a.shape[-2], a.shape[-1]
     N = b.shape[-1]
 
     def expand(mask, rows, cols):
-        e = mx.repeat(mx.repeat(mask, block_size, axis=-2), block_size, axis=-1)
+        e = tk.repeat(tk.repeat(mask, block_size, axis=-2), block_size, axis=-1)
         return e[..., :rows, :cols]
 
     a_masked = a * expand(lhs_mask, M, K)
@@ -51,17 +51,17 @@ def mlx_naive_block_masked_mm(a, b, block_size, out_mask, lhs_mask, rhs_mask):
     return c
 
 
-def bench_mlx(fn, warmup, iters):
+def bench_tiki(fn, warmup, iters):
     for _ in range(warmup):
         y = fn()
-        mx.eval(y)
-    mx.synchronize()
+        tk.eval(y)
+    tk.synchronize()
 
     start = time.perf_counter()
     for _ in range(iters):
         y = fn()
-        mx.eval(y)
-    mx.synchronize()
+        tk.eval(y)
+    tk.synchronize()
     return (time.perf_counter() - start) * 1e3 / iters
 
 
@@ -114,14 +114,14 @@ def main():
     parser.add_argument("--no-check", action="store_true")
     args = parser.parse_args()
 
-    mlx_dtype = MLX_DTYPES[args.dtype]
+    tiki_dtype = TIKI_DTYPES[args.dtype]
 
     print(f"dtype={args.dtype}  warmup={args.warmup}  iters={args.iters}")
 
     headers = [
         "Case (MxNxKxBS)",
         "Sparsity",
-        "MLX ms",
+        "Tiki ms",
         "Naive ms",
         "Speedup",
     ]
@@ -136,47 +136,47 @@ def main():
         b_np = rng.standard_normal((k, n)).astype(np.float32)
         lhs_mask_np, rhs_mask_np, out_mask_np = make_masks(m, n, k, bs, sparsity, rng)
 
-        a_mx = mx.array(a_np, dtype=mlx_dtype)
-        b_mx = mx.array(b_np, dtype=mlx_dtype)
-        lhs_mask_mx = mx.array(lhs_mask_np)
-        rhs_mask_mx = mx.array(rhs_mask_np)
-        out_mask_mx = mx.array(out_mask_np)
-        mx.eval(a_mx, b_mx, lhs_mask_mx, rhs_mask_mx, out_mask_mx)
+        a_mx = tk.array(a_np, dtype=tiki_dtype)
+        b_mx = tk.array(b_np, dtype=tiki_dtype)
+        lhs_mask_mx = tk.array(lhs_mask_np)
+        rhs_mask_mx = tk.array(rhs_mask_np)
+        out_mask_mx = tk.array(out_mask_np)
+        tk.eval(a_mx, b_mx, lhs_mask_mx, rhs_mask_mx, out_mask_mx)
 
         # Correctness check: block_masked_mm vs naive expand+matmul
         err_str = ""
         if not args.no_check:
-            y_op = mx.block_masked_mm(
+            y_op = tk.block_masked_mm(
                 a_mx, b_mx, bs, out_mask_mx, lhs_mask_mx, rhs_mask_mx
             )
-            y_naive = mlx_naive_block_masked_mm(
+            y_naive = tiki_naive_block_masked_mm(
                 a_mx, b_mx, bs, out_mask_mx, lhs_mask_mx, rhs_mask_mx
             )
-            mx.eval(y_op, y_naive)
-            err = float(mx.max(mx.abs(y_op - y_naive)).item())
+            tk.eval(y_op, y_naive)
+            err = float(tk.max(tk.abs(y_op - y_naive)).item())
             err_str = f"{err:.2e}"
 
         # Benchmark
-        t_mlx = bench_mlx(
-            lambda: mx.block_masked_mm(
+        t_tiki = bench_tiki(
+            lambda: tk.block_masked_mm(
                 a_mx, b_mx, bs, out_mask_mx, lhs_mask_mx, rhs_mask_mx
             ),
             args.warmup,
             args.iters,
         )
-        t_naive = bench_mlx(
-            lambda: mlx_naive_block_masked_mm(
+        t_naive = bench_tiki(
+            lambda: tiki_naive_block_masked_mm(
                 a_mx, b_mx, bs, out_mask_mx, lhs_mask_mx, rhs_mask_mx
             ),
             args.warmup,
             args.iters,
         )
-        speedup = f"{t_naive / t_mlx:.2f}x" if t_mlx > 0 else "-"
+        speedup = f"{t_naive / t_tiki:.2f}x" if t_tiki > 0 else "-"
 
         row = [
             f"{m}x{n}x{k}x{bs}",
             f"{sparsity:.0%}",
-            f"{t_mlx:.3f}",
+            f"{t_tiki:.3f}",
             f"{t_naive:.3f}",
             speedup,
         ]

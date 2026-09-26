@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import mlx.core as mx
-import mlx.nn as nn
+import tiki as tk
+import tiki.nn as nn
 from time_utils import time_fn
 
 
@@ -9,8 +9,8 @@ def time_rope():
     rope = nn.RoPE(64)
 
     # vec
-    x = mx.random.uniform(shape=(1, 32, 1, 128)).astype(mx.float16)
-    mx.eval(x)
+    x = tk.random.uniform(shape=(1, 32, 1, 128)).astype(tk.float16)
+    tk.eval(x)
 
     def rope_vec(x):
         for _ in range(32):
@@ -20,8 +20,8 @@ def time_rope():
     time_fn(rope_vec, x)
 
     # matrix
-    x = mx.random.uniform(shape=(1, 32, 1024, 128)).astype(mx.float16)
-    mx.eval(x)
+    x = tk.random.uniform(shape=(1, 32, 1024, 128)).astype(tk.float16)
+    tk.eval(x)
 
     def rope_mat(x):
         for _ in range(32):

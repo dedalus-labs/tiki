@@ -5,10 +5,10 @@
 
 #include <nanobind/ndarray.h>
 
-#include "mlx/dtype.h"
-#include "mlx/ops.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
+#include "tiki/dtype.h"
+#include "tiki/ops.h"
 
 bool is_none_slice(const nb::slice& in_slice) {
   return (
@@ -21,7 +21,7 @@ bool is_index_scalar(const nb::object& obj) {
   if (nb::isinstance<nb::bool_>(obj)) {
     return false;
   }
-  if (nb::isinstance<mx::array>(obj)) {
+  if (nb::isinstance<tk::array>(obj)) {
     return false;
   }
   if (!PyIndex_Check(obj.ptr())) {
@@ -57,9 +57,9 @@ int get_slice_int(nb::object obj, int default_val) {
 }
 
 void get_slice_params(
-    mx::ShapeElem& starts,
-    mx::ShapeElem& ends,
-    mx::ShapeElem& strides,
+    tk::ShapeElem& starts,
+    tk::ShapeElem& ends,
+    tk::ShapeElem& strides,
     const nb::slice& in_slice,
     int axis_size) {
   // Following numpy's convention
@@ -75,20 +75,20 @@ void get_slice_params(
       nb::getattr(in_slice, "stop"), strides < 0 ? -axis_size - 1 : axis_size);
 }
 
-mx::array get_int_index(nb::object idx, int axis_size) {
+tk::array get_int_index(nb::object idx, int axis_size) {
   int idx_ = safe_to_int32(idx);
   idx_ = (idx_ < 0) ? idx_ + axis_size : idx_;
 
-  return mx::array(idx_, mx::uint32);
+  return tk::array(idx_, tk::uint32);
 }
 
 bool is_valid_index_type(const nb::object& obj) {
   return nb::isinstance<nb::slice>(obj) || is_index_scalar(obj) ||
-      nb::isinstance<mx::array>(obj) || obj.is_none() ||
+      nb::isinstance<tk::array>(obj) || obj.is_none() ||
       nb::ellipsis().is(obj) || nb::isinstance<nb::list>(obj);
 }
 
-mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
+tk::array tiki_get_item_slice(const tk::array& src, const nb::slice& in_slice) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
     throw std::invalid_argument(
@@ -100,23 +100,23 @@ mx::array mlx_get_item_slice(const mx::array& src, const nb::slice& in_slice) {
     return src;
   }
 
-  mx::Shape starts(src.ndim(), 0);
+  tk::Shape starts(src.ndim(), 0);
   auto ends = src.shape();
-  mx::Shape strides(src.ndim(), 1);
+  tk::Shape strides(src.ndim(), 1);
 
   // Check and update slice params
   get_slice_params(starts[0], ends[0], strides[0], in_slice, ends[0]);
   return slice(src, starts, ends, strides);
 }
 
-mx::array mlx_get_item_array(const mx::array& src, const mx::array& indices) {
+tk::array tiki_get_item_array(const tk::array& src, const tk::array& indices) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
     throw std::invalid_argument(
         "too many indices for array: array is 0-dimensional");
   }
 
-  if (indices.dtype() == mx::bool_) {
+  if (indices.dtype() == tk::bool_) {
     throw std::invalid_argument("boolean indices are not yet supported");
   }
 
@@ -125,7 +125,7 @@ mx::array mlx_get_item_array(const mx::array& src, const mx::array& indices) {
   return take(src, indices, 0);
 }
 
-mx::array mlx_get_item_int(const mx::array& src, const nb::object& idx) {
+tk::array tiki_get_item_int(const tk::array& src, const nb::object& idx) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
     throw std::invalid_argument(
@@ -137,13 +137,13 @@ mx::array mlx_get_item_int(const mx::array& src, const nb::object& idx) {
   return take(src, get_int_index(idx, src.shape(0)), 0);
 }
 
-mx::array mlx_gather_nd(
-    mx::array src,
+tk::array tiki_gather_nd(
+    tk::array src,
     const std::vector<nb::object>& indices,
     bool gather_first,
     int& max_dims) {
   max_dims = 0;
-  std::vector<mx::array> gather_indices;
+  std::vector<tk::array> gather_indices;
   std::vector<bool> is_slice(indices.size(), false);
   int num_slices = 0;
   // gather all the arrays
@@ -151,7 +151,7 @@ mx::array mlx_gather_nd(
     auto& idx = indices[i];
 
     if (nb::isinstance<nb::slice>(idx)) {
-      mx::ShapeElem start, end, stride;
+      tk::ShapeElem start, end, stride;
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(idx), src.shape(i));
 
@@ -159,13 +159,13 @@ mx::array mlx_gather_nd(
       start = (start < 0) ? start + src.shape(i) : start;
       end = (end < 0) ? end + src.shape(i) : end;
 
-      gather_indices.push_back(arange(start, end, stride, mx::uint32));
+      gather_indices.push_back(arange(start, end, stride, tk::uint32));
       num_slices++;
       is_slice[i] = true;
     } else if (is_index_scalar(idx)) {
       gather_indices.push_back(get_int_index(idx, src.shape(i)));
-    } else if (nb::isinstance<mx::array>(idx)) {
-      auto arr = nb::cast<mx::array>(idx);
+    } else if (nb::isinstance<tk::array>(idx)) {
+      auto arr = nb::cast<tk::array>(idx);
       max_dims = std::max(static_cast<int>(arr.ndim()), max_dims);
       gather_indices.push_back(arr);
     }
@@ -176,7 +176,7 @@ mx::array mlx_gather_nd(
     int slice_index = 0;
     for (int i = 0; i < gather_indices.size(); i++) {
       if (is_slice[i]) {
-        mx::Shape index_shape(max_dims + num_slices, 1);
+        tk::Shape index_shape(max_dims + num_slices, 1);
         index_shape[max_dims + slice_index] = gather_indices[i].shape(0);
         gather_indices[i] = reshape(gather_indices[i], std::move(index_shape));
         slice_index++;
@@ -190,7 +190,7 @@ mx::array mlx_gather_nd(
     // reshape them so that the int/array indices are last
     for (int i = 0; i < gather_indices.size(); i++) {
       if (i < num_slices) {
-        mx::Shape index_shape(max_dims + num_slices, 1);
+        tk::Shape index_shape(max_dims + num_slices, 1);
         index_shape[i] = gather_indices[i].shape(0);
         gather_indices[i] = reshape(gather_indices[i], std::move(index_shape));
       }
@@ -208,10 +208,10 @@ mx::array mlx_gather_nd(
   for (auto& ax : axes) {
     ax += max_dims + num_slices;
   }
-  return mx::squeeze(src, axes);
+  return tk::squeeze(src, axes);
 }
 
-auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
+auto tiki_expand_ellipsis(const tk::Shape& shape, const nb::tuple& entries) {
   std::vector<nb::object> indices;
 
   // Go over all entries and note the position of ellipsis
@@ -226,7 +226,7 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
     auto idx = entries[i];
     if (!is_valid_index_type(idx)) {
       throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
+          "Cannot index tiki array using the given type yet");
     }
     if (!nb::ellipsis().is(idx)) {
       indices.push_back(idx);
@@ -242,7 +242,7 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
     auto idx = entries[j];
     if (!is_valid_index_type(idx)) {
       throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
+          "Cannot index tiki array using the given type yet");
     }
     if (nb::ellipsis().is(idx)) {
       throw std::invalid_argument(
@@ -267,7 +267,7 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
          axis < ndim - non_none_indices_after;
          axis++) {
       indices.push_back(
-          nb::slice(mx::ShapeElem{0}, shape[axis], mx::ShapeElem{1}));
+          nb::slice(tk::ShapeElem{0}, shape[axis], tk::ShapeElem{1}));
       non_none_indices++;
     }
   }
@@ -278,7 +278,7 @@ auto mlx_expand_ellipsis(const mx::Shape& shape, const nb::tuple& entries) {
   return std::make_pair(non_none_indices, indices);
 }
 
-mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
+tk::array tiki_get_item_nd(tk::array src, const nb::tuple& entries) {
   // No indices make this a noop
   if (entries.size() == 0) {
     return src;
@@ -291,7 +291,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
   // 4. Calculate the remaining slices and reshapes
 
   // Ellipsis handling
-  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
+  auto [non_none_indices, indices] = tiki_expand_ellipsis(src.shape(), entries);
   // List handling
   for (auto& idx : indices) {
     if (nb::isinstance<nb::list>(idx)) {
@@ -318,7 +318,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
     bool have_non_array = false;
     bool gather_first = false;
     for (auto& idx : indices) {
-      if (nb::isinstance<mx::array>(idx) || is_index_scalar(idx)) {
+      if (nb::isinstance<tk::array>(idx) || is_index_scalar(idx)) {
         if (have_array && have_non_array) {
           gather_first = true;
           break;
@@ -331,7 +331,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
 
     int n_arr = 0;
     for (auto& idx : indices) {
-      n_arr += nb::isinstance<mx::array>(idx);
+      n_arr += nb::isinstance<tk::array>(idx);
     }
 
     have_array &= n_arr > 0;
@@ -341,7 +341,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
       // Then find the last array
       for (last_array = indices.size() - 1; last_array >= 0; last_array--) {
         auto& idx = indices[last_array];
-        if (nb::isinstance<mx::array>(idx) || is_index_scalar(idx)) {
+        if (nb::isinstance<tk::array>(idx) || is_index_scalar(idx)) {
           break;
         }
       }
@@ -354,7 +354,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
         }
       }
       int max_dims;
-      src = mlx_gather_nd(src, gather_indices, gather_first, max_dims);
+      src = tiki_gather_nd(src, gather_indices, gather_first, max_dims);
 
       // Reassemble the indices for the slicing or reshaping if there are any
       if (gather_first) {
@@ -377,7 +377,7 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
       } else {
         for (int i = 0; i < indices.size(); i++) {
           auto& idx = indices[i];
-          if (nb::isinstance<mx::array>(idx) || is_index_scalar(idx)) {
+          if (nb::isinstance<tk::array>(idx) || is_index_scalar(idx)) {
             break;
           } else if (idx.is_none()) {
             remaining_indices.push_back(idx);
@@ -408,9 +408,9 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
 
   // Slice handling
   {
-    mx::Shape starts(src.ndim(), 0);
+    tk::Shape starts(src.ndim(), 0);
     auto ends = src.shape();
-    mx::Shape strides(src.ndim(), 1);
+    tk::Shape strides(src.ndim(), 1);
     int axis = 0;
     for (auto& idx : remaining_indices) {
       if (!idx.is_none()) {
@@ -463,31 +463,31 @@ mx::array mlx_get_item_nd(mx::array src, const nb::tuple& entries) {
   return src;
 }
 
-mx::array mlx_get_item(const mx::array& src, const nb::object& obj) {
+tk::array tiki_get_item(const tk::array& src, const nb::object& obj) {
   if (nb::isinstance<nb::slice>(obj)) {
-    return mlx_get_item_slice(src, nb::cast<nb::slice>(obj));
-  } else if (nb::isinstance<mx::array>(obj)) {
-    return mlx_get_item_array(src, nb::cast<mx::array>(obj));
+    return tiki_get_item_slice(src, nb::cast<nb::slice>(obj));
+  } else if (nb::isinstance<tk::array>(obj)) {
+    return tiki_get_item_array(src, nb::cast<tk::array>(obj));
   } else if (is_index_scalar(obj)) {
-    return mlx_get_item_int(src, obj);
+    return tiki_get_item_int(src, obj);
   } else if (nb::isinstance<nb::tuple>(obj)) {
-    return mlx_get_item_nd(src, nb::cast<nb::tuple>(obj));
+    return tiki_get_item_nd(src, nb::cast<nb::tuple>(obj));
   } else if (nb::isinstance<nb::ellipsis>(obj)) {
     return src;
   } else if (obj.is_none()) {
     return expand_dims(src, 0);
   } else if (nb::isinstance<nb::list>(obj)) {
-    return mlx_get_item_array(
+    return tiki_get_item_array(
         src, array_from_list(nb::cast<nb::list>(obj), {}));
   }
-  throw std::invalid_argument("Cannot index mlx array using the given type.");
+  throw std::invalid_argument("Cannot index tiki array using the given type.");
 }
 
-std::tuple<std::vector<mx::array>, mx::array, std::vector<int>>
-mlx_scatter_args_int(
-    const mx::array& src,
+std::tuple<std::vector<tk::array>, tk::array, std::vector<int>>
+tiki_scatter_args_int(
+    const tk::array& src,
     const nb::object& idx,
-    const mx::array& update) {
+    const tk::array& update) {
   if (src.ndim() == 0) {
     throw std::invalid_argument(
         "too many indices for array: array is 0-dimensional");
@@ -498,7 +498,7 @@ mlx_scatter_args_int(
   int s = 0;
   for (; s < update.ndim() && update.shape(s) == 1; s++)
     ;
-  auto up_shape = mx::Shape(update.shape().begin() + s, update.shape().end());
+  auto up_shape = tk::Shape(update.shape().begin() + s, update.shape().end());
   auto shape = src.shape();
   shape[0] = 1;
 
@@ -508,20 +508,20 @@ mlx_scatter_args_int(
       {0}};
 }
 
-mx::array squeeze_leading_singletons(const mx::array& in) {
+tk::array squeeze_leading_singletons(const tk::array& in) {
   int s = 0;
   for (; s < in.ndim() && in.shape(s) == 1; s++)
     ;
   auto squeeze_axes = std::vector<int>(s);
   std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
-  return mx::squeeze(in, squeeze_axes);
+  return tk::squeeze(in, squeeze_axes);
 }
 
-std::tuple<std::vector<mx::array>, mx::array, std::vector<int>>
-mlx_scatter_args_array(
-    const mx::array& src,
-    const mx::array& indices,
-    const mx::array& update) {
+std::tuple<std::vector<tk::array>, tk::array, std::vector<int>>
+tiki_scatter_args_array(
+    const tk::array& src,
+    const tk::array& indices,
+    const tk::array& update) {
   if (src.ndim() == 0) {
     throw std::invalid_argument(
         "too many indices for array: array is 0-dimensional");
@@ -539,11 +539,11 @@ mlx_scatter_args_array(
   return {{indices}, up, {0}};
 }
 
-std::tuple<std::vector<mx::array>, mx::array, std::vector<int>>
-mlx_scatter_args_slice(
-    const mx::array& src,
+std::tuple<std::vector<tk::array>, tk::array, std::vector<int>>
+tiki_scatter_args_slice(
+    const tk::array& src,
     const nb::slice& in_slice,
-    const mx::array& update) {
+    const tk::array& update) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
     throw std::invalid_argument(
@@ -557,9 +557,9 @@ mlx_scatter_args_slice(
         {}, broadcast_to(squeeze_leading_singletons(update), src.shape()), {}};
   }
 
-  mx::ShapeElem start = 0;
+  tk::ShapeElem start = 0;
   auto end = src.shape(0);
-  mx::ShapeElem stride = 1;
+  tk::ShapeElem stride = 1;
 
   // Check and update slice params
   get_slice_params(start, end, stride, in_slice, end);
@@ -570,35 +570,35 @@ mlx_scatter_args_slice(
     auto up = squeeze_leading_singletons(update);
 
     // Build array to mark start of slice
-    auto idx = mx::array({start}, {1}, mx::uint32);
+    auto idx = tk::array({start}, {1}, tk::uint32);
 
     // Get slice size
     int slice_size = (end - start);
 
     // Broadcast update to slice size
-    mx::Shape up_shape_broadcast = {1, slice_size};
+    tk::Shape up_shape_broadcast = {1, slice_size};
     up_shape_broadcast.insert(
         up_shape_broadcast.end(), src.shape().begin() + 1, src.shape().end());
 
     up = broadcast_to(up, up_shape_broadcast);
 
-    auto indices = std::vector<mx::array>{idx};
+    auto indices = std::vector<tk::array>{idx};
     auto axes = std::vector<int>{0};
 
     return {indices, up, axes};
   }
 
-  return mlx_scatter_args_array(
-      src, arange(start, end, stride, mx::uint32), update);
+  return tiki_scatter_args_array(
+      src, arange(start, end, stride, tk::uint32), update);
 }
 
-std::tuple<std::vector<mx::array>, mx::array, std::vector<int>>
-mlx_scatter_args_nd(
-    const mx::array& src,
+std::tuple<std::vector<tk::array>, tk::array, std::vector<int>>
+tiki_scatter_args_nd(
+    const tk::array& src,
     const nb::tuple& entries,
-    const mx::array& update) {
+    const tk::array& update) {
   // Expand ellipses into a series of ':' slices
-  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
+  auto [non_none_indices, indices] = tiki_expand_ellipsis(src.shape(), entries);
 
   // Convert List to array
   for (auto& idx : indices) {
@@ -649,12 +649,12 @@ mlx_scatter_args_nd(
           num_simple_slices_post++;
         }
 
-      } else if (nb::isinstance<mx::array>(idx)) {
+      } else if (nb::isinstance<tk::array>(idx)) {
         have_array = true;
         if (have_array && have_non_array) {
           arrays_first = true;
         }
-        max_dim = std::max(nb::cast<mx::array>(idx).ndim(), max_dim);
+        max_dim = std::max(nb::cast<tk::array>(idx).ndim(), max_dim);
         num_arrays++;
         num_simple_slices_post = 0;
       }
@@ -669,7 +669,7 @@ mlx_scatter_args_nd(
   idx_ndim = idx_ndim == 0 ? 1 : idx_ndim;
 
   // Go over each index type and translate to the needed scatter args
-  std::vector<mx::array> arr_indices;
+  std::vector<tk::array> arr_indices;
   int slice_num = 0;
   int array_num = 0;
   int ax = 0;
@@ -681,7 +681,7 @@ mlx_scatter_args_nd(
   for (int i = 0; i < indices.size(); ++i) {
     auto& pyidx = indices[i];
     if (nb::isinstance<nb::slice>(pyidx)) {
-      mx::ShapeElem start, end, stride;
+      tk::ShapeElem start, end, stride;
       auto axis_size = src.shape(ax++);
       get_slice_params(
           start, end, stride, nb::cast<nb::slice>(pyidx), axis_size);
@@ -690,11 +690,11 @@ mlx_scatter_args_nd(
       start = (start < 0) ? start + axis_size : start;
       end = (end < 0) ? end + axis_size : end;
 
-      mx::Shape idx_shape(idx_ndim, 1);
+      tk::Shape idx_shape(idx_ndim, 1);
 
       // If it's a simple slice, we only need to add the start index
       if (array_num >= num_arrays && num_strided_slices <= 0 && stride == 1) {
-        auto idx = mx::array({start}, idx_shape, mx::uint32);
+        auto idx = tk::array({start}, idx_shape, tk::uint32);
         slice_shapes.push_back(end - start);
         arr_indices.push_back(idx);
 
@@ -703,7 +703,7 @@ mlx_scatter_args_nd(
       }
       // Otherwise we expand the slice into indices using arange
       else {
-        auto idx = arange(start, end, stride, mx::uint32);
+        auto idx = arange(start, end, stride, tk::uint32);
         auto loc = slice_num + (arrays_first ? max_dim : 0);
         idx_shape[loc] = idx.size();
         arr_indices.push_back(reshape(idx, idx_shape));
@@ -722,10 +722,10 @@ mlx_scatter_args_nd(
     } else if (pyidx.is_none()) {
       // We only use the None's for bookeeping dimensions
       slice_num++;
-    } else if (nb::isinstance<mx::array>(pyidx)) {
+    } else if (nb::isinstance<tk::array>(pyidx)) {
       ax++;
-      auto idx = nb::cast<mx::array>(pyidx);
-      mx::Shape idx_shape(idx_ndim, 1);
+      auto idx = nb::cast<tk::array>(pyidx);
+      tk::Shape idx_shape(idx_ndim, 1);
 
       // Place the arrays in the correct dimension
       int st = (!arrays_first) * slice_num + max_dim - idx.ndim();
@@ -741,7 +741,7 @@ mlx_scatter_args_nd(
       update_shape[ax - 1] = 1;
     } else {
       throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
+          "Cannot index tiki array using the given type yet");
     }
   }
 
@@ -774,41 +774,41 @@ mlx_scatter_args_nd(
   return {arr_indices, up, axes};
 }
 
-std::tuple<std::vector<mx::array>, mx::array, std::vector<int>>
-mlx_compute_scatter_args(
-    const mx::array& src,
+std::tuple<std::vector<tk::array>, tk::array, std::vector<int>>
+tiki_compute_scatter_args(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto vals = to_array(v, src.dtype());
   if (nb::isinstance<nb::slice>(obj)) {
-    return mlx_scatter_args_slice(src, nb::cast<nb::slice>(obj), vals);
-  } else if (nb::isinstance<mx::array>(obj)) {
-    return mlx_scatter_args_array(src, nb::cast<mx::array>(obj), vals);
+    return tiki_scatter_args_slice(src, nb::cast<nb::slice>(obj), vals);
+  } else if (nb::isinstance<tk::array>(obj)) {
+    return tiki_scatter_args_array(src, nb::cast<tk::array>(obj), vals);
   } else if (is_index_scalar(obj)) {
-    return mlx_scatter_args_int(src, obj, vals);
+    return tiki_scatter_args_int(src, obj, vals);
   } else if (nb::isinstance<nb::tuple>(obj)) {
-    return mlx_scatter_args_nd(src, nb::cast<nb::tuple>(obj), vals);
+    return tiki_scatter_args_nd(src, nb::cast<nb::tuple>(obj), vals);
   } else if (nb::isinstance<nb::ellipsis>(obj)) {
     return {{}, broadcast_to(vals, src.shape()), {}};
   } else if (obj.is_none()) {
     return {{}, broadcast_to(vals, src.shape()), {}};
   } else if (nb::isinstance<nb::list>(obj)) {
-    return mlx_scatter_args_array(
+    return tiki_scatter_args_array(
         src, array_from_list(nb::cast<nb::list>(obj), {}), vals);
   }
 
-  throw std::invalid_argument("Cannot index mlx array using the given type.");
+  throw std::invalid_argument("Cannot index tiki array using the given type.");
 }
 
-std::tuple<std::optional<mx::array>, mx::Shape, mx::Shape, mx::Shape>
-mlx_compute_slice_update_args(
-    const mx::array& src,
+std::tuple<std::optional<tk::array>, tk::Shape, tk::Shape, tk::Shape>
+tiki_compute_slice_update_args(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   // Build the slice params
-  mx::Shape starts(src.ndim(), 0);
-  mx::Shape stops = src.shape();
-  mx::Shape strides(src.ndim(), 1);
+  tk::Shape starts(src.ndim(), 0);
+  tk::Shape stops = src.shape();
+  tk::Shape strides(src.ndim(), 1);
 
   // Can't route to slice update if not slice, tuple, or int
   if (src.ndim() == 0 ||
@@ -820,7 +820,7 @@ mlx_compute_slice_update_args(
   if (nb::isinstance<nb::tuple>(obj)) {
     // Can't route to slice update if any arrays are present
     for (auto idx : nb::cast<nb::tuple>(obj)) {
-      if (nb::isinstance<mx::array>(idx) || nb::isinstance<nb::list>(idx)) {
+      if (nb::isinstance<tk::array>(idx) || nb::isinstance<nb::list>(idx)) {
         return std::make_tuple(
             std::nullopt,
             std::move(starts),
@@ -844,7 +844,7 @@ mlx_compute_slice_update_args(
   };
   auto squeeze_axes = std::vector<int>(s);
   std::iota(squeeze_axes.begin(), squeeze_axes.end(), 0);
-  update = mx::squeeze(update, squeeze_axes);
+  update = tk::squeeze(update, squeeze_axes);
 
   // Single int then make it a slice of size 1
   if (is_index_scalar(obj)) {
@@ -878,7 +878,7 @@ mlx_compute_slice_update_args(
   auto entries = nb::cast<nb::tuple>(obj);
 
   // Expand ellipsis into a series of ':' slices
-  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
+  auto [non_none_indices, indices] = tiki_expand_ellipsis(src.shape(), entries);
 
   // Dimension check
   if (non_none_indices > src.ndim()) {
@@ -930,42 +930,42 @@ mlx_compute_slice_update_args(
       }
     }
   }
-  update = mx::squeeze(
-      mx::expand_dims(update, std::move(expand_dims)), std::move(squeeze_dims));
+  update = tk::squeeze(
+      tk::expand_dims(update, std::move(expand_dims)), std::move(squeeze_dims));
 
   return std::make_tuple(
       update, std::move(starts), std::move(stops), std::move(strides));
 }
 
-std::optional<mx::array> extract_boolean_mask(const nb::object& obj) {
+std::optional<tk::array> extract_boolean_mask(const nb::object& obj) {
   using NDArray = nb::ndarray<nb::ro>;
   if (nb::isinstance<nb::bool_>(obj)) {
-    return mx::array(nb::cast<bool>(obj), mx::bool_);
-  } else if (nb::isinstance<mx::array>(obj)) {
-    auto mask = nb::cast<mx::array>(obj);
-    if (mask.dtype() == mx::bool_) {
+    return tk::array(nb::cast<bool>(obj), tk::bool_);
+  } else if (nb::isinstance<tk::array>(obj)) {
+    auto mask = nb::cast<tk::array>(obj);
+    if (mask.dtype() == tk::bool_) {
       return mask;
     }
   } else if (nb::isinstance<NDArray>(obj)) {
     auto mask = nb::cast<NDArray>(obj);
     if (mask.dtype() == nb::dtype<bool>()) {
-      return nd_array_to_mlx(mask, mx::bool_);
+      return nd_array_to_tiki(mask, tk::bool_);
     }
   } else if (nb::isinstance<nb::list>(obj)) {
     auto mask = array_from_list(nb::cast<nb::list>(obj), {});
-    if (mask.dtype() == mx::bool_) {
+    if (mask.dtype() == tk::bool_) {
       return mask;
     }
   }
   return std::nullopt;
 }
 
-void mlx_set_item(
-    mx::array& src,
+void tiki_set_item(
+    tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     src.overwrite_descriptor(
         slice_update(src, *update, starts, stops, strides));
@@ -979,7 +979,7 @@ void mlx_set_item(
     return;
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     auto out = scatter(src, indices, updates, axes);
     src.overwrite_descriptor(out);
@@ -988,17 +988,17 @@ void mlx_set_item(
   }
 }
 
-mx::array mlx_add_item(
-    const mx::array& src,
+tk::array tiki_add_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_add(src, *update, starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_add(src, indices, updates, axes);
   } else {
@@ -1006,17 +1006,17 @@ mx::array mlx_add_item(
   }
 }
 
-mx::array mlx_subtract_item(
-    const mx::array& src,
+tk::array tiki_subtract_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_add(src, -(*update), starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_add(src, indices, -updates, axes);
   } else {
@@ -1024,17 +1024,17 @@ mx::array mlx_subtract_item(
   }
 }
 
-mx::array mlx_multiply_item(
-    const mx::array& src,
+tk::array tiki_multiply_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_prod(src, *update, starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_prod(src, indices, updates, axes);
   } else {
@@ -1042,17 +1042,17 @@ mx::array mlx_multiply_item(
   }
 }
 
-mx::array mlx_divide_item(
-    const mx::array& src,
+tk::array tiki_divide_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_prod(src, reciprocal(*update), starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_prod(src, indices, reciprocal(updates), axes);
   } else {
@@ -1060,17 +1060,17 @@ mx::array mlx_divide_item(
   }
 }
 
-mx::array mlx_maximum_item(
-    const mx::array& src,
+tk::array tiki_maximum_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_max(src, *update, starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_max(src, indices, updates, axes);
   } else {
@@ -1078,17 +1078,17 @@ mx::array mlx_maximum_item(
   }
 }
 
-mx::array mlx_minimum_item(
-    const mx::array& src,
+tk::array tiki_minimum_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v) {
   auto [update, starts, stops, strides] =
-      mlx_compute_slice_update_args(src, obj, v);
+      tiki_compute_slice_update_args(src, obj, v);
   if (update) {
     return slice_update_min(src, *update, starts, stops, strides);
   }
 
-  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  auto [indices, updates, axes] = tiki_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     return scatter_min(src, indices, updates, axes);
   } else {

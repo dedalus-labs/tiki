@@ -3,209 +3,209 @@
 import unittest
 from functools import partial
 
-import mlx.core as mx
-import mlx_tests
+import tiki as tk
+import tiki_tests
 
 
-class TestEval(mlx_tests.MLXTestCase):
+class TestEval(tiki_tests.TIKITestCase):
     def test_eval(self):
-        arrs = [mx.ones((2, 2)) for _ in range(4)]
-        mx.eval(*arrs)
+        arrs = [tk.ones((2, 2)) for _ in range(4)]
+        tk.eval(*arrs)
         for x in arrs:
             self.assertEqual(x.tolist(), [[1, 1], [1, 1]])
 
     def test_retain_graph(self):
         def fun(x):
             y = 3 * x
-            mx.eval(y)
+            tk.eval(y)
             return 2 * y
 
-        dfun_dx = mx.grad(fun)
-        y = dfun_dx(mx.array(1.0))
+        dfun_dx = tk.grad(fun)
+        y = dfun_dx(tk.array(1.0))
         self.assertEqual(y.item(), 6.0)
 
     def test_eval_mixed(self):
-        x = mx.array(1) + 1 + 1
+        x = tk.array(1) + 1 + 1
         y = 0
         z = "hello"
         state = [x, y, z]
-        mx.eval(state)
+        tk.eval(state)
         self.assertEqual(x.item(), 3)
 
     def test_async_eval(self):
-        x = mx.array(1) + mx.array(1) + mx.array(1)
-        mx.async_eval(x)
+        x = tk.array(1) + tk.array(1) + tk.array(1)
+        tk.async_eval(x)
         self.assertEqual(x.item(), 3)
 
         # It should be safe to call eval on the array which has been async
         # eval'ed
-        x = mx.array(1) + mx.array(1) + mx.array(1)
+        x = tk.array(1) + tk.array(1) + tk.array(1)
         self.assertEqual(x.item(), 3)
 
-        x = mx.array([1, 2, 3])
+        x = tk.array([1, 2, 3])
         y = 2 * x
-        mx.async_eval(y)
+        tk.async_eval(y)
         z = 2 * y
-        mx.async_eval(z)
-        self.assertTrue(mx.array_equal(y, mx.array([2, 4, 6])))
-        self.assertTrue(mx.array_equal(z, mx.array([4, 8, 12])))
+        tk.async_eval(z)
+        self.assertTrue(tk.array_equal(y, tk.array([2, 4, 6])))
+        self.assertTrue(tk.array_equal(z, tk.array([4, 8, 12])))
 
     def test_async_eval_twice(self):
         for _ in range(1000):
-            x = mx.array(1) + mx.array(1) + mx.array(1)
-            mx.async_eval(x)
+            x = tk.array(1) + tk.array(1) + tk.array(1)
+            tk.async_eval(x)
             y = x + 1
-            mx.async_eval(y)
+            tk.async_eval(y)
             self.assertEqual(x.item(), 3)
             self.assertEqual(y.item(), 4)
 
     def test_async_eval_in_trace(self):
         def fun(x):
             y = x + 1.0
-            mx.async_eval(y)
-            return mx.exp(y)
+            tk.async_eval(y)
+            return tk.exp(y)
 
         # Raises
         with self.assertRaises(ValueError):
-            mx.grad(fun)(mx.array(1.0))
+            tk.grad(fun)(tk.array(1.0))
 
         # Also raises
         with self.assertRaises(ValueError):
-            mx.vmap(fun)(mx.ones((2, 2)))
+            tk.vmap(fun)(tk.ones((2, 2)))
 
     def test_async_eval_into_eval(self):
-        x = mx.array(1)
+        x = tk.array(1)
         y = x + 1
-        mx.async_eval(y)
+        tk.async_eval(y)
         a = y - 10
-        b = mx.abs(a)
+        b = tk.abs(a)
         self.assertEqual(b.item(), 8)
 
     def test_async_eval_into_eval_diff_stream(self):
-        s = mx.new_stream(mx.cpu)
-        x = mx.array(0)
+        s = tk.new_stream(tk.cpu)
+        x = tk.array(0)
         y = x - 5
-        mx.async_eval(y)
-        z = mx.abs(y, stream=s)
+        tk.async_eval(y)
+        z = tk.abs(y, stream=s)
         self.assertEqual(z.item(), 5)
 
     def test_eval_slow_fast_multi_stream(self):
-        x = mx.ones((8000,))
-        y = mx.abs(mx.array(-1.0))
+        x = tk.ones((8000,))
+        y = tk.abs(tk.array(-1.0))
         for _ in range(20):
-            x = x + mx.array(1.0)
-        z = mx.add(x, y, stream=mx.cpu)
-        self.assertTrue(mx.allclose(z, mx.full((8000,), 22.0)))
+            x = x + tk.array(1.0)
+        z = tk.add(x, y, stream=tk.cpu)
+        self.assertTrue(tk.allclose(z, tk.full((8000,), 22.0)))
 
         # Switch eval order
-        x = mx.ones((8000,))
-        y = mx.abs(mx.array(-1.0))
+        x = tk.ones((8000,))
+        y = tk.abs(tk.array(-1.0))
         for _ in range(20):
-            x = x + mx.array(1.0)
-        z = mx.add(y, x, stream=mx.cpu)
-        self.assertTrue(mx.allclose(z, mx.full((8000,), 22.0)))
+            x = x + tk.array(1.0)
+        z = tk.add(y, x, stream=tk.cpu)
+        self.assertTrue(tk.allclose(z, tk.full((8000,), 22.0)))
 
     def test_multi_output_eval_during_transform(self):
-        x = mx.random.uniform(shape=(1024,))
-        y = mx.ones((1024,))
-        mx.eval(x, y)
+        x = tk.random.uniform(shape=(1024,))
+        y = tk.ones((1024,))
+        tk.eval(x, y)
 
         def fn(x):
-            a, b = mx.divmod(x, x)
-            mx.eval(a)
+            a, b = tk.divmod(x, x)
+            tk.eval(a)
             return a
 
-        out = mx.vjp(fn, (x,), (y,))
-        out = mx.vjp(fn, (x,), (y,))
-        peak_mem = mx.get_peak_memory()
-        out = mx.vjp(fn, (x,), (y,))
-        self.assertEqual(peak_mem, mx.get_peak_memory())
+        out = tk.vjp(fn, (x,), (y,))
+        out = tk.vjp(fn, (x,), (y,))
+        peak_mem = tk.get_peak_memory()
+        out = tk.vjp(fn, (x,), (y,))
+        self.assertEqual(peak_mem, tk.get_peak_memory())
 
     def test_async_eval_with_multiple_streams(self):
-        x = mx.array([1.0])
-        y = mx.array([1.0])
-        a = mx.array([1.0])
-        b = mx.array([1.0])
+        x = tk.array([1.0])
+        y = tk.array([1.0])
+        a = tk.array([1.0])
+        b = tk.array([1.0])
 
-        d = mx.default_device()
-        s2 = mx.new_stream(d)
+        d = tk.default_device()
+        s2 = tk.new_stream(d)
 
         for _ in range(50):
             for _ in range(20):
                 x = x + y
-            mx.async_eval(x)
-            mx.eval(a + b)
+            tk.async_eval(x)
+            tk.eval(a + b)
 
     def test_donation_for_noops(self):
         def fun(x):
             s = x.shape
             for _ in range(10):
-                x = mx.abs(x)
-                x = mx.reshape(x, (-1,))
+                x = tk.abs(x)
+                x = tk.reshape(x, (-1,))
                 x = x.T.T
-                x = mx.stop_gradient(x)
-                x = mx.abs(x)
+                x = tk.stop_gradient(x)
+                x = tk.abs(x)
             return x
 
-        x = mx.zeros((4096, 4096))
-        mx.eval(x)
-        pre = mx.get_peak_memory()
+        x = tk.zeros((4096, 4096))
+        tk.eval(x)
+        pre = tk.get_peak_memory()
         out = fun(x)
         del x
-        mx.eval(out)
-        post = mx.get_peak_memory()
+        tk.eval(out)
+        post = tk.get_peak_memory()
         self.assertEqual(pre, post)
 
         def fun(x):
             for _ in range(10):
-                x = mx.abs(x)
+                x = tk.abs(x)
                 x = x[:-1]
-                x = mx.abs(x)
+                x = tk.abs(x)
             return x
 
-        x = mx.zeros((4096 * 4096,))
-        mx.eval(x)
-        pre = mx.get_peak_memory()
+        x = tk.zeros((4096 * 4096,))
+        tk.eval(x)
+        pre = tk.get_peak_memory()
         out = fun(x)
         del x
-        mx.eval(out)
-        post = mx.get_peak_memory()
+        tk.eval(out)
+        post = tk.get_peak_memory()
         self.assertEqual(pre, post)
 
-    @unittest.skipIf(not mx.is_available(mx.gpu), "GPU is not available")
+    @unittest.skipIf(not tk.is_available(tk.gpu), "GPU is not available")
     def test_multistream_deadlock(self):
-        s1 = mx.default_stream(mx.gpu)
-        s2 = mx.new_stream(mx.gpu)
+        s1 = tk.default_stream(tk.gpu)
+        s2 = tk.new_stream(tk.gpu)
 
-        x = mx.array(1.0)
-        x = mx.abs(x, stream=s1)
+        x = tk.array(1.0)
+        x = tk.abs(x, stream=s1)
         for _ in range(1000):
-            x = mx.abs(x, stream=s2)
-        mx.eval(x)
+            x = tk.abs(x, stream=s2)
+        tk.eval(x)
 
-        s1 = mx.default_stream(mx.gpu)
-        s2 = mx.new_stream(mx.gpu)
-        old_limit = mx.set_memory_limit(1000)
+        s1 = tk.default_stream(tk.gpu)
+        s2 = tk.new_stream(tk.gpu)
+        old_limit = tk.set_memory_limit(1000)
 
-        x = mx.ones((512, 512), stream=s2)
+        x = tk.ones((512, 512), stream=s2)
         for _ in range(80):
-            x = mx.abs(x, stream=s1)
-        y = mx.abs(x, stream=s2)
-        z = mx.abs(y, stream=s2)
-        mx.eval(z)
-        mx.set_memory_limit(old_limit)
+            x = tk.abs(x, stream=s1)
+        y = tk.abs(x, stream=s2)
+        z = tk.abs(y, stream=s2)
+        tk.eval(z)
+        tk.set_memory_limit(old_limit)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    @unittest.skipIf(not tk.metal.is_available(), "Metal is not available")
     def test_eval_exception_does_not_corrupt_state(self):
         # An exception thrown from inside a primitive's eval (here a Metal
         # compile error raised lazily at eval time) must not corrupt arrays
         # evaluated earlier in the same batch: they are already marked
         # evaluated, so their pending command buffers must still be
         # committed before the exception propagates.
-        a = mx.full((1024,), 3.0)
+        a = tk.full((1024,), 3.0)
         b = a * 2.0  # encoded in the same eval batch as the failing kernel
 
-        kernel = mx.fast.metal_kernel(
+        kernel = tk.fast.metal_kernel(
             name="test_eval_exception_bad_kernel",
             input_names=["inp"],
             output_names=["out"],
@@ -219,23 +219,23 @@ class TestEval(mlx_tests.MLXTestCase):
                 grid=(1, 1, 1),
                 threadgroup=(1, 1, 1),
             )
-            mx.eval(y)
+            tk.eval(y)
 
-        self.assertTrue(mx.all(b == 6.0).item())
+        self.assertTrue(tk.all(b == 6.0).item())
 
         # Fresh computations after the failure stay correct.
-        x = mx.full((512,), 2.0)
+        x = tk.full((512,), 2.0)
         self.assertEqual((x + 1.0).sum().item(), 512.0 * 3.0)
 
     @unittest.skipIf(
-        mx.cuda.is_available(), "CUDA backend waits cpu stream synchronously"
+        tk.cuda.is_available(), "CUDA backend waits cpu stream synchronously"
     )
     def test_async_eval_error_in_synchronize(self):
-        a = mx.linalg.inv(mx.array([[1.0, 2.0], [2.0, 4.0]]), stream=mx.cpu)
-        mx.async_eval(a)
+        a = tk.linalg.inv(tk.array([[1.0, 2.0], [2.0, 4.0]]), stream=tk.cpu)
+        tk.async_eval(a)
         with self.assertRaises(RuntimeError):
-            mx.synchronize(mx.cpu)
+            tk.synchronize(tk.cpu)
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

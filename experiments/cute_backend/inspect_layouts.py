@@ -10,7 +10,7 @@ import cutlass
 import matplotlib
 from cutlass import cute
 
-import tiki as tk
+import compiler
 
 matplotlib.use("Agg")
 
@@ -19,7 +19,7 @@ ThreadValueLayout = tuple[tuple[tuple[int, int], int], tuple[tuple[int, int], in
 
 @dataclass(frozen=True)
 class SharedLayout:
-    swizzle: tk.Swizzle
+    swizzle: compiler.Swizzle
     shape: tuple[int, int] = (32, 32)
 
     def __getitem__(self, coordinate: tuple[int, int]) -> int:
@@ -59,7 +59,7 @@ def main() -> None:
     spec.loader.exec_module(debug)
     import matplotlib.pyplot as plt
 
-    schedule = tk.TransposeSchedule()
+    schedule = compiler.TransposeSchedule()
     warps = schedule.threads // 32
     values = 1024 // schedule.threads
     layouts = {
@@ -87,8 +87,8 @@ def main() -> None:
         fig.savefig(args.output / f"{name}.png", bbox_inches="tight")
         plt.close(fig)
     for name, swizzle in (
-        ("banks_plain", tk.Swizzle(0, 0, 5)),
-        ("banks_xor", tk.Swizzle(5, 0, 5)),
+        ("banks_plain", compiler.Swizzle(0, 0, 5)),
+        ("banks_xor", compiler.Swizzle(5, 0, 5)),
     ):
         fig, ax = debug.visualize_layout(
             SharedLayout(swizzle),

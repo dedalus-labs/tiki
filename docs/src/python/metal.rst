@@ -1,7 +1,7 @@
 Metal
 =====
 
-.. currentmodule:: mlx.core.metal
+.. currentmodule:: tiki.metal
 
 .. autosummary::
   :toctree: _autosummary

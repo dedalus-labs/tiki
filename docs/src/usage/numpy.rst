@@ -3,7 +3,7 @@
 Conversion to NumPy and Other Frameworks
 ========================================
 
-MLX array supports conversion between other frameworks with either:
+Tiki array supports conversion between other frameworks with either:
 
 * The `Python Buffer Protocol <https://docs.python.org/3/c-api/buffer.html>`_.
 * `DLPack <https://dmlc.github.io/dlpack/latest/>`_.
@@ -12,17 +12,17 @@ Let's convert an array to NumPy and back.
 
 .. code-block:: python
 
-  import mlx.core as mx
+  import tiki as tk
   import numpy as np
 
-  a = mx.arange(3)
+  a = tk.arange(3)
   b = np.array(a) # copy of a
-  c = mx.array(b) # copy of b
+  c = tk.array(b) # copy of b
 
 .. note::
 
     Since NumPy does not support ``bfloat16`` arrays, you will need to convert
-    to ``float16`` or ``float32`` first: ``np.array(a.astype(mx.float32))``.
+    to ``float16`` or ``float32`` first: ``np.array(a.astype(tk.float32))``.
     Otherwise, you will receive an error like: ``Item size 2 for PEP 3118
     buffer format string does not match the dtype V item size 0.``
 
@@ -31,7 +31,7 @@ an array view:
 
 .. code-block:: python
 
-  a = mx.arange(3)
+  a = tk.arange(3)
   a_view = np.array(a, copy=False)
   print(a_view.flags.owndata) # False
   a_view[0] = 1
@@ -39,7 +39,7 @@ an array view:
 
 .. note::
 
-    NumPy arrays with type ``float64`` will be default converted to MLX arrays
+    NumPy arrays with type ``float64`` will be default converted to Tiki arrays
     with type ``float32``.
 
 A NumPy array view is a normal NumPy array, except that it does not own its
@@ -54,11 +54,11 @@ Let's demonstrate this in an example:
 
   def f(x):
       x_view = np.array(x, copy=False)
-      x_view[:] *= x_view # modify memory without telling mx
+      x_view[:] *= x_view # modify memory without telling tk
       return x.sum()
 
-  x = mx.array([3.0])
-  y, df = mx.value_and_grad(f)(x)
+  x = tk.array([3.0])
+  y, df = tk.value_and_grad(f)(x)
   print("f(x) = x² =", y.item()) # 9.0
   print("f'(x) = 2x !=", df.item()) # 1.0
 
@@ -66,51 +66,51 @@ Let's demonstrate this in an example:
 The function ``f`` indirectly modifies the array ``x`` through a memory view.
 However, this modification is not reflected in the gradient, as seen in the
 last line outputting ``1.0``, representing the gradient of the sum operation
-alone.  The squaring of ``x`` occurs externally to MLX, meaning that no
+alone.  The squaring of ``x`` occurs externally to Tiki, meaning that no
 gradient is incorporated.  It's important to note that a similar issue arises
 during array conversion and copying.  For instance, a function defined as
-``mx.array(np.array(x)**2).sum()`` would also result in an incorrect gradient,
-even though no in-place operations on MLX memory are executed.
+``tk.array(np.array(x)**2).sum()`` would also result in an incorrect gradient,
+even though no in-place operations on Tiki memory are executed.
 
 PyTorch
 -------
 
-PyTorch supports DLPack inputs and can import MLX arrays directly.
-MLX can also import PyTorch tensors through DLPack with ``mx.asarray`` or
-``mx.from_dlpack``. Use ``torch.as_tensor`` to import an MLX array with
-DLPack; ``torch.tensor`` copies the data instead. Similarly, ``mx.asarray``
-can share DLPack inputs when possible, while ``mx.array`` copies:
+PyTorch supports DLPack inputs and can import Tiki arrays directly.
+Tiki can also import PyTorch tensors through DLPack with ``tk.asarray`` or
+``tk.from_dlpack``. Use ``torch.as_tensor`` to import an Tiki array with
+DLPack; ``torch.tensor`` copies the data instead. Similarly, ``tk.asarray``
+can share DLPack inputs when possible, while ``tk.array`` copies:
 
 .. code-block:: python
 
-  import mlx.core as mx
+  import tiki as tk
   import torch
 
-  a = mx.arange(3, dtype=mx.float32)
-  mx.eval(a)
+  a = tk.arange(3, dtype=tk.float32)
+  tk.eval(a)
 
   shared = torch.as_tensor(a)
   copied = torch.tensor(a)
 
-Creating an MLX array from a CPU tensor copies the data into MLX-owned storage.
+Creating an Tiki array from a CPU tensor copies the data into Tiki-owned storage.
 The arrays do not share memory:
 
 .. code-block:: python
 
   b = torch.arange(3)
-  c = mx.array(b)
+  c = tk.array(b)
 
   b += 10
   print(c.tolist()) # [0, 1, 2]
 
 Metal DLPack inputs are different. If a PyTorch MPS tensor is passed to
-``mx.asarray`` or to ``mx.from_dlpack`` with ``copy=None``, MLX imports it
+``tk.asarray`` or to ``tk.from_dlpack`` with ``copy=None``, Tiki imports it
 without a copy when the underlying Metal buffer is not private. Private Metal
-buffers are copied into MLX-managed storage instead. Passing ``copy=False``
+buffers are copied into Tiki-managed storage instead. Passing ``copy=False``
 requires zero-copy import and raises an error if a copy would be needed.
-Passing ``copy=True`` asks MLX to create a new array instead of reusing the
-Metal buffer. Zero-copy imports preserve the DLPack strides. ``mx.array`` also
-creates a new array instead of reusing the Metal buffer. MLX arrays exported to
+Passing ``copy=True`` asks Tiki to create a new array instead of reusing the
+Metal buffer. Zero-copy imports preserve the DLPack strides. ``tk.array`` also
+creates a new array instead of reusing the Metal buffer. Tiki arrays exported to
 PyTorch with DLPack are exported without a copy on Metal.
 
 In particular, PyTorch 2.12 and later use shared storage for ordinary MPS
@@ -123,13 +123,13 @@ converted array.
 
   b = torch.arange(3, device="mps", dtype=torch.float32)
   torch.mps.synchronize()
-  c = mx.asarray(b) # zero-copy if the Metal buffer can be reused
-  d = mx.from_dlpack(b, copy=True) # explicit copy
+  c = tk.asarray(b) # zero-copy if the Metal buffer can be reused
+  d = tk.from_dlpack(b, copy=True) # explicit copy
 
 .. code-block:: python
 
-  a = mx.arange(3, dtype=mx.float32)
-  mx.eval(a)
+  a = tk.arange(3, dtype=tk.float32)
+  tk.eval(a)
   b = torch.as_tensor(a) # zero-copy DLPack import on Metal
 
 JAX
@@ -138,12 +138,12 @@ JAX fully supports the buffer protocol.
 
 .. code-block:: python
 
-  import mlx.core as mx
+  import tiki as tk
   import jax.numpy as jnp
 
-  a = mx.arange(3)
+  a = tk.arange(3)
   b = jnp.array(a)
-  c = mx.array(b)
+  c = tk.array(b)
 
 TensorFlow
 ----------
@@ -153,9 +153,9 @@ TensorFlow supports the buffer protocol, but it requires an explicit
 
 .. code-block:: python
 
-  import mlx.core as mx
+  import tiki as tk
   import tensorflow as tf
 
-  a = mx.arange(3)
+  a = tk.arange(3)
   b = tf.constant(memoryview(a))
-  c = mx.array(b)
+  c = tk.array(b)

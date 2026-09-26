@@ -1,0 +1,70 @@
+# Find Tiki
+#
+# Defines the following variables:
+#
+#   TIKI_FOUND            : True if Tiki is found
+#   TIKI_INCLUDE_DIRS     : Include directory
+#   TIKI_LIBRARIES        : Libraries to link against
+#   TIKI_CXX_FLAGS        : Additional compiler flags
+#   TIKI_BUILD_ACCELERATE : True if Tiki was built with accelerate 
+#   TIKI_BUILD_METAL      : True if Tiki was built with metal 
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+if(WIN32 AND @TIKI_BUILD_CPU@ AND NOT TARGET TIKI::OpenBLAS)
+    add_library(TIKI::OpenBLAS UNKNOWN IMPORTED)
+    set_target_properties(TIKI::OpenBLAS PROPERTIES
+        IMPORTED_LOCATION "@PACKAGE_CMAKE_INSTALL_LIBDIR@/@OPENBLAS_LIB@.lib"
+    )
+endif()
+
+if(@TIKI_BUILD_CUDA@)
+    find_dependency(CUDAToolkit REQUIRED)
+
+    set(_TIKI_SAVED_CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}")
+    list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+    find_dependency(CUDNN REQUIRED)
+    set(CMAKE_MODULE_PATH "${_TIKI_SAVED_CMAKE_MODULE_PATH}")
+    unset(_TIKI_SAVED_CMAKE_MODULE_PATH)
+endif()
+
+include(@PACKAGE_TIKI_CMAKE_INSTALL_MODULE_DIR@/TIKITargets.cmake)
+include(@PACKAGE_TIKI_CMAKE_INSTALL_MODULE_DIR@/extension.cmake)
+
+set_and_check(TIKI_LIBRARY_DIRS @PACKAGE_CMAKE_INSTALL_LIBDIR@)
+set_and_check(TIKI_INCLUDE_DIRS @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@)
+set(TIKI_LIBRARIES tiki)
+
+find_library(TIKI_LIBRARY tiki PATHS ${TIKI_LIBRARY_DIRS})
+
+if (@TIKI_BUILD_ACCELERATE@)
+    set(TIKI_BUILD_ACCELERATE @TIKI_BUILD_ACCELERATE@)
+    set(TIKI_CXX_FLAGS ${TIKI_CXX_FLAGS} -DACCELERATE_NEW_LAPACK)
+endif()
+
+if (@TIKI_BUILD_METAL@)
+    set(TIKI_BUILD_METAL @TIKI_BUILD_METAL@)
+    set(TIKI_CXX_FLAGS ${TIKI_CXX_FLAGS} -D_METAL_)
+    set(TIKI_INCLUDE_DIRS 
+        "${TIKI_INCLUDE_DIRS};"
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/metal_cpp
+    )
+    if(@TIKI_METAL_VERSION@ GREATER_EQUAL 310)
+      set(TIKI_INCLUDE_DIRS
+        "${TIKI_INCLUDE_DIRS};"
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/tiki/backend/metal/kernels/metal_3_1)
+    else()
+      set(TIKI_INCLUDE_DIRS
+        "${TIKI_INCLUDE_DIRS};"
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/tiki/backend/metal/kernels/metal_3_0)
+    endif()
+endif()
+
+set_target_properties(tiki PROPERTIES
+    INTERFACE_COMPILE_OPTIONS "${TIKI_CXX_FLAGS}"
+)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(Tiki DEFAULT_MSG TIKI_LIBRARY TIKI_INCLUDE_DIRS)

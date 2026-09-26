@@ -12,39 +12,39 @@
 #include <string>
 #include <unordered_map>
 #include <variant>
-#include "mlx/io.h"
+#include "tiki/io.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 
 using LoadOutputTypes = std::variant<
-    mx::array,
-    std::unordered_map<std::string, mx::array>,
-    mx::SafetensorsLoad,
-    mx::GGUFLoad>;
+    tk::array,
+    std::unordered_map<std::string, tk::array>,
+    tk::SafetensorsLoad,
+    tk::GGUFLoad>;
 
-mx::SafetensorsLoad mlx_load_safetensor_helper(
+tk::SafetensorsLoad tiki_load_safetensor_helper(
     nb::object file,
-    mx::StreamOrDevice s);
-void mlx_save_safetensor_helper(
-    nb::object file,
-    nb::dict d,
-    std::optional<nb::dict> m);
-
-mx::GGUFLoad mlx_load_gguf_helper(nb::object file, mx::StreamOrDevice s);
-
-void mlx_save_gguf_helper(
+    tk::StreamOrDevice s);
+void tiki_save_safetensor_helper(
     nb::object file,
     nb::dict d,
     std::optional<nb::dict> m);
 
-LoadOutputTypes mlx_load_helper(
+tk::GGUFLoad tiki_load_gguf_helper(nb::object file, tk::StreamOrDevice s);
+
+void tiki_save_gguf_helper(
+    nb::object file,
+    nb::dict d,
+    std::optional<nb::dict> m);
+
+LoadOutputTypes tiki_load_helper(
     nb::object file,
     std::optional<std::string> format,
     bool return_metadata,
-    mx::StreamOrDevice s);
-void mlx_save_helper(nb::object file, mx::array a);
-void mlx_savez_helper(
+    tk::StreamOrDevice s);
+void tiki_save_helper(nb::object file, tk::array a);
+void tiki_savez_helper(
     nb::object file,
     nb::args args,
     const nb::kwargs& kwargs,

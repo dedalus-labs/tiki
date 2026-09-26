@@ -2,21 +2,21 @@
 
 #include <iostream>
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 
 int main() {
-  if (!mx::distributed::is_available()) {
+  if (!tk::distributed::is_available()) {
     std::cout << "No communication backend found" << std::endl;
     return 1;
   }
 
-  auto global_group = mx::distributed::init();
+  auto global_group = tk::distributed::init();
   std::cout << global_group.rank() << " / " << global_group.size() << std::endl;
 
-  mx::array x = mx::ones({10});
-  mx::array out = mx::distributed::all_sum(x, global_group);
+  tk::array x = tk::ones({10});
+  tk::array out = tk::distributed::all_sum(x, global_group);
 
   std::cout << out << std::endl;
 }

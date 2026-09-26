@@ -1,18 +1,18 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/memory.h"
+#include "tiki/memory.h"
 #include <nanobind/nanobind.h>
 
 #include "python/src/trees.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 void init_memory(nb::module_& m) {
   m.def(
       "get_active_memory",
-      &mx::get_active_memory,
+      &tk::get_active_memory,
       R"pbdoc(
       Get the actively used memory in bytes.
 
@@ -22,9 +22,9 @@ void init_memory(nb::module_& m) {
   m.def(
       "get_array_buffer_size",
       [](const nb::args& args) {
-        std::vector<mx::array> arrays = tree_flatten(args, false);
+        std::vector<tk::array> arrays = tree_flatten(args, false);
         nb::gil_scoped_release nogil;
-        return mx::get_array_buffer_size(arrays);
+        return tk::get_array_buffer_size(arrays);
       },
       nb::arg(),
       nb::sig("def get_array_buffer_size(*args) -> int"),
@@ -45,7 +45,7 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "get_peak_memory",
-      &mx::get_peak_memory,
+      &tk::get_peak_memory,
       R"pbdoc(
       Get the peak amount of used memory in bytes.
 
@@ -54,13 +54,13 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "reset_peak_memory",
-      &mx::reset_peak_memory,
+      &tk::reset_peak_memory,
       R"pbdoc(
       Reset the peak memory to zero.
       )pbdoc");
   m.def(
       "get_cache_memory",
-      &mx::get_cache_memory,
+      &tk::get_cache_memory,
       R"pbdoc(
       Get the cache size in bytes.
 
@@ -69,7 +69,7 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "set_memory_limit",
-      &mx::set_memory_limit,
+      &tk::set_memory_limit,
       "limit"_a,
       R"pbdoc(
       Set the memory limit.
@@ -90,7 +90,7 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "set_cache_limit",
-      &mx::set_cache_limit,
+      &tk::set_cache_limit,
       "limit"_a,
       R"pbdoc(
       Set the free cache limit.
@@ -110,7 +110,7 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "set_wired_limit",
-      &mx::set_wired_limit,
+      &tk::set_wired_limit,
       "limit"_a,
       R"pbdoc(
       Set the wired size limit.
@@ -142,7 +142,7 @@ void init_memory(nb::module_& m) {
       )pbdoc");
   m.def(
       "clear_cache",
-      &mx::clear_cache,
+      &tk::clear_cache,
       R"pbdoc(
       Clear the memory cache.
 

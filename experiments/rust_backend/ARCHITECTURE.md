@@ -14,7 +14,7 @@ implementation obligations, not claims of completed verification.
 
 | Layer | Responsibility |
 | --- | --- |
-| MLX graph and Tiki operators | Tensor semantics, graph construction, and differentiation rules. |
+| Tiki graph and Tiki operators | Tensor semantics, graph construction, and differentiation rules. |
 | Tiki scheduling and CuTe compilation | Kernel specialization, data layout, thread assignment, and device code generation. |
 | Rust CUDA runtime | Allocation ownership, access ordering, submission, completion, and resource retirement. |
 | CXX bridge | Explicit interoperation between the existing C++ core and Rust-owned runtime objects. |
@@ -22,7 +22,7 @@ implementation obligations, not claims of completed verification.
 
 ```mermaid
 flowchart LR
-    model[MLX graphs and Tiki operators] --> bridge[CXX runtime interface]
+    model[Tiki graphs and Tiki operators] --> bridge[CXX runtime interface]
     model --> compiler[Tiki scheduling and CuTe compiler]
     compiler --> artifact[Kernel artifact and argument contract]
     artifact --> runtime[Rust CUDA runtime]
@@ -171,10 +171,10 @@ does not depend on their field layout, allocator implementation, or upstream
 crate types. The bridge checks representation compatibility; its adapters must
 also uphold aliasing, error, and lifetime contracts across the language boundary.
 
-This structure limits migration coupling. The MLX core can continue constructing
+This structure limits migration coupling. The Tiki core can continue constructing
 graphs while Rust assumes execution ownership. A supported operation has one
 authority for its resources; ownership is not divided between independent C++
-and Rust allocators. Other execution paths can remain under MLX ownership until
+and Rust allocators. Other execution paths can remain under Tiki ownership until
 they are migrated.
 
 CuTile runtime crates are candidates for implementation reuse. Their public

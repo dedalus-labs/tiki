@@ -3,12 +3,12 @@
 Tiki layout API
 ===============
 
-.. currentmodule:: mlx.tiki
+.. currentmodule:: tiki.layout
 
 See :ref:`tiki-layouts` for the model and :ref:`tiki-layout-recipes` for examples.
 
 .. py:data:: Coordinate
-   :module: mlx.tiki.composed
+   :module: tiki.layout.composed
 
    An integer coordinate, a nested tuple of coordinates, or a slice marker.
    ``None`` and ``slice(None)`` retain a mode during slicing.
