@@ -1,0 +1,8 @@
+Tiki
+Copyright (c) 2026 Dedalus Labs, Inc. and its contributors
+
+Tiki began from ml-explore/mlx commit
+b6368984b8e02a3fb3ee7986846c0fb85e1fccf7, copyright Apple Inc.
+Except where an inherited notice states otherwise, Tiki is licensed under
+Apache-2.0 as recorded in `LICENSE`. MLX-derived files retain their original
+MIT license, recorded in `LICENSE-MIT`, and their attribution notices.

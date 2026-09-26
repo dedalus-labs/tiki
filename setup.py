@@ -266,7 +266,7 @@ if __name__ == "__main__":
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
-        license="MIT",
+        license="Apache-2.0",
         url="https://github.com/ml-explore/mlx",
         include_package_data=True,
         package_dir=package_dir,
