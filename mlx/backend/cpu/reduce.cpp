@@ -69,18 +69,6 @@ const complex64_t Limits<complex64_t>::min =
     -std::numeric_limits<float>::infinity();
 
 template <typename T, typename U, typename Op>
-struct ReductionAccumulator {
-  static constexpr int N = std::min(simd::max_size<T>, simd::max_size<U>);
-  // Widen to float32 only if the input is float16 (with N=1) or bfloat16 as it
-  // improves performance.
-  static constexpr bool widen_to_float =
-      (std::is_same_v<T, bfloat16_t> ||
-       (N == 1 && std::is_same_v<T, float16_t>));
-
-  using type = std::conditional_t<widen_to_float, float, U>;
-};
-
-template <typename T, typename U, typename Op>
 void strided_reduce(
     const T* x,
     U* accumulator,
@@ -279,7 +267,10 @@ void float_reduction(
     array& out,
     const std::vector<int>& axes,
     U init) {
-  using AccT = ReductionAccumulator<T, U, Op>::type;
+  using AccT = std::conditional_t<
+      std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>,
+      float,
+      U>;
   if constexpr (std::is_same_v<AccT, U>) {
     reduction_op<T, U, Op>(x, out, axes, init);
   } else {

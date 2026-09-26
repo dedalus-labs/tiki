@@ -982,6 +982,22 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  if (reduce_type_ == Reduce::Prod &&
+      (in.dtype() == float16 || in.dtype() == bfloat16)) {
+    // Two conversion passes keep the reduction in float32 until the final
+    // store.
+    auto& s = stream();
+    auto& encoder = metal::get_command_encoder(s);
+    array promoted(in.shape(), float32, nullptr, {});
+    array reduced(out.shape(), float32, nullptr, {});
+    copy_gpu(in, promoted, CopyType::General, s);
+    encoder.add_temporary(promoted);
+    eval_gpu({promoted}, reduced);
+    encoder.add_temporary(reduced);
+    copy_gpu(reduced, out, CopyType::Vector, s);
+    return;
+  }
+
   // Continue with reduction operation
   // Minimum of 4 bytes since we use size 4 structs for all reduce
   // and metal will complain o/w
