@@ -39,6 +39,7 @@ are the CPU and GPU.
    usage/lazy_evaluation
    usage/unified_memory
    usage/indexing
+   usage/layouts
    usage/kv_cache
    usage/saving_and_loading
    usage/function_transforms
@@ -55,6 +56,7 @@ are the CPU and GPU.
    :maxdepth: 1
 
    examples/linear_regression
+   examples/layouts
    examples/mlp
    examples/llama-inference
    examples/data_parallelism
@@ -65,6 +67,7 @@ are the CPU and GPU.
    :maxdepth: 1
 
    python/array
+   python/tiki
    python/data_types
    python/devices_and_streams
    python/export
@@ -94,6 +97,7 @@ are the CPU and GPU.
    :maxdepth: 1
 
    dev/extensions
+   dev/tiki_layouts
    dev/metal_debugger
    dev/metal_logging
    dev/custom_metal_kernels
