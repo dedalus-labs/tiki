@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #include <cassert>
 
+#include "mlx/as_strided.h"
 #include "mlx/backend/common/broadcasting.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/dtype_utils.h"
@@ -20,25 +21,21 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
         "AsStrided must be used with row contiguous arrays only.");
   }
 
+  auto layout =
+      as_strided_detail::layout(shape_, strides_, offset_, out.itemsize());
+  as_strided_detail::check_extent(layout, in.nbytes());
+  if (layout.data_size == 0) {
+    return out.copy_shared_buffer(in, strides_, {true, true, true}, 0, offset_);
+  }
   auto [no_bsx_size, row_contiguous, col_contiguous] =
       check_contiguity(shape_, strides_);
-
-  int64_t l = 0, h = 0;
   bool has_negative_stride = false;
   for (int i = 0; i < strides_.size(); i++) {
-    auto delta = strides_[i] * (shape_[i] - 1);
-    if (strides_[i] >= 0) {
-      h += delta;
-    } else {
-      l += delta;
-      has_negative_stride |= shape_[i] > 1;
-    }
+    has_negative_stride |= strides_[i] < 0 && shape_[i] > 1;
   }
-  size_t data_size = out.size() == 0 ? 0 : (h - l) + 1;
-
+  auto data_size = static_cast<size_t>(layout.data_size);
   auto flags = in.flags();
-  flags.contiguous =
-      out.size() == 0 || (!has_negative_stride && no_bsx_size == data_size);
+  flags.contiguous = !has_negative_stride && no_bsx_size == data_size;
   flags.row_contiguous = row_contiguous;
   flags.col_contiguous = col_contiguous;
 
