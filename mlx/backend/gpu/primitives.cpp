@@ -22,7 +22,12 @@ namespace mlx::core {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   MLX_PROFILER_RANGE("AsStrided::eval_gpu");
-  eval(inputs, out);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs, out);
+    return;
+  }
+  auto packed = contiguous_copy_gpu(inputs[0], stream());
+  eval({packed}, out);
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {

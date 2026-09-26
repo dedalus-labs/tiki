@@ -79,7 +79,12 @@ static std::pair<array, bool> compute_dynamic_offset(
 }
 
 void AsStrided::eval_cpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+  if (inputs[0].flags().row_contiguous) {
+    eval(inputs, out);
+    return;
+  }
+  auto packed = contiguous_copy_cpu(inputs[0], stream());
+  eval({packed}, out);
 }
 void Broadcast::eval_cpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
