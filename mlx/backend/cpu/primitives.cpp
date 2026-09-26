@@ -8,6 +8,7 @@
 #include <type_traits>
 
 #include "mlx/allocator.h"
+#include "mlx/as_strided.h"
 #include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cpu/arange.h"
@@ -83,6 +84,11 @@ void AsStrided::eval_cpu(const std::vector<array>& inputs, array& out) {
     eval(inputs, out);
     return;
   }
+  // Reject an invalid view before packing: the copy runs asynchronously, and a throw after it is
+  // queued would destroy its destination while the copy still writes to it.
+  as_strided_detail::check_extent(
+      as_strided_detail::layout(shape_, strides_, offset_, out.itemsize()),
+      inputs[0].nbytes());
   auto packed = contiguous_copy_cpu(inputs[0], stream());
   eval({packed}, out);
 }
