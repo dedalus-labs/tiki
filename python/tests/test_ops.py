@@ -2719,6 +2719,13 @@ class TestOps(mlx_tests.MLXTestCase):
                     with self.assertRaisesRegex(ValueError, "outside its input array"):
                         mx.eval(view)
 
+    def test_as_strided_rejects_packed_inputs_before_copying(self):
+        # The strided input is packed asynchronously; rejection must happen before that copy starts.
+        strided = mx.arange(1000000)[::2]
+        for _ in range(20):
+            with self.assertRaisesRegex(ValueError, "outside its input array"):
+                mx.eval(mx.as_strided(strided, (2,), (-1,), 0))
+
     def test_as_strided_ignores_recycled_allocation_slack(self):
         # The allocator can hand back a larger freed buffer; bytes past the new array stay unreadable.
         freed = mx.arange(1000.0)
