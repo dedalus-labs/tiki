@@ -323,6 +323,17 @@ void init_array(nb::module_& m) {
       .def_prop_ro(
           "ndim", &mx::array::ndim, R"pbdoc(The array's dimension.)pbdoc")
       .def_prop_ro(
+          "is_tracer",
+          &mx::array::is_placeholder,
+          R"pbdoc(
+            Whether the array is a placeholder that cannot be evaluated.
+
+            Inside ``vmap`` or ``compile`` tracing an array has no storage, so
+            its layout cannot be read and code that specializes on strides
+            packs it instead. Inside a derivative rule the graph is retained
+            and evaluation is allowed, so this is ``False`` there.
+          )pbdoc")
+      .def_prop_ro(
           "itemsize",
           &mx::array::itemsize,
           R"pbdoc(The size of the array's datatype in bytes.)pbdoc")
