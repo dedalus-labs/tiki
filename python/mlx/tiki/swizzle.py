@@ -9,6 +9,15 @@ from mlx.tiki._layout import LayoutError
 from mlx.tiki._layout import Swizzle as NativeSwizzle
 
 
+def notation(value: object, spec: str, cute: str) -> str:
+    """Resolve a format spec: empty for the keyword form, ``cute`` for CuTe's notation."""
+    if spec == "":
+        return repr(value)
+    if spec == "cute":
+        return cute
+    raise ValueError(f"unknown format code {spec!r} for {type(value).__name__}")
+
+
 def _integer(value: SupportsIndex, field: str) -> int:
     try:
         if isinstance(value, bool):
@@ -28,6 +37,7 @@ def _integer(value: SupportsIndex, field: str) -> int:
 class Swizzle(NativeSwizzle):
     """Permute nonnegative element offsets with disjoint XOR bit fields.
 
+    Construct it with keywords: ``Swizzle(bits=2, base=0, shift=2)``.
     ``bits`` is each field's width. ``base`` is the number of low bits below
     both fields. Positive ``shift`` copies high bits toward low bits. Negative
     ``shift`` copies low bits toward high bits. Parameters are immutable.
@@ -39,7 +49,7 @@ class Swizzle(NativeSwizzle):
 
     __slots__ = ()
 
-    def __init__(self, bits: int, base: int, shift: int) -> None:
+    def __init__(self, *, bits: int, base: int, shift: int) -> None:
         super().__init__(
             _integer(bits, "bits"), _integer(base, "base"), _integer(shift, "shift")
         )
@@ -48,8 +58,11 @@ class Swizzle(NativeSwizzle):
         """Transform an integral element offset without dereferencing it."""
         return super().__call__(_integer(offset, "index"))
 
-    def __str__(self) -> str:
-        return f"SW_{self.bits}_{self.base}_{self.shift}"
-
     def __repr__(self) -> str:
-        return f"Swizzle({self.bits}, {self.base}, {self.shift})"
+        return f"Swizzle(bits={self.bits}, base={self.base}, shift={self.shift})"
+
+    __str__ = __repr__
+
+    def __format__(self, spec: str) -> str:
+        """``format(swizzle, "cute")`` is CuTe's ``SW_bits_base_shift``."""
+        return notation(self, spec, f"SW_{self.bits}_{self.base}_{self.shift}")
