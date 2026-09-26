@@ -68,12 +68,12 @@ def validate_row(graph: Graph) -> Node | None:
         value.shape not in ((), (cols,), (rows, 1), (rows, cols)) for value in values
     ):
         raise UnsupportedGraphError("unsupported row broadcast shape")
+    if any(node.operation == "Transpose" for node in graph.nodes):
+        raise UnsupportedGraphError("row schedule does not support transpose")
     reductions = [node for node in graph.nodes if node.operation == "ReduceSum"]
     if not reductions and cols == 1:
         return None
-    if len(reductions) != 1 or any(
-        node.operation == "Transpose" for node in graph.nodes
-    ):
+    if len(reductions) != 1:
         raise UnsupportedGraphError("row schedule requires exactly one sum reduction")
     reduction = reductions[0]
     shapes = {value.name: value.shape for value in values}

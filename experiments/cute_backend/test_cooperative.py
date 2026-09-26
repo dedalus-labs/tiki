@@ -12,6 +12,13 @@ def rms_norm(x, weight):
 
 
 class ScheduleTests(unittest.TestCase):
+    def test_row_schedule_rejects_transpose_for_all_shapes(self):
+        # Row schedules cannot transpose, even when a 1x1 output is unchanged.
+        compiled = tk.compile(schedule=tk.RowSchedule())(lambda x: x.T)
+        for shape in ((1, 1), (1, 5), (5, 1), (3, 3)):
+            with self.subTest(shape=shape), self.assertRaises(tk.UnsupportedGraphError):
+                compiled.lower(mx.zeros(shape))
+
     def test_row_launch_grid_fits_signed_int(self):
         # MLX requires a signed-int grid. One extra row can exceed its limit.
         for threads, rows in ((32, 4), (64, 2), (128, 1), (256, 1)):
