@@ -46,6 +46,22 @@ def assert_close(actual: Pair, expected: Pair, name: str) -> None:
 
 @unittest.skipUnless(HAS_CUDA, "the affine scan kernel needs CUDA")
 class TestAffineScan(unittest.TestCase):
+    # Invariant: a length-one scan is the identity, even for nonfinite inputs.
+    # Witness: infinite and NaN coefficients with finite offsets.
+    def test_length_one_preserves_inputs(self) -> None:
+        a = mx.array([[np.inf], [-np.inf], [np.nan]], dtype=mx.float32)
+        b = mx.ones((3, 1))
+        assert_close(affine_scan(a, b), (a, b), "length-one identity")
+
+    # Invariant: a length-one VJP preserves each cotangent independently.
+    # Witness: finite coefficient cotangents with infinite and NaN offsets.
+    def test_length_one_preserves_cotangents(self) -> None:
+        a, b = mx.ones((3, 1)), mx.ones((3, 1))
+        gp = mx.full((3, 1), 2.0)
+        gh = mx.array([[np.inf], [-np.inf], [np.nan]], dtype=mx.float32)
+        grads = mx.vjp(affine_scan, (a, b), (gp, gh))[1]
+        assert_close(grads, (gp, gh), "length-one VJP identity")
+
     # Invariant: the kernel's forward equals the generic tree at every
     # contract length, including a zero coefficient mid-row.
     # Witness: batch 5 rows for each length in LENGTHS.

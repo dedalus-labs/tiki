@@ -36,7 +36,7 @@ __syncthreads();
 tree_scan(s);
 for (int j = threadIdx.x; j < T; j += blockDim.x) {
   p[row + j] = a[row + j] * s[0][j];
-  h[row + j] = a[row + j] * s[1][j] + b[row + j];
+  h[row + j] = j ? a[row + j] * s[1][j] + b[row + j] : b[row + j];
 }
 """
 
@@ -56,8 +56,7 @@ for (int j = threadIdx.x; j < T; j += blockDim.x) {
   float coef = t + 1 < T ? a[row + t + 1] : 0.f;
   float rp = coef * s[1][j] + gp[row + t];
   float rh = coef * s[2][j] + gh[row + t];
-  da[row + t] = rp * (t ? p[row + t - 1] : 1.f)
-             + rh * (t ? h[row + t - 1] : 0.f);
+  da[row + t] = t ? rp * p[row + t - 1] + rh * h[row + t - 1] : rp;
   db[row + t] = rh;
 }
 """
