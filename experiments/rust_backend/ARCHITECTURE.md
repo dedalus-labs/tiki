@@ -15,10 +15,10 @@ implementation obligations, not claims of completed verification.
 | Layer | Responsibility |
 | --- | --- |
 | Rust core | Tensor semantics, graphs, differentiation |
-| Rust compiler | Graph regions to CUDA Tile IR |
+| Rust compiler | Kernel IR, proofs, LLVM IR |
 | Rust CUDA runtime | Memory, ordering, launches, retirement |
-| Rust device accessors | Every GPU load and store address |
-| Kernel arithmetic | cuTile Rust, or C++ through accessors |
+| Rust device accessors | Addresses in inherited C++ kernels |
+| Tiki kernels | CuTe-style layouts, atoms, pipelines |
 | CUDA driver and device | Module loading, execution, completion |
 
 During the migration, a CXX bridge lets remaining C++ host code call the Rust
@@ -26,19 +26,20 @@ runtime. The bridge is removed once the host is Rust.
 
 ```mermaid
 flowchart LR
-    model[Rust core] --> compiler[Rust compiler to CUDA Tile IR]
+    model[Rust core] --> compiler[Rust compiler to LLVM IR and libNVVM]
     compiler --> artifact[Kernel artifact and argument contract]
     model --> runtime[Rust CUDA runtime]
     artifact --> runtime
     runtime --> cuda[CUDA driver and device]
 ```
 
-The compiler lowers supported graph regions to CUDA Tile IR through
-`cutile-ir`, which builds Tile IR bytecode in Rust with no LLVM or MLIR
-dependency. `tileiras` turns that bytecode into a CUDA device binary.
-Compilation produces a kernel artifact: the binary, its entry point, and the
-information required to bind arguments and launch it. The CuTe MLIR compiler in
-`experiments/cute_backend` is the reference design for this lowering.
+The compiler turns kernels written in Tiki's kernel language, and kernels it
+generates for fused graph regions, into a kernel IR with CuTe semantics. It
+proves each kernel's accesses from its layouts, lowers it to LLVM IR, and
+compiles that with `libNVVM` to PTX. Compilation produces a kernel artifact:
+the GPU binary, its entry point, and the information required to bind
+arguments and launch it. The CuTe MLIR compiler in `experiments/cute_backend` is
+the reference design for this lowering.
 
 ## Rationale for Rust
 

@@ -1,8 +1,9 @@
 # Rust CUDA backend
 
 Tiki's execution is memory safe from its Python API to the GPU. Rust owns all
-host code and every GPU memory address, and C++ remains only as arithmetic
-inside GPU kernels that calls Rust accessors for each load and store.
+host code, and GPU kernels are written in Tiki's kernel language, which follows
+CuTe's semantics and has every memory access proven by the compiler. Inherited
+C++ kernels call Rust accessors for each load and store until they are ported.
 [ADR-0001](DECISION-2026-09-05.md) records the decision and its evidence.
 
 Rust makes allocation ownership, permitted access, and resource retirement part
