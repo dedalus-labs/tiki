@@ -41,6 +41,15 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaises(tk.UnsupportedGraphError):
             tk.compile()(lambda x, y: x + y).lower(mx.zeros((2, 3)), mx.zeros((3,)))
 
+    def test_only_array_returns_are_supported(self):
+        # Return containers must not become arrays.
+        # One-item tuples and lists would lose their indexing semantics.
+        for container in (tuple, list):
+            with self.subTest(container=container.__name__), self.assertRaisesRegex(
+                tk.UnsupportedGraphError, "return must be an MLX array"
+            ):
+                tk.compile()(lambda x: container((x + 1.0,))).lower(mx.zeros((7,)))
+
     def test_shape_specialization_is_reused(self):
         function = tk.compile()(lambda x: x + 2.0)
         first = function.lower(mx.zeros((7,)))

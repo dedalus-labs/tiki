@@ -55,9 +55,15 @@ def descriptor(raw: Descriptor) -> Value:
 
 
 def capture(function: ArrayFunction, shapes: tuple[Shape, ...]) -> Graph:
+    def array_output(*inputs: mx.array) -> mx.array:
+        output = function(*inputs)
+        if not isinstance(output, mx.array):
+            raise UnsupportedGraphError("return must be an MLX array")
+        return output
+
     events: list[ExportEvent] = []
     placeholders = [mx.zeros(shape, dtype=mx.float32) for shape in shapes]
-    mx.export_function(events.append, function, *placeholders)
+    mx.export_function(events.append, array_output, *placeholders)
     headers = {event["type"]: event for event in events if event["type"] != "primitive"}
     inputs = tuple(descriptor(raw) for raw in headers["inputs"]["inputs"])
     outputs = headers["outputs"]["outputs"]
