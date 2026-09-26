@@ -1139,9 +1139,15 @@ class TestBlas(tiki_tests.TIKITestCase):
                 tiles_n = (N + block_size - 1) // block_size
                 tiles_k = (K + block_size - 1) // block_size
 
-                a_mx_bool_mask, a_mx_mask = make_mask(tiles_m, tiles_k, batch_A, np_dtype)
-                b_mx_bool_mask, b_mx_mask = make_mask(tiles_k, tiles_n, batch_B, np_dtype)
-                out_mx_bool_mask, out_mx_mask = make_mask(tiles_m, tiles_n, batch_out, np_dtype)
+                a_mx_bool_mask, a_mx_mask = make_mask(
+                    tiles_m, tiles_k, batch_A, np_dtype
+                )
+                b_mx_bool_mask, b_mx_mask = make_mask(
+                    tiles_k, tiles_n, batch_B, np_dtype
+                )
+                out_mx_bool_mask, out_mx_mask = make_mask(
+                    tiles_m, tiles_n, batch_out, np_dtype
+                )
 
                 # Boolean block masks
                 run_test(
