@@ -366,6 +366,7 @@ struct PrimitiveFactory {
       SERIALIZE_PRIMITIVE(Ceil),
       SERIALIZE_PRIMITIVE(Concatenate),
       SERIALIZE_PRIMITIVE(Conjugate),
+      SERIALIZE_PRIMITIVE(Contiguous),
       SERIALIZE_PRIMITIVE(Convolution),
       SERIALIZE_PRIMITIVE(Copy),
       SERIALIZE_PRIMITIVE(Cos),

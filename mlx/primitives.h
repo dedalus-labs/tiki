@@ -718,6 +718,10 @@ class Contiguous : public UnaryPrimitive {
   DEFINE_NAME(Contiguous)
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool state() const {
+    return allow_col_major_;
+  }
+
   bool is_equivalent(const Primitive& other) const override;
 
  private:
