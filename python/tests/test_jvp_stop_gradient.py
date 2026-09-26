@@ -44,6 +44,17 @@ def opaque_double():
 
 
 class TestJvpStopGradient(mlx_tests.MLXTestCase):
+    def test_completed_jvp_outputs_evaluate_in_independent_transforms(self):
+        # Completed JVP outputs have no stale tracers, even on stopped paths.
+        # Witness: async_eval of a stopped square during an independent grad.
+        (out,), (tangent,) = mx.jvp(
+            lambda x: mx.stop_gradient(x * x), [mx.array(2.0)], [mx.array(1.0)]
+        )
+        grad = mx.grad(lambda z: (mx.async_eval(out), z * z)[1])(mx.array(3.0))
+        self.assertEqual(grad.item(), 6.0)
+        self.assertEqual(out.item(), 4.0)
+        self.assertEqual(tangent.item(), 0.0)
+
     # Invariant: forward mode does not tape anything upstream of stop_gradient,
     # so a custom_function whose forward uses a primitive without a JVP still
     # differentiates through its registered rule.
