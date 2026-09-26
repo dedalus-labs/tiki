@@ -916,6 +916,28 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.broadcast_to(mx.random.uniform(shape=(2, 1, 8)), (2, 2, 8))
         self.assertTrue(mx.allclose(mx.logsumexp(x), logsumexp(x)))
 
+    def test_logsumexp_nan_dominates_infinite_values(self):
+        for dtype in (mx.float16, mx.bfloat16, mx.float32):
+            for width in (3, 8, 33, 257, 4099):
+                for nan_index in (0, width // 2, width - 1):
+                    with self.subTest(dtype=dtype, width=width, nan_index=nan_index):
+                        infinity_index = 1 if nan_index == 0 else 0
+                        mixed = [1.0] * width
+                        mixed[infinity_index] = float("inf")
+                        mixed[nan_index] = float("nan")
+                        infinite = [1.0] * width
+                        infinite[infinity_index] = float("inf")
+                        nan = [1.0] * width
+                        nan[nan_index] = float("nan")
+                        values = mx.array(
+                            [mixed, [-float("inf")] * width, infinite, nan], dtype=dtype
+                        )
+                        actual = mx.logsumexp(values, axis=-1).tolist()
+                        self.assertTrue(math.isnan(actual[0]))
+                        self.assertEqual(actual[1], -float("inf"))
+                        self.assertEqual(actual[2], float("inf"))
+                        self.assertTrue(math.isnan(actual[3]))
+
     def test_logsumexp_shape(self):
         # A reduction over all axes with keepdims=False must yield a scalar
         # array (), consistent with every other reduction (sum, prod, max, ...).
