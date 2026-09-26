@@ -137,11 +137,14 @@ def measure(cubin, kernel: str, launch, expected: np.ndarray):
                 )
             )
 
+        actual = np.full_like(expected, np.nan)
+        checked(cuda.cuMemcpyHtoD(pointers[-1], actual.ctypes.data, actual.nbytes))
         run()
         checked(cuda.cuStreamSynchronize(stream))
-        actual = np.empty_like(expected)
         checked(cuda.cuMemcpyDtoH(actual.ctypes.data, pointers[-1], actual.nbytes))
-        np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-6)
+        np.testing.assert_allclose(
+            actual, expected, rtol=2e-5, atol=2e-6, equal_nan=False
+        )
         samples = [
             testing.benchmark(
                 run,
