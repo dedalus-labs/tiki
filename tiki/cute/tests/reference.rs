@@ -1,11 +1,13 @@
 // Copyright © 2026 Dedalus Labs, Inc.
 
-//! Replays every integer layout-algebra call that PyCuTe's own test suite makes.
+//! Replays every integer and XOR layout-algebra call that PyCuTe's own test suite makes.
 //!
 //! `reference/cases.txt` holds one call per line with PyCuTe's result, recorded by
-//! `reference/record.py`. tiki-cute must return the same layout, structurally equal, and must
-//! refuse exactly where PyCuTe raises. Replaying the reference's own cases catches a divergence
-//! in any branch those tests reach, including the normal form of each result.
+//! `reference/record.py`. PyCuTe's `F2` strides are written as XOR strides, `^v`. tiki-cute must
+//! return the same layout, structurally equal, and must refuse exactly where PyCuTe raises.
+//! Replaying the reference's own cases catches a divergence in any branch those tests reach,
+//! including the normal form of each result. PyCuTe prints the XOR zero as `F0`, recorded as
+//! `^0`, which parses to the integer 0 that belongs to every codomain.
 
 use tiki_cute::{Int, Layout, LayoutError, Shape, Tiler, Tuple};
 
