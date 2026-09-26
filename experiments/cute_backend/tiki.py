@@ -32,6 +32,10 @@ class BackendUnavailableError(RuntimeError):
     """Execution requires the selected MLX CUDA device."""
 
 
+class UnsupportedDerivativeError(UnsupportedGraphError):
+    """The derivative needs a schedule that this compiler does not provide."""
+
+
 def profile(array: mx.array) -> Profile:
     """Shape and strides of an evaluated array; this is the specialization key."""
     return tuple(array.shape), tuple(array.strides)
@@ -100,10 +104,11 @@ def _arrays(value: mx.array | tuple[mx.array, ...]) -> tuple[mx.array, ...]:
 class Compiled:
     """A specialized array function with registered reverse and forward derivatives.
 
-    Each call specializes on the live layout profile of every input, so a
-    transposed or sliced view gets its own kernel and is consumed in place:
-    nothing is packed. The derivatives are compiled regions of the traced
-    VJP and JVP graphs, one kernel per cotangent, lowered the same way.
+    Elementwise calls specialize on each input's layout and consume views
+    in place. Cooperative schedules pack views into dense storage.
+    Compiled derivatives require an elementwise schedule.
+    VJP inputs must match the output shape because broadcast cotangents need
+    reductions. Other derivative schedules fail with UnsupportedDerivativeError.
     """
 
     def __init__(
@@ -166,6 +171,12 @@ class Compiled:
             self._cotangent_kernels[i] = Compiled(input_cotangent, self.schedule)
         return self._cotangent_kernels[i]
 
+    def _check_derivative_schedule(self) -> None:
+        if not isinstance(self.schedule, Schedule):
+            raise UnsupportedDerivativeError(
+                "compiled derivatives require an elementwise schedule"
+            )
+
     def _vjp(
         self,
         primals: mx.array | tuple[mx.array, ...],
@@ -173,7 +184,13 @@ class Compiled:
         output: mx.array,
     ) -> tuple[mx.array, ...]:
         """MLX passes one cotangent array for a single-output function."""
+        self._check_derivative_schedule()
         primals = _arrays(primals)
+        if any(primal.shape != cotangent.shape for primal in primals):
+            raise UnsupportedDerivativeError(
+                "compiled VJP requires matching input and output shapes "
+                "because broadcast reductions have no derivative schedule"
+            )
         n = len(primals)
         return tuple(
             self._cotangent_kernel(i, n).launch(*primals, cotangent) for i in range(n)
@@ -182,10 +199,20 @@ class Compiled:
     def _jvp(
         self,
         primals: mx.array | tuple[mx.array, ...],
-        tangents: mx.array | tuple[mx.array, ...],
+        tangents: mx.array | None | tuple[mx.array | None, ...],
     ) -> mx.array:
         """MLX passes (primals, tangents) and expects the output tangent."""
-        primals, tangents = _arrays(primals), _arrays(tangents)
+        self._check_derivative_schedule()
+        primals = _arrays(primals)
+        tangents = (
+            (tangents,)
+            if tangents is None or isinstance(tangents, mx.array)
+            else tuple(tangents)
+        )
+        tangents = tuple(
+            mx.zeros_like(primal) if tangent is None else tangent
+            for primal, tangent in zip(primals, tangents, strict=True)
+        )
         n = len(primals)
         if self._tangent_kernel is None:
 
