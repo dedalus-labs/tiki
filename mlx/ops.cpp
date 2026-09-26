@@ -726,11 +726,11 @@ array flip(const array& a, StreamOrDevice s /* = {} */) {
 namespace {
 
 inline auto
-normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
+normalize_slice(const Shape& shape, Shape& start, Shape& stop, Shape& strides) {
   // - Start indices are normalized
   // - End indices are unchanged as -1 means something different
   //   pre-normalization (the end of the axis) versus post normalization (the
-  //   position left of 0).
+  //   position left of 0), except for a singleton result (see below).
   // - Any strides corresponding to singleton dimension are set to 1
 
   Shape out_shape(shape.size());
@@ -772,9 +772,12 @@ normalize_slice(const Shape& shape, Shape& start, Shape stop, Shape& strides) {
 
       out_shape[i] = (ed - start[i] + strides[i] - 1) / strides[i];
     }
-    // Simplify the stride if it's unused
+    // A singleton result keeps stride 1 and stop = start + 1, so the recorded
+    // indices still select one element when Slice::vjp and Slice::jvp replay
+    // them.
     if (out_shape[i] == 1) {
       strides[i] = 1;
+      stop[i] = start[i] + 1;
     }
   }
 
