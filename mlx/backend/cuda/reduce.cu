@@ -35,6 +35,19 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
+  if ((reduce_type_ == Reduce::Sum || reduce_type_ == Reduce::Prod) &&
+      (in.dtype() == float16 || in.dtype() == bfloat16)) {
+    // Keep partial results in float32 until the final output conversion.
+    array promoted(in.shape(), float32, nullptr, {});
+    array reduced(out.shape(), float32, nullptr, {});
+    copy_gpu(in, promoted, CopyType::General, s);
+    encoder.add_temporary(promoted);
+    eval_gpu({promoted}, reduced);
+    encoder.add_temporary(reduced);
+    copy_gpu(reduced, out, CopyType::Vector, s);
+    return;
+  }
+
   // Reduce.
   ReductionPlan plan = get_reduction_plan(in, axes_);
 
