@@ -2865,32 +2865,28 @@ TEST_CASE("test as_strided checked metadata") {
   CHECK_THROWS_AS(checked::layout({-1}, {1}, 0, 4), std::invalid_argument);
 }
 
-TEST_CASE("test as_strided allocation intervals") {
+TEST_CASE("test as_strided input extents") {
   namespace checked = as_strided_detail;
-  auto reverse = checked::layout({3}, {-1}, 0, 4);
+  auto reverse = checked::layout({3}, {-1}, 2, 4);
   CHECK_EQ(reverse.data_size, 3);
-  CHECK_NOTHROW(checked::check_storage(reverse, 8, 16));
+  CHECK_NOTHROW(checked::check_extent(reverse, 12));
+  CHECK_THROWS_AS(checked::check_extent(reverse, 11), std::invalid_argument);
   CHECK_THROWS_AS(
-      checked::check_storage(reverse, 0, 16), std::invalid_argument);
+      checked::check_extent(checked::layout({3}, {-1}, 0, 4), 16),
+      std::invalid_argument);
   auto unaligned = checked::layout({2}, {1}, 0, 4);
-  CHECK_NOTHROW(checked::check_storage(unaligned, 1, 9));
-  CHECK_THROWS_AS(
-      checked::check_storage(unaligned, 2, 9), std::invalid_argument);
-  CHECK_THROWS_AS(
-      checked::check_storage(
-          unaligned, std::numeric_limits<int64_t>::max(), 16),
-      std::overflow_error);
+  CHECK_NOTHROW(checked::check_extent(unaligned, 8));
+  CHECK_THROWS_AS(checked::check_extent(unaligned, 7), std::invalid_argument);
   auto empty =
       checked::layout({0}, {std::numeric_limits<int64_t>::min()}, 1, 4);
   CHECK_EQ(empty.data_size, 0);
-  CHECK_NOTHROW(checked::check_storage(empty, 0, 4));
-  CHECK_THROWS_AS(checked::check_storage(empty, 1, 4), std::invalid_argument);
+  CHECK_NOTHROW(checked::check_extent(empty, 4));
+  CHECK_THROWS_AS(checked::check_extent(empty, 3), std::invalid_argument);
   auto extent = std::numeric_limits<ShapeElem>::max();
   CHECK_NOTHROW(
       checked::layout({extent, extent, extent, 0}, {0, 0, 0, 0}, 0, 4));
-  CHECK_THROWS_AS(
-      checked::layout({0, extent, extent, extent}, {0, 0, 0, 0}, 0, 4),
-      std::overflow_error);
+  CHECK_NOTHROW(
+      checked::layout({0, extent, extent, extent}, {0, 0, 0, 0}, 0, 4));
 }
 
 TEST_CASE("test as_strided op") {

@@ -23,7 +23,7 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
 
   auto layout =
       as_strided_detail::layout(shape_, strides_, offset_, out.itemsize());
-  as_strided_detail::check_storage(layout, in.offset(), in.buffer_size());
+  as_strided_detail::check_extent(layout, in.nbytes());
   if (layout.data_size == 0) {
     return out.copy_shared_buffer(in, strides_, {true, true, true}, 0, offset_);
   }
