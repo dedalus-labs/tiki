@@ -75,6 +75,29 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
+# Storage ownership lives in the Rust crate under runtime/. Cargo builds it and
+# generates the CXX header that allocator.cpp includes.
+find_program(CARGO cargo REQUIRED)
+set(MLX_CUDA_RUNTIME_DIR ${CMAKE_CURRENT_SOURCE_DIR}/runtime)
+set(MLX_CARGO_TARGET_DIR ${CMAKE_BINARY_DIR}/cargo)
+set(MLX_CUDA_RUNTIME_LIB
+    ${MLX_CARGO_TARGET_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}tiki_cuda_runtime${CMAKE_STATIC_LIBRARY_SUFFIX}
+)
+file(GLOB_RECURSE MLX_CUDA_RUNTIME_SOURCES ${MLX_CUDA_RUNTIME_DIR}/src/*.rs)
+add_custom_command(
+  OUTPUT ${MLX_CUDA_RUNTIME_LIB}
+  COMMAND
+    ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${MLX_CARGO_TARGET_DIR} ${CARGO}
+    build --locked --release --manifest-path ${MLX_CUDA_RUNTIME_DIR}/Cargo.toml
+  DEPENDS ${MLX_CUDA_RUNTIME_SOURCES} ${MLX_CUDA_RUNTIME_DIR}/Cargo.toml
+          ${MLX_CUDA_RUNTIME_DIR}/Cargo.lock ${MLX_CUDA_RUNTIME_DIR}/build.rs
+  COMMENT "Building tiki-cuda-runtime"
+  VERBATIM)
+add_custom_target(tiki_cuda_runtime DEPENDS ${MLX_CUDA_RUNTIME_LIB})
+add_dependencies(mlx tiki_cuda_runtime)
+target_include_directories(mlx PRIVATE ${MLX_CARGO_TARGET_DIR}/cxxbridge)
+target_link_libraries(mlx PRIVATE ${MLX_CUDA_RUNTIME_LIB} ${CMAKE_DL_LIBS})
+
 # Put dynamic defines in the dirs.cpp file.
 add_library(mlx_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
 target_include_directories(mlx_dirs PRIVATE "${PROJECT_SOURCE_DIR}")
