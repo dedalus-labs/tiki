@@ -13,7 +13,8 @@ from math import prod
 from operator import index
 
 import mlx.core as mx
-from mlx.tiki._pycute import Layout, Shape, Stride, Tensor, flatten, size
+from mlx.tiki._pycute import Shape, Stride, Tensor, flatten, size
+from mlx.tiki.affine import Layout
 from mlx.tiki.composed import ComposedLayout
 from mlx.tiki.engine import ArrayEngine
 from mlx.tiki.layout import LayoutError
