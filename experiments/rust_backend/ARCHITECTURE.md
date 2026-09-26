@@ -26,7 +26,7 @@ runtime. The bridge is removed once the host is Rust.
 
 ```mermaid
 flowchart LR
-    model[Rust core] --> compiler[Rust compiler to LLVM IR and libNVVM]
+    model[Rust core] --> compiler[Rust compiler to LLVM IR and NVPTX]
     compiler --> artifact[Kernel artifact and argument contract]
     model --> runtime[Rust CUDA runtime]
     artifact --> runtime
@@ -36,7 +36,7 @@ flowchart LR
 The compiler turns kernels written in Tiki's kernel language, and kernels it
 generates for fused graph regions, into a kernel IR with CuTe semantics. It
 proves each kernel's accesses from its layouts, lowers it to LLVM IR, and
-compiles that with `libNVVM` to PTX. Compilation produces a kernel artifact:
+compiles that with LLVM's open NVPTX backend to PTX. Compilation produces a kernel artifact:
 the GPU binary, its entry point, and the information required to bind
 arguments and launch it. The CuTe MLIR compiler in `experiments/cute_backend` is
 the reference design for this lowering.
