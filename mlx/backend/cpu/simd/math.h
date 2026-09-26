@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "mlx/backend/cpu/simd/type.h"
 
 namespace mlx::core::simd {
@@ -24,10 +26,23 @@ constexpr float inf = std::numeric_limits<float>::infinity();
  * Note: The implementation below is a general fast exp. There could be faster
  *       implementations for numbers strictly < 0.
  */
+/* The polynomial paths below evaluate in single precision, which a float64
+ * input cannot afford; double lanes go through the standard library instead. */
+template <typename T, int N, typename Op>
+Simd<T, N> per_lane(Simd<T, N> in, Op op) {
+  Simd<T, N> out;
+  for (int i = 0; i < N; ++i) {
+    out[i] = op(in[i]);
+  }
+  return out;
+}
+
 template <typename T, int N>
 Simd<T, N> exp(Simd<T, N> in) {
   if constexpr (is_complex<T>) {
     return Simd<T, 1>{std::exp(in.value)};
+  } else if constexpr (std::is_same_v<T, double>) {
+    return per_lane(in, [](double v) { return std::exp(v); });
   } else {
     Simd<float, N> x_init = in;
     auto x = x_init * 1.442695f; // multiply with log_2(e)
@@ -121,6 +136,10 @@ Simd<T, N> sincos(Simd<T, N> in) {
 // to libm instead. 2^23 keeps x * 4/pi under 2^24 with room to spare.
 template <bool Sine, typename T, int N>
 Simd<T, N> sincos_checked(Simd<T, N> x) {
+  if constexpr (std::is_same_v<T, double>) {
+    return per_lane(
+        x, [](double v) { return Sine ? std::sin(v) : std::cos(v); });
+  }
   Simd<float, N> xf = x;
   if (any(abs(xf) > Simd<float, N>(8388608.0f))) {
     Simd<T, N> out;
@@ -153,6 +172,9 @@ Simd<T, N> cos(Simd<T, N> x) {
 
 template <typename T, int N>
 Simd<T, N> erf(Simd<T, N> x) {
+  if constexpr (std::is_same_v<T, double>) {
+    return per_lane(x, [](double v) { return std::erf(v); });
+  }
   // https://github.com/pytorch/pytorch/blob/abf28982a8cb43342e7669d859de9543fd804cc9/aten/src/ATen/cpu/vec/vec256/vec256_float.h#L175
   Simd<float, N> v = x;
   auto t = recip(fma(Simd<float, N>(0.3275911f), abs(v), 1.0f));
