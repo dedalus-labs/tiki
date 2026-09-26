@@ -4,6 +4,7 @@
 :caption: Tiki
 :maxdepth: 1
 
+Framework design <../dev/design>
 Building and testing layouts <../dev/tiki_layouts>
 ```
 
