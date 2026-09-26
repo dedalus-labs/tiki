@@ -93,6 +93,7 @@ void RoPE::eval_gpu(
 
   // Special case for inference (single time step, contiguous, one offset)
   auto& offset = inputs[1];
+  const bool offset_is_unsigned = offset.dtype() == uint32;
   bool single = in.flags().row_contiguous && T == 1 && offset.size() == 1;
 
   bool with_freqs = inputs.size() == 3;
@@ -109,13 +110,15 @@ void RoPE::eval_gpu(
       hash_name,
       kname,
       "_",
+      offset_is_unsigned ? "unsigned_" : "",
       forward_ ? "" : "vjp_",
       traditional_ ? "traditional_" : "",
       head_seq_transpose ? "transpose" : "");
   metal::MTLFCList func_consts = {
       {&forward_, MTL::DataType::DataTypeBool, 1},
       {&traditional_, MTL::DataType::DataTypeBool, 2},
-      {&head_seq_transpose, MTL::DataType::DataTypeBool, 3}};
+      {&head_seq_transpose, MTL::DataType::DataTypeBool, 3},
+      {&offset_is_unsigned, MTL::DataType::DataTypeBool, 4}};
 
   auto kernel = d.get_kernel(kname, hash_name, func_consts);
   auto& compute_encoder = metal::get_command_encoder(s);
@@ -140,7 +143,7 @@ void RoPE::eval_gpu(
     compute_encoder.set_bytes(strides, 3, 4);
     compute_encoder.set_bytes(out_strides, 3, 5);
     int64_t offset_stride = 0;
-    if (offset.ndim() > 0) {
+    if (offset.size() > 1) {
       offset_stride = offset.strides()[0];
     }
     compute_encoder.set_bytes(offset_stride, 6);
