@@ -6,6 +6,7 @@
 
 #include <fmt/format.h>
 #include <cuda/cmath>
+#include <limits>
 #include <vector>
 
 namespace mlx::core {
@@ -91,9 +92,16 @@ void* allocate_workspace(cu::CommandEncoder& encoder, size_t workspace_size) {
   assert(status == cudaStreamCaptureStatusNone);
 #endif
 
-  // Ensure workspace is 256-byte aligned.
-  int nbytes = cuda::ceil_div(workspace_size, 256) * 256;
-  array workspace(cu::malloc_async(nbytes, encoder), {nbytes}, int8);
+  // Keep byte counts wide; array dimensions must fit ShapeElem.
+  size_t blocks = workspace_size / 256 + (workspace_size % 256 != 0);
+  if (blocks > std::numeric_limits<ShapeElem>::max()) {
+    throw std::overflow_error(
+        "[allocate_workspace] Workspace shape is too large.");
+  }
+  array workspace(
+      cu::malloc_async(blocks * 256, encoder),
+      {static_cast<ShapeElem>(blocks), 256},
+      int8);
   encoder.add_temporary(workspace);
   return gpu_ptr<void>(workspace);
 }
