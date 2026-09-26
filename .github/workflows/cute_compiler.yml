@@ -1,0 +1,48 @@
+name: CuTe Compiler
+
+on:
+  pull_request:
+    paths:
+      - experiments/cute_backend/**
+      - experiments/associative_scan/**
+      - mlx/**
+      - python/**
+      - cmake/**
+      - CMakeLists.txt
+      - setup.py
+      - pyproject.toml
+      - .github/workflows/cute_compiler.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cute-compiler-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Python contracts
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: false
+      - name: Install CPU build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build libblas-dev liblapack-dev liblapacke-dev libopenmpi-dev
+          uv venv --python 3.14
+          uv pip install cmake setuptools wheel numpy typing_extensions -r experiments/cute_backend/requirements-check.txt
+      - name: Build native export and its Python stubs
+        env:
+          CMAKE_GENERATOR: Ninja
+          CMAKE_BUILD_PARALLEL_LEVEL: "4"
+          CMAKE_ARGS: -DMLX_BUILD_CPU=ON -DMLX_BUILD_CUDA=OFF -DMLX_BUILD_METAL=OFF
+        run: |
+          source .venv/bin/activate
+          python setup.py build_ext --inplace
+      - name: Check style, types, size limits, and CPU contracts
+        run: .venv/bin/python experiments/cute_backend/check.py

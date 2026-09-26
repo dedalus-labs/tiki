@@ -16,15 +16,24 @@ repos:
     rev: 26.1.0
     hooks:
     -   id: black
+        exclude: ^experiments/cute_backend/(tiki_compiler/|typings/|tiki\.py$|associative_scan\.py$|check\.py$|test_.*\.py$|demo_.*\.py$)
     
 -   repo: https://github.com/pycqa/isort
     rev: 7.0.0
     hooks:
     -   id: isort
+        exclude: ^experiments/cute_backend/(tiki_compiler/|typings/|tiki\.py$|associative_scan\.py$|check\.py$|test_.*\.py$|demo_.*\.py$)
         args:
             - --profile=black
             - --src=experiments/cute_backend
             - --src=experiments/associative_scan
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.5
+    hooks:
+    -   id: ruff-check
+        files: ^experiments/cute_backend/(tiki_compiler/|typings/|tiki\.py$|associative_scan\.py$|check\.py$|test_.*\.py$|demo_.*\.py$)
+    -   id: ruff-format
+        files: ^experiments/cute_backend/(tiki_compiler/|typings/|tiki\.py$|associative_scan\.py$|check\.py$|test_.*\.py$|demo_.*\.py$)
 - repo: https://github.com/cheshirekow/cmake-format-precommit
   rev: v0.6.13
   hooks:
