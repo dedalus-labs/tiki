@@ -66,6 +66,10 @@ inline Layout layout(
   }
   auto bytes = static_cast<int64_t>(itemsize);
   auto origin = scale(static_cast<int64_t>(offset), bytes);
+  // An empty view reads nothing, so its other extents must not decide whether it overflows.
+  if (std::any_of(shape.begin(), shape.end(), [](auto n) { return n == 0; })) {
+    return {origin, origin, 0};
+  }
   int64_t elements = 1;
   for (size_t i = 0; i < shape.size(); ++i) {
     elements = scale(elements, shape[shape.size() - 1 - i]);
@@ -74,9 +78,6 @@ inline Layout layout(
       std::numeric_limits<size_t>::max() / itemsize) {
     throw std::overflow_error(
         "[as_strided] Array byte count is unrepresentable.");
-  }
-  if (elements == 0) {
-    return {origin, origin, 0};
   }
   int64_t low = 0, high = 0;
   for (size_t i = 0; i < shape.size(); ++i) {
@@ -90,13 +91,14 @@ inline Layout layout(
       add(subtract(high, low), 1)};
 }
 
-inline void
-check_storage(const Layout& layout, int64_t base_offset, size_t capacity) {
-  auto low = add(base_offset, layout.lower_bytes);
-  auto high = add(base_offset, layout.upper_bytes);
-  if (low < 0 || high < low || static_cast<uint64_t>(high) > capacity) {
+// A view must lie within the bytes of the array it was taken from. Allocator capacity is wider:
+// recycled buffers keep another array's bytes past the requested size, and a gradient can only
+// scatter into the input's own elements.
+inline void check_extent(const Layout& layout, size_t input_bytes) {
+  if (layout.lower_bytes < 0 || layout.upper_bytes < layout.lower_bytes ||
+      static_cast<uint64_t>(layout.upper_bytes) > input_bytes) {
     throw std::invalid_argument(
-        "[as_strided] View reaches outside its backing allocation.");
+        "[as_strided] View reaches outside its input array.");
   }
 }
 

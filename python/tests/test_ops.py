@@ -2548,7 +2548,7 @@ class TestOps(mlx_tests.MLXTestCase):
             with self.subTest(strides=strides, offset=offset):
                 view = mx.as_strided(base, shape, strides, offset)
                 # Only evaluate view metadata; never copy or read an invalid view.
-                with self.assertRaisesRegex(ValueError, "backing allocation"):
+                with self.assertRaisesRegex(ValueError, "outside its input array"):
                     mx.eval(view)
 
     def test_as_strided_validates_rank_before_constructing_metadata(self):
@@ -2579,15 +2579,38 @@ class TestOps(mlx_tests.MLXTestCase):
         mx.eval(view)
         self.assertEqual(view.shape, (0,))
         outside = mx.as_strided(base, (0,), (0,), 1024)
-        with self.assertRaisesRegex(ValueError, "backing allocation"):
+        with self.assertRaisesRegex(ValueError, "outside its input array"):
             mx.eval(outside)
 
-    def test_as_strided_preserves_parent_backed_offsets_and_reversals(self):
-        base = mx.array([1.0, 2.0, 3.0, 4.0])
-        tail = mx.as_strided(base[1:2], (3,), (1,), 0)
-        prefix = mx.as_strided(base[2:4], (3,), (-1,), 0)
-        self.assertEqual(tail.tolist(), [2.0, 3.0, 4.0])
-        self.assertEqual(prefix.tolist(), [3.0, 2.0, 1.0])
+    def test_as_strided_rejects_views_past_the_input_array(self):
+        # A view of a slice stays within that slice, so its gradient has an element to reach.
+        for size in (4, 8192):
+            with self.subTest(size=size):
+                base = mx.arange(1, size + 1, dtype=mx.float32)
+                within = mx.as_strided(base[1:4], (3,), (-1,), 2)
+                self.assertEqual(within.tolist(), [4.0, 3.0, 2.0])
+                for view in (
+                    mx.as_strided(base[1:2], (3,), (1,), 0),
+                    mx.as_strided(base[2:4], (3,), (-1,), 0),
+                ):
+                    with self.assertRaisesRegex(ValueError, "outside its input array"):
+                        mx.eval(view)
+
+    def test_as_strided_ignores_recycled_allocation_slack(self):
+        # The allocator can hand back a larger freed buffer; bytes past the new array stay unreadable.
+        freed = mx.arange(1000.0)
+        mx.eval(freed)
+        del freed
+        reused = mx.arange(990.0)
+        mx.eval(reused)
+        with self.assertRaisesRegex(ValueError, "outside its input array"):
+            mx.eval(mx.as_strided(reused, (1000,), (1,)))
+
+    def test_as_strided_gradient_covers_every_accepted_view(self):
+        x = mx.array([1.0, 2.0, 3.0, 4.0])
+        forward = lambda t: mx.as_strided(t[1:3], (3,), (0,), 1).sum()
+        mx.eval(forward(x))
+        self.assertEqual(mx.grad(forward)(x).tolist(), [0.0, 0.0, 3.0, 0.0])
 
     def test_as_strided_preserves_unaligned_reinterpretation_byte_offsets(self):
         data = mx.array([0, 0, 0, 128, 63, 0, 0, 0, 64], dtype=mx.uint8)
@@ -2596,7 +2619,7 @@ class TestOps(mlx_tests.MLXTestCase):
         # Read bytes so the CPU oracle never dereferences an unaligned float.
         self.assertEqual(view.view(mx.uint8).tolist(), data[1:].tolist())
         invalid = mx.as_strided(data, (4,), (1,), 1024).view(mx.float32)
-        with self.assertRaisesRegex(ValueError, "backing allocation"):
+        with self.assertRaisesRegex(ValueError, "outside its input array"):
             mx.eval(invalid)
 
     def test_logcumsumexp(self):
