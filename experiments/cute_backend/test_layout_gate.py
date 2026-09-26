@@ -65,7 +65,12 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # Witness: the elementwise demo graph at (513,) contains no logical
     # coordinate and only flat memrefs.
     def test_dense_mlir_is_unchanged(self):
-        lowered = tk.specialize(affine, tk.Schedule(), (((513,), (1,)), ((513,), (1,))))
+        lowered = tk.specialize(
+            affine,
+            tk.Schedule(),
+            (((513,), (1,)), ((513,), (1,))),
+            mx.default_stream(mx.default_device()),
+        )
         self.assertNotIn("%logical", lowered.mlir)
         self.assertIn('"(513):(1)"', lowered.mlir)
         self.assertNotIn(":(1,", lowered.mlir)
@@ -76,7 +81,10 @@ class TestLoweringWithoutDevice(unittest.TestCase):
     # Witness: x transposed, y dense, both (64, 513).
     def test_strided_mlir(self):
         lowered = tk.specialize(
-            affine, tk.Schedule(), (((64, 513), (1, 64)), ((64, 513), (513, 1)))
+            affine,
+            tk.Schedule(),
+            (((64, 513), (1, 64)), ((64, 513), (513, 1))),
+            mx.default_stream(mx.default_device()),
         )
         self.assertIn("%logical = cute.make_coord(%i0, %i1)", lowered.mlir)
         self.assertIn('"(64,513):(1,64)"', lowered.mlir)
@@ -91,8 +99,13 @@ class TestLoweringWithoutDevice(unittest.TestCase):
             return x * mx.rsqrt(mx.mean(x * x, axis=-1, keepdims=True) + 1e-6) * w
 
         schedule = tk.RowSchedule(threads_per_row=32, rows_per_block=4)
-        strided = tk.specialize(rms, schedule, (((8, 64), (1, 8)), ((64,), (1,))))
-        dense = tk.specialize(rms, schedule, (((8, 64), (64, 1)), ((64,), (1,))))
+        stream = mx.default_stream(mx.default_device())
+        strided = tk.specialize(
+            rms, schedule, (((8, 64), (1, 8)), ((64,), (1,))), stream
+        )
+        dense = tk.specialize(
+            rms, schedule, (((8, 64), (64, 1)), ((64,), (1,))), stream
+        )
         self.assertEqual(strided.mlir, dense.mlir)
         self.assertTrue(tk.packs_views(schedule))
         self.assertFalse(tk.packs_views(tk.Schedule()))

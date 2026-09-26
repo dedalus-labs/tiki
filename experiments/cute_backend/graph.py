@@ -19,7 +19,7 @@ def dense_strides(shape: Shape) -> Strides:
 
 
 Descriptor = tuple[str, Shape, mx.Dtype]
-ArrayFunction = Callable[..., mx.array]
+ArrayFunction = Callable[..., mx.array | tuple[mx.array, ...]]
 
 
 class UnsupportedGraphError(ValueError):
@@ -34,6 +34,9 @@ class ExportEvent(TypedDict, total=False):
     constants: list[tuple[str, mx.array]]
     keywords: list[tuple[str, str]]
     arguments: list[bool | int | list[int] | tuple[int, ...]]
+    stream: mx.Stream
+    group: mx.distributed.Group
+    group_index: int
 
 
 @dataclass(frozen=True)
@@ -89,7 +92,7 @@ def descriptor(raw: Descriptor, strides: Strides = ()) -> Value:
     return Value(name, tuple(shape), strides)
 
 
-def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
+def trace(function: ArrayFunction, profiles: tuple[Profile, ...]) -> list[ExportEvent]:
     """Trace ``function`` on dense placeholders; record each input's strides.
 
     Strides do not change the traced graph, only how the lowering addresses
@@ -98,6 +101,11 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     events: list[ExportEvent] = []
     placeholders = [mx.zeros(shape, dtype=mx.float32) for shape, _ in profiles]
     mx.export_function(events.append, function, *placeholders)
+    return events
+
+
+def from_events(events: list[ExportEvent], profiles: tuple[Profile, ...]) -> Graph:
+    """Validate exported tensor operations against the CuTe region contract."""
     headers = {event["type"]: event for event in events if event["type"] != "primitive"}
     raw_inputs = headers["inputs"]["inputs"]
     if len(raw_inputs) != len(profiles):
@@ -119,6 +127,10 @@ def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
     if any(prod(output.shape) >= 2**31 - 1024 for output in outputs):
         raise UnsupportedGraphError("element count exceeds signed 32-bit indexing")
     return Graph(inputs, tuple(constants), nodes, outputs)
+
+
+def capture(function: ArrayFunction, profiles: tuple[Profile, ...]) -> Graph:
+    return from_events(trace(function, profiles), profiles)
 
 
 def parse_node(event: ExportEvent) -> Node:
