@@ -2,7 +2,9 @@
 
 import math
 import os
+import struct
 import unittest
+from itertools import product
 
 import mlx.core as mx
 import mlx_tests
@@ -70,6 +72,56 @@ def layer_norm(x, weight, bias, eps):
 
 
 class TestFast(mlx_tests.MLXTestCase):
+    def test_rope_adds_integer_positions_before_float_conversion(self):
+        cases = (
+            (mx.int32, -3),
+            (mx.int32, 2**24 + 1),
+            (mx.int32, 2**31 - 1),
+            (mx.uint32, 2**31),
+            (mx.uint32, 2**32 - 1),
+        )
+        for (kind, offset), tokens in product(cases, (1, 3)):
+            phases = [
+                struct.unpack("f", struct.pack("f", offset + token))[0]
+                for token in range(tokens)
+            ]
+            expected = mx.array([[[math.cos(p), math.sin(p)] for p in phases]])
+            values = mx.broadcast_to(mx.array([1.0, 0.0]), (1, tokens, 2))
+            values = mx.contiguous(values)
+            for supplied in (False, True):
+                with self.subTest(
+                    kind=kind, offset=offset, tokens=tokens, supplied=supplied
+                ):
+                    actual = mx.fast.rope(
+                        values,
+                        2,
+                        traditional=False,
+                        base=None if supplied else 10000.0,
+                        scale=1.0,
+                        offset=mx.array(offset, dtype=kind),
+                        freqs=mx.array([1.0]) if supplied else None,
+                    )
+                    self.assertTrue(mx.allclose(actual, expected, rtol=1e-6, atol=1e-6))
+
+    def test_rope_broadcasts_singleton_offset_views_across_batches(self):
+        parent = mx.array([2, 37], dtype=mx.int32)
+        offset = parent[:1]
+        values = mx.array([[[1.0, 0.0]], [[1.0, 0.0]]])
+        for supplied in (False, True):
+            with self.subTest(supplied=supplied):
+                actual = mx.fast.rope(
+                    values,
+                    2,
+                    traditional=False,
+                    base=None if supplied else 10000.0,
+                    scale=1.0,
+                    offset=offset,
+                    freqs=mx.array([1.0]) if supplied else None,
+                )
+                expected = mx.array([[[math.cos(2), math.sin(2)]]] * 2)
+                self.assertTrue(mx.allclose(actual, expected, rtol=1e-6, atol=1e-6))
+        self.assertEqual(parent.tolist(), [2, 37])
+
     def test_rope(self):
         T = 4
 
