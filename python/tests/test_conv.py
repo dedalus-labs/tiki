@@ -1146,6 +1146,108 @@ class TestConv(mlx_tests.MLXTestCase):
         )
         self.assertTrue(mx.allclose(mx_out, mx.array(pt_out), atol=1e-3, rtol=1e-3))
 
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_asymmetric_padding_gradients(self):
+        cases = (
+            ((2, 8, 4), (6, 3, 2), (2,), ((1,), (2,)), (2,), (1,), 2, False),
+            (
+                (2, 5, 6, 4),
+                (6, 2, 3, 2),
+                (2, 1),
+                ((1, 2), (2, 1)),
+                (2, 1),
+                (1, 2),
+                2,
+                True,
+            ),
+            (
+                (1, 4, 3, 5, 2),
+                (4, 2, 2, 2, 2),
+                (1, 2, 1),
+                ((0, 1, 2), (1, 2, 0)),
+                (1, 1, 1),
+                (1, 1, 1),
+                1,
+                False,
+            ),
+            ((1, 4, 2), (4, 2, 1), (1,), ((3,), (0,)), (1,), (2,), 2, False),
+            ((1, 4, 2), (4, 2, 1), (1,), ((0,), (4,)), (1,), (1,), 2, True),
+            ((1, 3, 2), (4, 2, 1), (2,), ((4,), (5,)), (2,), (2,), 2, True),
+        )
+        generator = np.random.default_rng(52)
+        for shape, kernel, stride, padding, kd, id_, groups, flip in cases:
+            with self.subTest(shape=shape, padding=padding, stride=stride, flip=flip):
+                x_np = generator.normal(size=shape).astype(np.float32) / 4
+                w_np = generator.normal(size=kernel).astype(np.float32) / 4
+                x_pt = torch.tensor(x_np, requires_grad=True)
+                w_pt = torch.tensor(w_np, requires_grad=True)
+                dimensions = len(stride)
+                permutation = (0, dimensions + 1, *range(1, dimensions + 1))
+                dilated_shape = tuple(
+                    (size - 1) * step + 1 for size, step in zip(shape[1:-1], id_)
+                )
+                expanded = torch.zeros((shape[0], shape[-1], *dilated_shape))
+                selection = (
+                    slice(None),
+                    slice(None),
+                    *(slice(None, None, step) for step in id_),
+                )
+                expanded[selection] = x_pt.permute(permutation)
+                pads = tuple(
+                    value for pair in reversed(tuple(zip(*padding))) for value in pair
+                )
+                expanded = F.pad(expanded, pads)
+                weight = w_pt.permute(permutation)
+                if flip:
+                    weight = weight.flip(tuple(range(2, dimensions + 2)))
+                convolution = (F.conv1d, F.conv2d, F.conv3d)[dimensions - 1]
+                expected = convolution(
+                    expanded, weight, stride=stride, dilation=kd, groups=groups
+                )
+                expected = expected.permute(0, *range(2, dimensions + 2), 1)
+                cotan = generator.normal(size=tuple(expected.shape)).astype(np.float32)
+                expected.backward(torch.tensor(cotan))
+
+                def function(x, w):
+                    return mx.conv_general(
+                        x,
+                        w,
+                        stride=stride,
+                        padding=padding,
+                        kernel_dilation=kd,
+                        input_dilation=id_,
+                        groups=groups,
+                        flip=flip,
+                    )
+
+                _, actual = mx.vjp(
+                    function, (mx.array(x_np), mx.array(w_np)), (mx.array(cotan),)
+                )
+                for received, reference in zip(actual, (x_pt.grad, w_pt.grad)):
+                    self.assertEqual(received.shape, tuple(reference.shape))
+                    np.testing.assert_allclose(
+                        received, reference.numpy(), rtol=1e-4, atol=1e-4
+                    )
+
+    @unittest.skipUnless(mx.cuda.is_available(), "requires CUDA")
+    def test_gpu_convolution_input_dilation(self):
+        x = mx.arange(8, dtype=mx.float32).reshape(1, 4, 2) / 8
+        for kernel, stride, dilations in ((2, 2, (1, 2, 1)), (9, 1, (2,))):
+            weight = (
+                mx.arange(4 * kernel, dtype=mx.float32).reshape(4, kernel, 1) - 7
+            ) / 11
+            for dilation in dilations:
+                with self.subTest(kernel=kernel, stride=stride, dilation=dilation):
+                    options = dict(
+                        stride=stride,
+                        padding=((3,), (0,)),
+                        input_dilation=dilation,
+                        groups=2,
+                    )
+                    expected = mx.conv_general(x, weight, stream=mx.cpu, **options)
+                    actual = mx.conv_general(x, weight, stream=mx.gpu, **options)
+                    np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-5)
+
     def test_basic_grad_shapes(self):
         def loss_fn(kernel, inputs, strides, groups):
             return mx.sum(
