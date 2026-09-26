@@ -50,7 +50,10 @@ def associative_scan(
 
     def combine(a: Leaves, b: Leaves) -> Leaves:
         c = fn(tree_unflatten(list(zip(keys, a))), tree_unflatten(list(zip(keys, b))))
-        return [leaf for _, leaf in tree_flatten(c)]
+        outputs = dict(tree_flatten(c))
+        if outputs.keys() != set(keys):
+            raise ValueError("associative_scan: fn must preserve the leaf paths")
+        return [outputs[key] for key in keys]
 
     scans = _scan(combine, leaves)
     if reverse:

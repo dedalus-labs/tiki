@@ -81,6 +81,40 @@ def assert_close(actual: Any, expected: Any, name: str) -> None:
         )
 
 
+class TestScanStructure(unittest.TestCase):
+    # Invariant: dictionary leaves stay with their keys.
+    # Witness: addition returns b before a at each combine.
+    def test_reordered_dictionary(self) -> None:
+        elems = {"a": mx.array([1, 2, 3, 4, 5]), "b": mx.array([10, 20, 30, 40, 50])}
+        for n in (2, 5):
+            for reverse in (False, True):
+                inputs = {key: leaf[:n] for key, leaf in elems.items()}
+                got = associative_scan(
+                    lambda left, right: {
+                        "b": left["b"] + right["b"],
+                        "a": left["a"] + right["a"],
+                    },
+                    inputs,
+                    reverse=reverse,
+                )
+                self.assertEqual(got.keys(), inputs.keys())
+                for key, leaf in inputs.items():
+                    self.assertEqual(
+                        got[key].tolist(), mx.cumsum(leaf, reverse=reverse).tolist()
+                    )
+
+    # Invariant: a combine cannot change the leaf paths.
+    # Witness: missing, extra, and renamed dictionary keys raise ValueError.
+    def test_changed_dictionary_keys(self) -> None:
+        elems = {"a": mx.array([1, 2]), "b": mx.array([10, 20])}
+        for keys in (("a",), ("a", "b", "c"), ("a", "c")):
+            with self.subTest(keys=keys):
+                with self.assertRaisesRegex(ValueError, "leaf paths"):
+                    associative_scan(
+                        lambda left, right: {key: left["a"] for key in keys}, elems
+                    )
+
+
 @unittest.skipUnless(
     FIXED, "MLX build lacks the normalize_slice fix; strided-slice VJP is wrong"
 )
