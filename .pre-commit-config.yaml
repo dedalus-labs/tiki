@@ -1,3 +1,4 @@
+exclude: ^(experiments/rust_backend/repros/crubit/generated/|python/mlx/tiki/_pycute/)
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
