@@ -55,7 +55,7 @@ html_theme = "sphinx_book_theme"
 
 html_theme_options = {
     "show_toc_level": 2,
-    "repository_url": "https://github.com/ml-explore/mlx",
+    "repository_url": "https://github.com/dedalus-labs/tiki",
     "use_repository_button": True,
     "navigation_with_keys": False,
     "logo": {
