@@ -6,7 +6,7 @@ use proptest::prelude::*;
 use tiki_algebra::laws::{
     is_associative, is_commutative, is_distributive, is_identity, is_inverse,
 };
-use tiki_algebra::{Add, And, F2, LogSumExp, Max, Min, Mul, Or};
+use tiki_algebra::{Add, And, F2, Field, LogSumExp, Max, Min, Mul, Or};
 
 /// Integers small enough that products of three never overflow.
 const SMALL: std::ops::RangeInclusive<i64> = -1_000_000..=1_000_000;
@@ -17,7 +17,10 @@ fn exact<T: PartialEq>(a: &T, b: &T) -> bool {
     a == b
 }
 
-fn close(a: &f64, b: &f64) -> bool {
+/// Equal within the relative tolerance. Infinite identities compare exactly, since their
+/// difference is not a number.
+#[expect(clippy::float_cmp, reason = "an infinite identity equals only itself")]
+fn close(a: f64, b: f64) -> bool {
     a == b || (a - b).abs() <= TOLERANCE * a.abs().max(b.abs()).max(1.0)
 }
 
@@ -50,7 +53,6 @@ proptest! {
         prop_assert!(is_commutative::<Add, _>(&a, &b, exact) && is_commutative::<Mul, _>(&a, &b, exact));
         prop_assert!(is_inverse::<Add, _>(&a, exact));
         prop_assert!(is_distributive::<Add, Mul, _>(&a, &b, &c, exact));
-        use tiki_algebra::Field;
         prop_assert_eq!(a.reciprocal().map(|r| r * a), a.is_one().then_some(F2::ONE));
     }
 
@@ -58,13 +60,15 @@ proptest! {
     // Witness: every law holds within the tolerance on random finite floats.
     #[test]
     fn floats_form_the_semirings(a in -1e3f64..1e3, b in -1e3f64..1e3, c in -1e3f64..1e3) {
-        prop_assert!(is_distributive::<Add, Mul, _>(&a, &b, &c, close));
-        prop_assert!(is_distributive::<Max, Add, _>(&a, &b, &c, close));
-        prop_assert!(is_distributive::<Min, Add, _>(&a, &b, &c, close));
-        prop_assert!(is_distributive::<LogSumExp, Add, _>(&a, &b, &c, close));
-        prop_assert!(is_associative::<LogSumExp, _>(&a, &b, &c, close));
-        prop_assert!(is_identity::<LogSumExp, _>(&a, close) && is_identity::<Max, _>(&a, close));
-        prop_assert!(is_commutative::<LogSumExp, _>(&a, &b, close));
+        // The law checks compare through references, as they do for every type.
+        let near = |x: &f64, y: &f64| close(*x, *y);
+        prop_assert!(is_distributive::<Add, Mul, _>(&a, &b, &c, near));
+        prop_assert!(is_distributive::<Max, Add, _>(&a, &b, &c, near));
+        prop_assert!(is_distributive::<Min, Add, _>(&a, &b, &c, near));
+        prop_assert!(is_distributive::<LogSumExp, Add, _>(&a, &b, &c, near));
+        prop_assert!(is_associative::<LogSumExp, _>(&a, &b, &c, near));
+        prop_assert!(is_identity::<LogSumExp, _>(&a, near) && is_identity::<Max, _>(&a, near));
+        prop_assert!(is_commutative::<LogSumExp, _>(&a, &b, near));
     }
 
     // Invariant: booleans form the boolean semiring.
