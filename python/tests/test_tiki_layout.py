@@ -194,9 +194,9 @@ class TestComposedLayout(tiki_tests.TIKITestCase):
         with self.assertRaises(tl.LayoutError):
             tl.check_swizzle(tl.Swizzle(bits=2, base=0, shift=1))
         self.assertEqual(tl.check_swizzle(tl.Swizzle(bits=1, base=0, shift=1)).shift, 1)
-        from tiki.layout._pycute import Swizzle as ReferenceSwizzle
-
-        self.assertEqual({ReferenceSwizzle(1, 0, 0)(index) for index in range(2)}, {0})
+        # PyCuTe's Swizzle(1, 0, 0) is index ^ ((index & 1) >> 0). The vendored
+        # PyCuTe is deleted, so the witness writes out that formula.
+        self.assertEqual({index ^ ((index & 1) >> 0) for index in range(2)}, {0})
 
     # Invariant (zop): parent(fixed, free) == engine_delta + residual(free) at
     # every coordinate, for affine, swizzled, and nested-swizzled layouts. An

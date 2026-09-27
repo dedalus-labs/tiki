@@ -1,0 +1,27 @@
+[package]
+name = "tiki-cute-python"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "The tiki.layout._cute Python extension: tiki-cute layouts behind a typed PyO3 interface"
+
+[lib]
+name = "tiki_cute_python"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# Leaves the Python symbols to the interpreter that loads the extension. Builds of the
+# extension enable it, and `cargo test` links libpython instead.
+extension-module = ["pyo3/extension-module"]
+
+[dependencies]
+pyo3 = "=0.26.0"
+tiki-cute = { path = ".." }
+
+[build-dependencies]
+pyo3-build-config = "=0.26.0"
+
+[lints]
+workspace = true

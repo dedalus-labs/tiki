@@ -155,7 +155,7 @@ integer strides describes this map on the ``(4, 4)`` domain:
    >>> swizzled.stride
    Traceback (most recent call last):
      ...
-   tiki.layout._layout.LayoutError: a composed layout has no stride. Require an affine layout
+   tiki.layout._cute.LayoutError: a composed layout has no stride. Require an affine layout
 
 Every row permutes its four indices differently:
 
@@ -239,10 +239,11 @@ among others.
 
 In that framework, composition of layouts is composition of the underlying
 maps, and each algebra operation corresponds to an operation on morphisms.
-Cecka [3]_ gives NVIDIA's reference definition and ships PyCuTe, the Python
-implementation that Tiki vendors for the affine algebra.
+Cecka [3]_ gives NVIDIA's reference definition and ships PyCuTe, its Python
+reference implementation. Tiki computes the algebra with tiki-cute, a Rust
+implementation that replays every layout-algebra call of PyCuTe's test suite.
 
-The Rust extension implements indexing and composed transforms.
+The Rust extension implements the algebra and the indexing transforms.
 :ref:`tiki-layouts` describes the indexing model, and
 :ref:`tiki-layout-recipes` shows the operations in use.
 
@@ -271,8 +272,8 @@ Build the framework
 
       python -m pip install .
 
-   The build compiles the ``tiki-cute`` crate and links it into the
-   ``tiki_cute_python`` extension through CXX.
+   The build compiles the PyO3 crate in ``tiki/cute/python``, which links the
+   ``tiki-cute`` crate, into the ``tiki.layout._cute`` extension.
 
 Expected result: the extension is importable and computes offsets.
 
@@ -316,9 +317,9 @@ Run the checks
 
 Run the Rust and Python checks from the repository root::
 
-   cargo test --manifest-path tiki/cute/Cargo.toml --all-features
-   cargo fmt --manifest-path tiki/cute/Cargo.toml --check
-   cargo clippy --manifest-path tiki/cute/Cargo.toml --all-targets --all-features -- -D warnings
+   cargo test --manifest-path tiki/cute/Cargo.toml --workspace
+   cargo fmt --manifest-path tiki/cute/Cargo.toml --all --check
+   cargo clippy --manifest-path tiki/cute/Cargo.toml --workspace --all-targets -- -D warnings
    PYTHONPATH=python:python/tests python -m unittest discover -s python/tests -p 'test_tiki_*.py'
 
 ``test_tiki_docs`` parses :doc:`../usage/layouts` and

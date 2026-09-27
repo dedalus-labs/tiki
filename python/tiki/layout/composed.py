@@ -19,14 +19,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from operator import index
 from textwrap import indent
-from typing import SupportsIndex, TypeAlias, cast
+from typing import TYPE_CHECKING, SupportsIndex, TypeAlias, cast
 
-from tiki.layout._layout import LayoutError
-from tiki.layout._pycute import Layout, LayoutBase, Shape, rank, size
-from tiki.layout._pycute.typedefs import Coord, StrideScalar
+from tiki.layout._cute import LayoutError
 from tiki.layout.swizzle import Swizzle, notation
+from tiki.layout.tuples import Coord, Offset, Shape, rank
+
+if TYPE_CHECKING:
+    from tiki.layout.affine import Layout
 
 Coordinate: TypeAlias = int | None | slice | tuple["Coordinate", ...]
+
+
+class LayoutBase:
+    """Marker for every layout, so ``is_layout`` covers stride and composed layouts."""
+
+    __slots__ = ()
 
 
 def check_swizzle(swizzle: Swizzle) -> Swizzle:
@@ -45,14 +53,14 @@ class ComposedLayout(LayoutBase):
     inner: Layout | ComposedLayout
 
     def __post_init__(self) -> None:
-        if not isinstance(self.outer, (Swizzle, Layout, ComposedLayout)):
+        if not isinstance(self.outer, (Swizzle, LayoutBase)):
             raise LayoutError("composition outer must be a Swizzle or a layout")
-        if not isinstance(self.inner, (Layout, ComposedLayout)):
+        if not isinstance(self.inner, LayoutBase):
             raise LayoutError("composition inner must supply a layout domain")
         if type(self.offset) is not int:
             raise LayoutError("composition offset must be an integer")
 
-    def __call__(self, *coordinate: Coordinate) -> int:
+    def __call__(self, *coordinate: Coord) -> int:
         """Evaluate ``outer(offset + inner(coordinate))`` without accessing storage."""
         argument = self.offset + _evaluate(self.inner, coordinate)
         if isinstance(self.outer, Swizzle):
@@ -66,6 +74,8 @@ class ComposedLayout(LayoutBase):
     def _offset_and_slice(
         self, coordinate: Coordinate
     ) -> tuple[int, "Layout | ComposedLayout"]:
+        from tiki.layout.affine import Layout
+
         residual, delta = slice_and_offset(coordinate, self)
         if rank(residual) == 0:
             return delta + _evaluate(residual, ()), Layout((), stride=())
@@ -109,7 +119,9 @@ def _leaves(
     if isinstance(shape, tuple):
         return [
             row
-            for position, (extent, step) in enumerate(zip(shape, cast(tuple, stride)))
+            for position, (extent, step) in enumerate(
+                zip(shape, cast(tuple[object, ...], stride))
+            )
             for row in _leaves(extent, step, f"{path}[{position}]")
         ]
     return [(f"c{path}", str(shape), str(stride))]
@@ -149,8 +161,8 @@ def slice_and_offset(
     layout keeps it inside the composition and reports zero displacement.
     """
     if not isinstance(layout, ComposedLayout):
-        offset, residual = layout._offset_and_slice(cast(Coord, coordinate))
-        return residual, _offset(offset)
+        offset, sliced = layout._offset_and_slice(coordinate)
+        return sliced, _offset(offset)
     residual, delta = slice_and_offset(coordinate, layout.inner)
     return (
         ComposedLayout(
@@ -160,7 +172,7 @@ def slice_and_offset(
     )
 
 
-def _offset(value: StrideScalar | SupportsIndex) -> int:
+def _offset(value: Offset | SupportsIndex) -> int:
     if not isinstance(value, SupportsIndex):
         raise LayoutError(
             "composition requires integer offset addition, not XOR or coordinate addition"
@@ -168,18 +180,7 @@ def _offset(value: StrideScalar | SupportsIndex) -> int:
     return index(value)
 
 
-def _evaluate(
-    layout: Layout | ComposedLayout, coordinate: tuple[Coordinate, ...]
-) -> int:
+def _evaluate(layout: Layout | ComposedLayout, coordinate: tuple[Coord, ...]) -> int:
     if isinstance(layout, ComposedLayout):
         return layout(*coordinate)
-    # PyCuTe's coordinate ABCs register Python integers dynamically.
-    return _offset(layout(*cast(tuple[Coord, ...], coordinate)))
-
-
-def composed_size(layout: "Layout | ComposedLayout") -> int:
-    return size(layout.inner if isinstance(layout, ComposedLayout) else layout)
-
-
-def composed_rank(layout: "Layout | ComposedLayout") -> int:
-    return rank(layout.inner if isinstance(layout, ComposedLayout) else layout)
+    return _offset(layout(*coordinate))

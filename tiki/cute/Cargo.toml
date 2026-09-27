@@ -6,27 +6,22 @@ rust-version = "1.92"
 publish = false
 description = "CuTe layout algebra with static and dynamic extents, checked tensors and swizzles"
 
-[lib]
-crate-type = ["staticlib", "rlib"]
-
-[features]
-default = []
-cxx-bridge = ["dep:cxx", "dep:cxx-build"]
+[workspace]
+members = ["python"]
 
 [dependencies]
 thiserror = "2"
-cxx = { version = "=1.0.200", optional = true }
-
-[build-dependencies]
-cxx-build = { version = "=1.0.200", optional = true }
 
 [dev-dependencies]
 proptest = "1"
 
-[lints.rust]
+[lints]
+workspace = true
+
+[workspace.lints.rust]
 unsafe_code = "deny"
 
-[lints.clippy]
+[workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 missing_errors_doc = "allow"

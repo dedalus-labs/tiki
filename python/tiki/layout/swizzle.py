@@ -5,8 +5,8 @@
 from operator import index
 from typing import SupportsIndex
 
-from tiki.layout._layout import LayoutError
-from tiki.layout._layout import Swizzle as NativeSwizzle
+from tiki.layout._cute import LayoutError
+from tiki.layout._cute import Swizzle as NativeSwizzle
 
 
 def notation(value: object, spec: str, cute: str) -> str:
@@ -49,9 +49,12 @@ class Swizzle(NativeSwizzle):
 
     __slots__ = ()
 
-    def __init__(self, *, bits: int, base: int, shift: int) -> None:
-        super().__init__(
-            _integer(bits, "bits"), _integer(base, "base"), _integer(shift, "shift")
+    def __new__(cls, *, bits: int, base: int, shift: int) -> "Swizzle":
+        return super().__new__(
+            cls,
+            _integer(bits, "bits"),
+            _integer(base, "base"),
+            _integer(shift, "shift"),
         )
 
     def __call__(self, offset: SupportsIndex) -> int:

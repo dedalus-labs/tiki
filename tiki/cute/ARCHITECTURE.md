@@ -25,6 +25,12 @@ types, so every new layout instantiates new templates. Keeping layouts as
 values makes a kernel's layout work cost what the algebra costs, before LLVM
 runs.
 
+The `tiki.layout` Python API calls the same algebra through `tiki.layout._cute`, the
+PyO3 extension that the crate in `python/` builds. The extension takes typed
+values, nested tuples of integers, XOR and coordinate stride values, and
+layout handles, and returns them. No CuTe notation crosses it. Python keeps
+the API's printed forms, composition with nonlinear transforms, and storage.
+
 ## Representation
 
 ### One recursive tuple
@@ -377,7 +383,8 @@ name.
   spanning more than 2^63 elements reaches. The algebra runs in the compiler
   process, where a panic ends one compilation. `Tensor` uses checked arithmetic
   throughout and reports overflow as an error, because host code builds tensors
-  from user shapes.
+  from user shapes. Through the Python extension, a panic reaches Python as
+  `pyo3_runtime.PanicException`.
 - **Upper bounds.** A parameter's facts give it a least value and a divisor.
   A fact such as `M <= 4096` would prove more, and `Param` is where it would
   live.
