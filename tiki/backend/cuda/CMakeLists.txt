@@ -75,8 +75,6 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/quantized/convert_fp8.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/worker.cpp)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/runtime.cmake)
-
 # Put dynamic defines in the dirs.cpp file.
 add_library(tiki_dirs OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/dirs.cpp)
 target_include_directories(tiki_dirs PRIVATE "${PROJECT_SOURCE_DIR}")
