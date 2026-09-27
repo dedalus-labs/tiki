@@ -151,17 +151,25 @@ stride prints as `^9`, where PyCuTe prints `F9`, so no name reads as one.
 ## Build
 
 tiki-cute needs Rust 1.92 or newer. Python source builds compile it on every
-backend, CPU and Metal included, because the `tiki.layout` extension links it:
-`CMakeLists.txt` builds the crate with the `cxx-bridge` feature, and
-`src/bridge.rs` passes validated `Swizzle` values to C++ through CXX. The
-crate's semantics do not depend on the device. Prebuilt wheels need no Rust
-toolchain, and C++ builds with `TIKI_BUILD_PYTHON_BINDINGS=OFF` skip the crate.
-The CUDA runtime has its own Rust crate.
+backend, CPU and Metal included, because the `tiki.layout` Python API computes
+every layout operation with it. The workspace member `python/` is the PyO3
+crate `tiki-cute-python`, which builds the `tiki.layout._cute` extension:
+`CMakeLists.txt` runs Cargo with its `extension-module` feature and installs
+the library next to the `tiki.layout` package. The binding forbids unsafe code
+and passes typed values only, so Python never formats CuTe notation for this
+crate to parse. The crate's semantics do not depend on the device. Prebuilt
+wheels need no Rust toolchain, and C++ builds with
+`TIKI_BUILD_PYTHON_BINDINGS=OFF` skip the crate. The CUDA runtime has its own
+Rust crate.
 
 ```sh
-cargo test --manifest-path tiki/cute/Cargo.toml --all-features
-cargo clippy --manifest-path tiki/cute/Cargo.toml --all-targets --all-features -- -D warnings
+cargo test --manifest-path tiki/cute/Cargo.toml --workspace
+cargo clippy --manifest-path tiki/cute/Cargo.toml --workspace --all-targets -- -D warnings
+cargo fmt --manifest-path tiki/cute/Cargo.toml --all --check
 ```
+
+The binding's tests link libpython. PyO3 finds the interpreter on `PATH`, or
+the one `PYO3_PYTHON` names.
 
 ## References
 

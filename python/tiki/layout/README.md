@@ -1,7 +1,7 @@
 # Reference layout layer
 
-`tiki.layout` combines a pinned PyCuTe algebra, Rust-owned indexing transforms,
-and an Tiki-backed reference Engine.
+`tiki.layout` combines tiki-cute, Tiki's Rust implementation of the CuTe layout
+algebra and its indexing transforms, with an Tiki-backed reference Engine.
 It is an experimental Python interface, not the Rust array backend or a
 replacement for `tiki.array`.
 
@@ -62,16 +62,22 @@ rule. Negative target extents are rejected.
 ## Scope and provenance
 
 The reference accessors do not establish Rust ownership, exclusive mutation,
-or kernel memory-safety proofs. In particular, the vendored foreign-pointer
-accessors retain their upstream contracts. A pure layout's extended-coordinate
-evaluation is not evidence that a tensor access is in bounds.
+or kernel memory-safety proofs. In particular, `Ptr` and `Array` address ctypes
+memory without bounds checks. A pure layout's extended-coordinate evaluation
+is not evidence that a tensor access is in bounds.
 
-PyCuTe source remains unmodified. Its revision and license are recorded in
-[_pycute/VENDORED.md](_pycute/VENDORED.md). Tiki's validation and Tiki adapters
-live outside that directory.
+[tiki-cute](../../../tiki/cute/README.md) computes every layout operation. The
+`tiki.layout._cute` extension, built with PyO3 from `tiki/cute/python`, passes it
+typed values only: nested tuples of integers, `F2` and coordinate stride
+values, and layout handles. The Python modules keep the API, its printed
+forms, composition with nonlinear transforms, and the Engines. tiki-cute
+agrees with PyCuTe, the reference implementation, except where
+[its architecture](../../../tiki/cute/ARCHITECTURE.md) records a stricter
+result: it refuses compositions that break Cecka's Equation 23 and extents
+that are not positive, and it reads the XOR zero as the integer 0.
 
-The Rust extension is required. Missing native bindings do not select a Python
-implementation. See the [layout guide](../../../docs/src/usage/layouts.rst),
+The Rust extension is required. A missing extension fails the import of
+`tiki.layout` and names `tiki.layout._cute`. No Python implementation replaces it. See the [layout guide](../../../docs/src/usage/layouts.rst),
 [recipes](../../../docs/src/examples/layouts.rst), and
 [build instructions](../../../docs/src/dev/tiki_layouts.rst).
 

@@ -1,1 +1,1 @@
-doc-valid-idents = ["CuTe", "PyCuTe", "CUTLASS", "VanKoughnett", ".."]
+doc-valid-idents = ["CuTe", "PyCuTe", "PyO3", "CUTLASS", "VanKoughnett", ".."]

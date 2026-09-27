@@ -272,4 +272,4 @@ limitations under the License.
 
 # Third-party code
 
-- NVIDIA CuTe (Apache-2.0): the PyCuTe reference implementation of the CuTe layout algebra is vendored unmodified as `mlx.tiki._pycute`; see `python/mlx/tiki/_pycute/VENDORED.md` for the pinned commit.
+- NVIDIA CuTe (Apache-2.0): `tiki.layout` computes its layout algebra with tiki-cute (`tiki/cute`), Tiki's Rust implementation of the CuTe layout algebra. PyCuTe, the reference implementation, is tiki-cute's oracle: `tiki/cute/tests/reference/cases.txt` records the layout-algebra calls of PyCuTe's test suite at commit `111253d17e2f0f8631f43999b43ac4afa5954b04`, and the `tiki.layout` Python API keeps PyCuTe's names and printed forms.

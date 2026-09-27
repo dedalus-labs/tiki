@@ -52,7 +52,7 @@ Domain operations
 
 ``logical_divide``, ``zipped_divide``, ``coalesce``, ``complement``,
 ``logical_product``, ``blocked_product``, ``raked_product``, ``left_inverse``,
-``right_inverse``, ``nullspace``, and ``recast`` expose the vendored PyCuTe
+``right_inverse``, ``nullspace``, and ``recast`` expose the tiki-cute
 algebra through the same namespace. They do not imply general support for
 nonlinear operands. Use composition to apply a transform to a derived affine
 domain.
