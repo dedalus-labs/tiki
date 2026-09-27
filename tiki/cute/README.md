@@ -192,8 +192,7 @@ the one `PYO3_PYTHON` names.
 5. NVIDIA. [cuda-oxide](https://github.com/NVlabs/cuda-oxide/tree/ec4aa4797956534578a1af010f86252a0b6d8626),
    Rust kernels compiled to PTX, and
    [cuTile Rust](https://github.com/NVlabs/cutile-rs/tree/cc720f182f38bf46527753caa340e78d6d5fa3cc)
-   0.4.0, whose host crates `cuda-core` and `cuda-async` Tiki's runtime design
-   adopts. Both informed where the Rust boundary sits in Tiki's compiler.
+   0.4.0. ADR-0001 evaluates both, and neither is a dependency.
 6. NVIDIA. [CUDA Tile IR](https://github.com/NVIDIA/cuda-tile/tree/7e8e2e68fa219716103824c01f7303367cf7df8d),
    evaluated as a kernel target. Tile IR has no threads or shared memory, which
    CuTe-style kernels address explicitly.

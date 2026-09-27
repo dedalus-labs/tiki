@@ -385,3 +385,138 @@ Proofs
 The compiler proves each kernel from the same structure it is built from:
 bounds from each tensor's layout and its allocation, disjoint writes from
 each partition, and completion order from each barrier and pipeline stage.
+It also proves that every thread of a block reaches each block-wide barrier.
+An index read from tensor data, as in a gather or a block table, has no static
+proof, so the compiler checks it before the access.
+
+From tk to PTX
+--------------
+
+Compiling a kernel is ordinary Rust and never calls the driver. Running it
+goes through the driver, and only the launcher does that. This section
+follows the elementwise ``axpy`` above through each stage.
+
+**Layouts and proofs.** Tracing turns each tensor into a ``tiki-cute`` layout.
+The launch fact ``512 | N`` is a parameter fact, and the proofs use it:
+
+.. code-block:: rust
+
+   use tiki_cute::{Int, Layout, Param, Shape, Tiler, Tuple};
+
+   let n = Int::from(Param::multiple_of("N", 512)?);
+   let array = Layout::from(Shape::try_from(Tuple::Leaf(n.clone()))?);   // N:1
+   let tiles = array.logical_divide(&Tiler::try_from(512)?)?;             // (512, floor(N/512)):(1, 512)
+   let threads: Layout = "(128, 4):(4, 1)".parse()?;
+   let partition = tiles.compose(&Tiler::from([Some(Tiler::from(threads)), None]))?;
+   // ((128, 4), floor(N/512)):((4, 1), 512): (thread, value, block) to element offset
+
+   // Highest offset: 4·127 + 3 + 512·(floor(N/512) - 1) = N - 1, below N.
+   prove::in_bounds(&partition, &array)?;
+   // No two (thread, value, block) coordinates reach one offset of y.
+   prove::injective(&partition)?;
+   // N has no upper bound, so offsets lower as 64-bit integers.
+   let width = IndexWidth::for_highest(&n);
+
+With ``Param::positive("N")`` instead, the bounds question stays open for the
+last tile. The compiler then guards it with ``offset < N`` or refuses the
+kernel.
+
+**Thread IR.** Layout evaluation becomes integer arithmetic, static loops
+unroll, and each access keeps the fact that proves it:
+
+.. code-block:: text
+
+   axpy(alpha: f32, x: global f32[N], y: global f32[N], N: i64 {N > 0, N % 512 == 0})
+     b: i64 = block.x                  range [0, N/512)
+     t: i64 = thread.x                 range [0, 128)
+     base: i64 = 512*b + 4*t           range [0, N-4], multiple of 4
+     xr[v] = load x[base + v]          v in 0..4, base + 3 <= N - 1
+     yr[v] = load y[base + v]
+     store y[base + v] = alpha*xr[v] + yr[v]
+
+**LLVM IR.** Every flag that lets LLVM assume something comes from a fact
+above, or for ``noalias`` from the launcher's borrows:
+
+.. code-block:: llvm
+
+   define ptx_kernel void @axpy(float %alpha, ptr addrspace(1) noalias %x,
+                                ptr addrspace(1) noalias %y, i64 %N) {
+     %b    = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+     %t    = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+     %b64  = zext i32 %b to i64
+     %t64  = zext i32 %t to i64
+     %blk  = shl nuw nsw i64 %b64, 9                 ; 512*b < N < 2^63
+     %lane = shl nuw nsw i64 %t64, 2
+     %base = add nuw nsw i64 %blk, %lane
+     %px   = getelementptr inbounds float, ptr addrspace(1) %x, i64 %base
+     %py   = getelementptr inbounds float, ptr addrspace(1) %y, i64 %base
+     %xv   = load <4 x float>, ptr addrspace(1) %px, align 16   ; base % 4 == 0
+     %yv   = load <4 x float>, ptr addrspace(1) %py, align 16
+     %av   = insertelement <4 x float> poison, float %alpha, i64 0
+     %as   = shufflevector <4 x float> %av, <4 x float> poison, <4 x i32> zeroinitializer
+     %r    = call <4 x float> @llvm.fma.v4f32(<4 x float> %as, <4 x float> %xv, <4 x float> %yv)
+     store <4 x float> %r, ptr addrspace(1) %py, align 16
+     ret void
+   }
+
+**PTX.** LLVM's NVPTX backend writes the PTX for ``sm_90``:
+
+.. code-block:: text
+
+   .visible .entry axpy(.param .f32 alpha, .param .u64 x, .param .u64 y, .param .u64 N)
+   {
+       mov.u32          %r1, %ctaid.x;
+       mov.u32          %r2, %tid.x;
+       mul.wide.u32     %rd1, %r1, 2048;
+       mad.wide.u32     %rd2, %r2, 16, %rd1;
+       ld.global.v4.f32 {%f1, %f2, %f3, %f4}, [%rd3];
+       ld.global.v4.f32 {%f5, %f6, %f7, %f8}, [%rd4];
+       fma.rn.f32       %f9, %f0, %f1, %f5;
+       st.global.v4.f32 [%rd4], {%f9, %f10, %f11, %f12};
+       ret;
+   }
+
+**Launch.** The compiler generates the launcher from the kernel's signature.
+It is the only way to run the kernel, and it checks every fact the proofs
+assumed:
+
+.. code-block:: rust
+
+   pub struct Axpy {
+       function: Function,
+   }
+
+   impl Axpy {
+       pub fn load(module: &Module) -> Result<Axpy, LoadError> {
+           // The driver's parameter offsets and sizes must match the signature.
+           let signature = [Parameter::F32, Parameter::Pointer, Parameter::Pointer, Parameter::I64];
+           let function = module.function("axpy", &signature)?;
+           Ok(Axpy { function })
+       }
+
+       pub fn launch(
+           &self,
+           stream: &Stream,
+           alpha: f32,
+           x: &DeviceArray<f32>,
+           y: &mut DeviceArray<f32>,
+           batch: &mut Batch,
+       ) -> Result<(), LaunchError> {
+           let n = x.len();
+           if y.len() != n {
+               return Err(LaunchError::Length { expected: n, found: y.len() });
+           }
+           if n == 0 || n % 512 != 0 {
+               return Err(LaunchError::Fact { parameter: "N", fact: "a positive multiple of 512" });
+           }
+           let shape = LaunchShape { blocks: n / 512, threads: 128 };
+           // Orders the launch after x's last write and y's last access, and
+           // retains both arrays in the batch until the device passes it.
+           stream.launch(&self.function, shape, (alpha, x, y, n as i64), batch)
+       }
+   }
+
+``x`` is borrowed and ``y`` is borrowed mutably, so the borrow checker rejects
+a call that passes one array as both. The only ``unsafe`` on this path is the
+driver call inside ``Stream::launch``, and each of its preconditions is a
+fact the types above already hold.

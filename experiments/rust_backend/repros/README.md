@@ -1,7 +1,7 @@
 # Backend evaluation reproductions
 
-This directory contains version-pinned procedures for findings F-01 through
-F-03 in [ADR-0001](../DECISION-2026-09-05.md). The procedures specify both
+This directory contains version-pinned procedures for the findings in
+[ADR-0001](../DECISION-2026-09-05.md). The procedures specify both
 successful controls and expected failures, allowing an implementation's
 behavior to be checked against the September 5, 2026 evaluation.
 
@@ -133,6 +133,28 @@ clang++ -std=c++20 -Wno-nontrivial-memcall \
 The linked client exits 0 after checking construction and mutation. The
 snapshot-only syntax check requires no Rust nightly installation.
 
+## Unproven nsw bounds guard
+
+Requirements: LLVM 21 or later with `opt` and `clang`. The fixture needs no
+GPU: the lowering defect is the same on every target.
+
+```sh
+llvm=/opt/homebrew/opt/llvm/bin
+for variant in wrap nsw; do
+  "$llvm/opt" -O2 -S unproven_nsw/guard_$variant.ll -o "$repro_output/guard_$variant.ll"
+  grep icmp "$repro_output/guard_$variant.ll"
+  "$llvm/clang" -O2 -Wno-override-module unproven_nsw/main.c "$repro_output/guard_$variant.ll" \
+    -o "$repro_output/guard_$variant"
+  "$repro_output/guard_$variant"; echo "exit $?"
+done
+```
+
+**Expected result.** The `wrap` program keeps two comparisons, prints `guard
+rejected the store`, and exits 0. The `nsw` program keeps only
+`icmp slt i32 %offset, %len`, stores 8 GiB past its buffer, and exits 139 on
+`SIGSEGV`. LLVM 21.1.8 on Linux aarch64 and 23.1.2 on macOS arm64 remove the
+same comparison.
+
 ## Recorded verification results
 
 | Fixture | Exit code | Observed result |
@@ -143,6 +165,8 @@ snapshot-only syntax check requires no Rust nightly installation.
 | CXX foreign-type fixture | 101 | Rust reports `E0117`. |
 | Crubit pinned header with `-Werror` | 1 | Four `-Wnontrivial-memcall` errors. |
 | Crubit pinned header with that warning disabled | 0 | Syntax check passes. |
+| Guard with wrapping arithmetic | 0 | Both comparisons kept; store rejected. |
+| Guard with `nsw` arithmetic | 139 | `offset >= 0` removed; `SIGSEGV`. |
 
 The expected failures reproduce the identified constraints and defects. Backend
 qualification requires the broader checks in the
