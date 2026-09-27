@@ -1,12 +1,12 @@
-"""Normalize MLX callback results at the array/tuple boundary."""
+"""Normalize Tiki callback results at the array/tuple boundary."""
 
-from mlx import core
+from tiki import core
 
 from .graph import ArrayResult, Profile, UnsupportedGraphError
 
 
 def arrays(value: core.array | tuple[core.array, ...]) -> tuple[core.array, ...]:
-    """MLX passes a bare array to derivative callbacks of single-input functions."""
+    """Tiki passes a bare array to derivative callbacks of single-input functions."""
     result = (value,) if isinstance(value, core.array) else tuple(value)
     return result
 

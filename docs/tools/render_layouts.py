@@ -17,7 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import matplotlib
-import mlx.tiki as tk
+import tiki.layout as tl
 
 matplotlib.use("Agg")
 
@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 class Grid:
     """The visualizer reads ``shape`` and ``layout[row, column]``."""
 
-    def __init__(self, layout: tk.Layout | tk.ComposedLayout) -> None:
+    def __init__(self, layout: tl.Layout | tl.ComposedLayout) -> None:
         self.layout = layout
         self.shape = layout.shape
 
@@ -62,13 +62,13 @@ def main() -> None:
     by_tile: Callable[[int], tuple[float, ...]] = lambda index: tints[
         (index // 4 // 2) * 2 + (index % 4) // 2
     ]
-    base = tk.Layout((4, 4), stride=(4, 1))
+    base = tl.Layout((4, 4), stride=(4, 1))
     figures = {
         "layout-row-major": (base, by_storage_row),
-        "layout-column-major": (tk.Layout((4, 4), stride=(1, 4)), by_storage_row),
-        "layout-tiled": (tk.logical_divide(base, (2, 2)), by_tile),
+        "layout-column-major": (tl.Layout((4, 4), stride=(1, 4)), by_storage_row),
+        "layout-tiled": (tl.logical_divide(base, (2, 2)), by_tile),
         "layout-swizzled": (
-            base.swizzle(tk.Swizzle(bits=2, base=0, shift=2)),
+            base.swizzle(tl.Swizzle(bits=2, base=0, shift=2)),
             by_storage_row,
         ),
     }

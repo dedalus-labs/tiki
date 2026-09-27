@@ -7,13 +7,13 @@
 
 #include <chrono>
 
-#include "mlx/ops.h"
-#include "mlx/random.h"
 #include "python/src/random.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/ops.h"
+#include "tiki/random.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -31,11 +31,11 @@ class PyKeySequence {
   }
 
   void seed(uint64_t seed) {
-    state()[0] = mx::random::key(seed);
+    state()[0] = tk::random::key(seed);
   }
 
-  mx::array next() {
-    auto out = mx::random::split(nb::cast<mx::array>(state()[0]));
+  tk::array next() {
+    auto out = tk::random::split(nb::cast<tk::array>(state()[0]));
     state()[0] = out.first;
     return out.second;
   }
@@ -49,7 +49,7 @@ class PyKeySequence {
             .count();
       }();
       state_ = nb::list();
-      state_->append(mx::random::key(time_seed));
+      state_->append(tk::random::key(time_seed));
     }
     return *state_;
   }
@@ -68,8 +68,8 @@ void reset_random_state() {
   default_key().reset();
 }
 
-// A process-global sentinel for `mx.random.state`. Since it is the same object
-// on every thread, capturing it (e.g. with `mx.compile`) is thread-independent;
+// A process-global sentinel for `tk.random.state`. Since it is the same object
+// on every thread, capturing it (e.g. with `tk.compile`) is thread-independent;
 // the pytree traversal in trees.cpp resolves it to the calling thread's key.
 class RandomState {};
 
@@ -83,18 +83,18 @@ nb::object random_state_sentinel() {
   return sentinel;
 }
 
-mx::array random_state_key() {
-  return nb::cast<mx::array>(default_key().state()[0]);
+tk::array random_state_key() {
+  return nb::cast<tk::array>(default_key().state()[0]);
 }
 
-void set_random_state_key(const mx::array& key) {
+void set_random_state_key(const tk::array& key) {
   default_key().state()[0] = nb::cast(key);
 }
 
 void init_random(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "random",
-      "mlx.core.random: functionality related to random number generation");
+      "tiki.random: functionality related to random number generation");
 
   nb::class_<RandomState>(m, "_RandomState")
       .def("__len__", [](const RandomState&) { return 1; })
@@ -134,7 +134,7 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "key",
-      &mx::random::key,
+      &tk::random::key,
       "seed"_a,
       R"pbdoc(
         Get a PRNG key from a seed.
@@ -147,8 +147,8 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "split",
-      nb::overload_cast<const mx::array&, int, mx::StreamOrDevice>(
-          &mx::random::split),
+      nb::overload_cast<const tk::array&, int, tk::StreamOrDevice>(
+          &tk::random::split),
       "key"_a,
       "num"_a = 2,
       "stream"_a = nb::none(),
@@ -168,23 +168,23 @@ void init_random(nb::module_& parent_module) {
       "uniform",
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
-         const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
-        return mx::random::uniform(
+        return tk::random::uniform(
             to_array(low),
             to_array(high),
             shape,
-            type.value_or(mx::float32),
+            type.value_or(tk::float32),
             key,
             s);
       },
       "low"_a = 0,
       "high"_a = 1,
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::float32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -210,22 +210,22 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "normal",
-      [](const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
+      [](const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
          const std::optional<ScalarOrArray>& loc_,
          const std::optional<ScalarOrArray>& scale_,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
-        auto dtype = type.value_or(mx::float32);
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
+        auto dtype = type.value_or(tk::float32);
         auto key = key_ ? key_.value() : default_key().next();
         auto loc =
             loc_ ? std::make_optional(to_array(*loc_, dtype)) : std::nullopt;
         auto scale = scale_ ? std::make_optional(to_array(*scale_, dtype))
                             : std::nullopt;
-        return mx::random::normal(shape, dtype, loc, scale, key, s);
+        return tk::random::normal(shape, dtype, loc, scale, key, s);
       },
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::float32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::float32,
       "loc"_a = nb::none(),
       "scale"_a = nb::none(),
       "key"_a = nb::none(),
@@ -254,20 +254,20 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "multivariate_normal",
-      [](const mx::array& mean,
-         const mx::array& cov,
-         const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+      [](const tk::array& mean,
+         const tk::array& cov,
+         const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
-        return mx::random::multivariate_normal(
-            mean, cov, shape, type.value_or(mx::float32), key, s);
+        return tk::random::multivariate_normal(
+            mean, cov, shape, type.value_or(tk::float32), key, s);
       },
       "mean"_a,
       "cov"_a,
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::float32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -298,23 +298,23 @@ void init_random(nb::module_& parent_module) {
       "randint",
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
-         const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
-        return mx::random::randint(
+        return tk::random::randint(
             to_array(low),
             to_array(high),
             shape,
-            type.value_or(mx::int32),
+            type.value_or(tk::int32),
             key,
             s);
       },
       "low"_a,
       "high"_a,
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::int32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::int32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -345,15 +345,15 @@ void init_random(nb::module_& parent_module) {
   m.def(
       "bernoulli",
       [](const ScalarOrArray& p_,
-         const std::optional<mx::Shape> shape,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const std::optional<tk::Shape> shape,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
         auto p = to_array(p_);
         if (shape.has_value()) {
-          return mx::random::bernoulli(p, shape.value(), key, s);
+          return tk::random::bernoulli(p, shape.value(), key, s);
         } else {
-          return mx::random::bernoulli(p, key, s);
+          return tk::random::bernoulli(p, key, s);
         }
       },
       "p"_a = 0.5,
@@ -383,25 +383,25 @@ void init_random(nb::module_& parent_module) {
       "truncated_normal",
       [](const ScalarOrArray& lower_,
          const ScalarOrArray& upper_,
-         const std::optional<mx::Shape> shape_,
-         std::optional<mx::Dtype> type,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const std::optional<tk::Shape> shape_,
+         std::optional<tk::Dtype> type,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
         auto lower = to_array(lower_);
         auto upper = to_array(upper_);
-        auto t = type.value_or(mx::float32);
+        auto t = type.value_or(tk::float32);
         if (shape_.has_value()) {
-          return mx::random::truncated_normal(
+          return tk::random::truncated_normal(
               lower, upper, shape_.value(), t, key, s);
         } else {
-          return mx::random::truncated_normal(lower, upper, t, key, s);
+          return tk::random::truncated_normal(lower, upper, t, key, s);
         }
       },
       "lower"_a,
       "upper"_a,
       "shape"_a = nb::none(),
-      "dtype"_a.none() = mx::float32,
+      "dtype"_a.none() = tk::float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -427,15 +427,15 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "gumbel",
-      [](const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+      [](const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
-        return mx::random::gumbel(shape, type.value_or(mx::float32), key, s);
+        return tk::random::gumbel(shape, type.value_or(tk::float32), key, s);
       },
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::float32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -459,23 +459,23 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "categorical",
-      [](const mx::array& logits,
+      [](const tk::array& logits,
          int axis,
-         const std::optional<mx::Shape> shape,
+         const std::optional<tk::Shape> shape,
          const std::optional<int> num_samples,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
         if (shape.has_value() && num_samples.has_value()) {
           throw std::invalid_argument(
               "[categorical] At most one of shape or num_samples can be specified.");
         } else if (shape.has_value()) {
-          return mx::random::categorical(logits, axis, shape.value(), key, s);
+          return tk::random::categorical(logits, axis, shape.value(), key, s);
         } else if (num_samples.has_value()) {
-          return mx::random::categorical(
+          return tk::random::categorical(
               logits, axis, num_samples.value(), key, s);
         } else {
-          return mx::random::categorical(logits, axis, key, s);
+          return tk::random::categorical(logits, axis, key, s);
         }
       },
       "logits"_a,
@@ -511,18 +511,18 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "laplace",
-      [](const mx::Shape& shape,
-         std::optional<mx::Dtype> type,
+      [](const tk::Shape& shape,
+         std::optional<tk::Dtype> type,
          float loc,
          float scale,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
-        return mx::random::laplace(
-            shape, type.value_or(mx::float32), loc, scale, key, s);
+        return tk::random::laplace(
+            shape, type.value_or(tk::float32), loc, scale, key, s);
       },
-      "shape"_a = mx::Shape{},
-      "dtype"_a.none() = mx::float32,
+      "shape"_a = tk::Shape{},
+      "dtype"_a.none() = tk::float32,
       "loc"_a = 0.0,
       "scale"_a = 1.0,
       "key"_a = nb::none(),
@@ -545,15 +545,15 @@ void init_random(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "permutation",
-      [](const std::variant<nb::int_, mx::array>& x,
+      [](const std::variant<nb::int_, tk::array>& x,
          int axis,
-         const std::optional<mx::array>& key_,
-         mx::StreamOrDevice s) {
+         const std::optional<tk::array>& key_,
+         tk::StreamOrDevice s) {
         auto key = key_ ? key_.value() : default_key().next();
         if (auto pv = std::get_if<nb::int_>(&x); pv) {
-          return mx::random::permutation(nb::cast<int>(*pv), key, s);
+          return tk::random::permutation(nb::cast<int>(*pv), key, s);
         } else {
-          return mx::random::permutation(std::get<mx::array>(x), axis, key, s);
+          return tk::random::permutation(std::get<tk::array>(x), axis, key, s);
         }
       },
       "x"_a,
@@ -567,7 +567,7 @@ void init_random(nb::module_& parent_module) {
 
         Args:
             x (int or array, optional): If an integer is provided a random
-              permtuation of ``mx.arange(x)`` is returned. Otherwise the entries
+              permtuation of ``tk.arange(x)`` is returned. Otherwise the entries
               of ``x`` along the given axis are randomly permuted.
             axis (int, optional): The axis to permute along. Default: ``0``.
             key (array, optional): A PRNG key. Default: ``None``.

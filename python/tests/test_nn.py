@@ -4,11 +4,11 @@ import os
 import tempfile
 import unittest
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx_tests
 import numpy as np
-from mlx.utils import tree_flatten, tree_map, tree_reduce
+import tiki as tk
+import tiki.nn as nn
+import tiki_tests
+from tiki.utils import tree_flatten, tree_map, tree_reduce
 
 try:
     import torch
@@ -18,13 +18,13 @@ except ImportError:
     has_torch = False
 
 
-class TestBase(mlx_tests.MLXTestCase):
+class TestBase(tiki_tests.TIKITestCase):
     def test_module_utilities(self):
         m = nn.Sequential(
             nn.Sequential(nn.Linear(2, 10), nn.relu),
             nn.Sequential(nn.Linear(10, 10), nn.ReLU()),
             nn.Linear(10, 1),
-            mx.sigmoid,
+            tk.sigmoid,
         )
 
         children = m.children()
@@ -69,28 +69,28 @@ class TestBase(mlx_tests.MLXTestCase):
                 self.initialize()
 
             def initialize(self):
-                self.val = mx.array(1.0)
+                self.val = tk.array(1.0)
 
         model = Model()
-        self.assertTrue(mx.array_equal(model.val, mx.array(1.0)))
+        self.assertTrue(tk.array_equal(model.val, tk.array(1.0)))
 
         model.val = None
         self.assertEqual(model.val, None)
 
-        model.val = mx.array([3])
+        model.val = tk.array([3])
         self.assertEqual(model.val.item(), 3)
 
     def test_model_with_dict(self):
         class DictModule(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.weights = {"w1": mx.zeros((2, 2)), "w2": mx.ones((2, 2))}
+                self.weights = {"w1": tk.zeros((2, 2)), "w2": tk.ones((2, 2))}
 
         model = DictModule()
         params = tree_flatten(model.parameters(), destination={})
         self.assertEqual(len(params), 2)
-        self.assertTrue(mx.array_equal(params["weights.w1"], mx.zeros((2, 2))))
-        self.assertTrue(mx.array_equal(params["weights.w2"], mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(params["weights.w1"], tk.zeros((2, 2))))
+        self.assertTrue(tk.array_equal(params["weights.w2"], tk.ones((2, 2))))
 
     def test_save_npz_weights(self):
         def make_model():
@@ -104,10 +104,10 @@ class TestBase(mlx_tests.MLXTestCase):
         m_load.load_weights(npz_file)
 
         # Eval before cleanup so model file is unlocked.
-        mx.eval(m_load.state)
+        tk.eval(m_load.state)
         tdir.cleanup()
 
-        eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
+        eq_tree = tree_map(tk.array_equal, m.parameters(), m_load.parameters())
         self.assertTrue(all(tree_flatten(eq_tree)))
 
     def test_save_safetensors_weights(self):
@@ -122,37 +122,37 @@ class TestBase(mlx_tests.MLXTestCase):
         m_load.load_weights(safetensors_file)
 
         # Eval before cleanup so model file is unlocked.
-        mx.eval(m_load.state)
+        tk.eval(m_load.state)
         tdir.cleanup()
 
-        eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
+        eq_tree = tree_map(tk.array_equal, m.parameters(), m_load.parameters())
         self.assertTrue(all(tree_flatten(eq_tree)))
 
     def test_load_from_weights(self):
         m = nn.Linear(2, 2)
 
         # Too few weights
-        weights = [("weight", mx.ones((2, 2)))]
+        weights = [("weight", tk.ones((2, 2)))]
         with self.assertRaises(ValueError):
             m.load_weights(weights)
 
         m.load_weights(weights, strict=False)
-        self.assertTrue(mx.array_equal(m.weight, weights[0][1]))
+        self.assertTrue(tk.array_equal(m.weight, weights[0][1]))
 
         # Wrong name
         with self.assertRaises(ValueError):
-            m.load_weights([("weihgt", mx.ones((2, 2)))])
+            m.load_weights([("weihgt", tk.ones((2, 2)))])
 
         # Ok
-        m.load_weights([("weihgt", mx.ones((2, 2)))], strict=False)
+        m.load_weights([("weihgt", tk.ones((2, 2)))], strict=False)
 
         # Too many weights
         with self.assertRaises(ValueError):
             m.load_weights(
                 [
-                    ("weight", mx.ones((2, 2))),
-                    ("bias", mx.ones((2,))),
-                    ("bias2", mx.ones((2,))),
+                    ("weight", tk.ones((2, 2))),
+                    ("bias", tk.ones((2,))),
+                    ("bias2", tk.ones((2,))),
                 ]
             )
 
@@ -160,8 +160,8 @@ class TestBase(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             m.load_weights(
                 [
-                    ("weight", mx.ones((2, 2))),
-                    ("bias", mx.ones((2, 1))),
+                    ("weight", tk.ones((2, 2))),
+                    ("bias", tk.ones((2, 1))),
                 ]
             )
 
@@ -169,7 +169,7 @@ class TestBase(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             m.load_weights(
                 [
-                    ("weight", mx.ones((2, 2))),
+                    ("weight", tk.ones((2, 2))),
                     ("bias", 3),
                 ]
             )
@@ -184,14 +184,14 @@ class TestBase(mlx_tests.MLXTestCase):
         m = nn.Sequential(nn.Linear(2, 2))
         m.load_weights(
             [
-                ("layers.0.weight", mx.ones((2, 2))),
-                ("layers.0.bias", mx.ones((2,))),
-                ("layers.1.weight", mx.ones((2, 2))),
-                ("layers.1.bias", mx.ones((2,))),
+                ("layers.0.weight", tk.ones((2, 2))),
+                ("layers.0.bias", tk.ones((2,))),
+                ("layers.1.weight", tk.ones((2, 2))),
+                ("layers.1.bias", tk.ones((2,))),
             ],
             strict=False,
         )
-        self.assertTrue(mx.array_equal(m.layers[0].weight, mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(m.layers[0].weight, tk.ones((2, 2))))
         self.assertEqual(len(m.layers), 1)
 
     def test_module_state(self):
@@ -243,7 +243,7 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
         self.assertTrue(isinstance(m.layers[1], nn.ReLU))
         self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
-        self.assertTrue(isinstance(m.layers[2].scales, mx.array))
+        self.assertTrue(isinstance(m.layers[2].scales, tk.array))
 
         m = nn.Sequential(
             nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256, bias=False)
@@ -296,8 +296,8 @@ class TestBase(mlx_tests.MLXTestCase):
         def loss_fn(model):
             return model.m1(x).sum()
 
-        x = mx.zeros((3,))
-        mx.grad(loss_fn)(model)
+        x = tk.zeros((3,))
+        tk.grad(loss_fn)(model)
 
     def test_update(self):
         m = nn.Sequential(nn.Linear(3, 3), nn.Linear(3, 3))
@@ -330,8 +330,8 @@ class TestBase(mlx_tests.MLXTestCase):
         class MyModule(nn.Module):
             def __init__(self):
                 super().__init__()
-                self.test = mx.array(1.0)
-                self.list = [mx.array(1.0), mx.array(2.0)]
+                self.test = tk.array(1.0)
+                self.list = [tk.array(1.0), tk.array(2.0)]
 
         m = MyModule()
         with self.assertRaises(ValueError):
@@ -373,39 +373,39 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertFalse(hasattr(m, "weight"))
 
     def test_circular_leaks(self):
-        y = mx.random.uniform(1)
-        mx.eval(y)
+        y = tk.random.uniform(1)
+        tk.eval(y)
 
         def make_and_update():
             model = nn.Linear(1024, 512)
-            mx.eval(model.parameters())
+            tk.eval(model.parameters())
             leaves = {}
             model.update_modules(leaves)
 
-        mx.synchronize()
-        pre = mx.get_active_memory()
+        tk.synchronize()
+        pre = tk.get_active_memory()
         make_and_update()
-        mx.synchronize()
-        post = mx.get_active_memory()
+        tk.synchronize()
+        post = tk.get_active_memory()
         self.assertEqual(pre, post)
 
 
-class TestLayers(mlx_tests.MLXTestCase):
+class TestLayers(tiki_tests.TIKITestCase):
     def test_identity(self):
-        inputs = mx.zeros((10, 4))
+        inputs = tk.zeros((10, 4))
         layer = nn.Identity()
         outputs = layer(inputs)
         self.assertEqual(inputs.shape, outputs.shape)
 
     def test_linear(self):
-        inputs = mx.zeros((10, 4))
+        inputs = tk.zeros((10, 4))
         layer = nn.Linear(input_dims=4, output_dims=8)
         outputs = layer(inputs)
         self.assertEqual(outputs.shape, (10, 8))
 
     def test_bilinear(self):
-        inputs1 = mx.zeros((10, 2))
-        inputs2 = mx.zeros((10, 4))
+        inputs1 = tk.zeros((10, 2))
+        inputs2 = tk.zeros((10, 4))
         layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
         outputs = layer(inputs1, inputs2)
         self.assertEqual(outputs.shape, (10, 6))
@@ -433,10 +433,10 @@ class TestLayers(mlx_tests.MLXTestCase):
                 build(eps)
 
     def test_group_norm(self):
-        x = mx.arange(100, dtype=mx.float32)
+        x = tk.arange(100, dtype=tk.float32)
         x = x.reshape(1, 10, 10, 1)
-        x = mx.broadcast_to(x, (2, 10, 10, 4))
-        x = mx.concatenate([x, 0.5 * x], axis=-1)
+        x = tk.broadcast_to(x, (2, 10, 10, 4))
+        x = tk.concatenate([x, 0.5 * x], axis=-1)
 
         # Group norm in groups last mode
         g = nn.GroupNorm(2, 8)
@@ -480,7 +480,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
     def test_instance_norm(self):
         # Test InstanceNorm1d
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [-0.0119524, 1.1263, 2.02223],
@@ -515,7 +515,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # Test InstanceNorm2d
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [
@@ -594,7 +594,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # # Test InstanceNorm3d
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [
@@ -695,7 +695,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
         # Reduced-precision statistics must not overflow for finite feature maps.
         checkerboard = np.indices((4, 4, 4)).sum(axis=0) % 2
-        x = mx.array(
+        x = tk.array(
             np.stack(
                 [
                     np.where(checkerboard, -512, 512),
@@ -705,25 +705,25 @@ class TestLayers(mlx_tests.MLXTestCase):
             ).astype(np.float16)
         )[None]
         y = nn.InstanceNorm(dims=2)(x)
-        self.assertEqual(y.dtype, mx.float16)
-        self.assertTrue(mx.allclose(y.min(), mx.array(-1.0, dtype=mx.float16)))
-        self.assertTrue(mx.allclose(y.max(), mx.array(1.0, dtype=mx.float16)))
+        self.assertEqual(y.dtype, tk.float16)
+        self.assertTrue(tk.allclose(y.min(), tk.array(-1.0, dtype=tk.float16)))
+        self.assertTrue(tk.allclose(y.max(), tk.array(1.0, dtype=tk.float16)))
         # Test repr
         self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
         # Raise for inputs without spatial dimensions
         with self.assertRaises(ValueError):
-            nn.InstanceNorm(dims=8)(mx.zeros((4, 8)))
+            nn.InstanceNorm(dims=8)(tk.zeros((4, 8)))
 
     def test_batch_norm(self):
-        mx.random.seed(42)
-        x = mx.random.normal((5, 4), dtype=mx.float32)
+        tk.random.seed(42)
+        x = tk.random.normal((5, 4), dtype=tk.float32)
 
         # Batch norm
         bn = nn.BatchNorm(num_features=4, affine=True)
-        self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
-        self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
+        self.assertTrue(tk.allclose(bn.running_mean, tk.zeros_like(bn.running_mean)))
+        self.assertTrue(tk.allclose(bn.running_var, tk.ones_like(bn.running_var)))
         y = bn(x)
-        expected_y = mx.array(
+        expected_y = tk.array(
             [
                 [-0.439520, 1.647328, -0.955515, 1.966031],
                 [-1.726690, -1.449826, -0.234026, -0.723364],
@@ -732,17 +732,17 @@ class TestLayers(mlx_tests.MLXTestCase):
                 [0.922789, -0.082813, 1.937028, -0.607913],
             ],
         )
-        expected_mean = mx.array([0.008929, 0.005680, -0.016092, 0.027778])
-        expected_var = mx.array([0.935544, 1.030691, 1.076463, 0.953224])
+        expected_mean = tk.array([0.008929, 0.005680, -0.016092, 0.027778])
+        expected_var = tk.array([0.935544, 1.030691, 1.076463, 0.953224])
         self.assertTrue(x.shape == y.shape)
-        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
-        self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
+        self.assertTrue(tk.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(tk.allclose(bn.running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(tk.allclose(bn.running_var, expected_var, atol=1e-5))
 
         # test eval mode
         bn.eval()
         y = bn(x)
-        expected_y = mx.array(
+        expected_y = tk.array(
             [
                 [-0.159232, 1.70949, -1.23382, 1.57007],
                 [-0.868873, -1.40987, -0.407588, -0.227397],
@@ -753,12 +753,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         )
 
         self.assertTrue(x.shape == y.shape)
-        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(tk.allclose(y, expected_y, atol=1e-5))
 
         # test_no_affine
         bn = nn.BatchNorm(num_features=4, affine=False)
         y = bn(x)
-        expected_y = mx.array(
+        expected_y = tk.array(
             [
                 [-0.439520, 1.647328, -0.955515, 1.966031],
                 [-1.726690, -1.449826, -0.234026, -0.723364],
@@ -768,22 +768,22 @@ class TestLayers(mlx_tests.MLXTestCase):
             ]
         )
         self.assertTrue(x.shape == y.shape)
-        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(tk.allclose(y, expected_y, atol=1e-5))
 
         # test with 3D input
-        mx.random.seed(42)
+        tk.random.seed(42)
         N = 2
         L = 4
         C = 5
-        x = mx.random.normal((N, L, C), dtype=mx.float32)
+        x = tk.random.normal((N, L, C), dtype=tk.float32)
 
         # Batch norm
         bn = nn.BatchNorm(num_features=C, affine=True)
-        self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
-        self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
+        self.assertTrue(tk.allclose(bn.running_mean, tk.zeros_like(bn.running_mean)))
+        self.assertTrue(tk.allclose(bn.running_var, tk.ones_like(bn.running_var)))
         y = bn(x)
         self.assertTrue(x.shape == y.shape)
-        expected_y = mx.array(
+        expected_y = tk.array(
             [
                 [
                     [-0.335754, 0.342054, 1.02653, 0.628588, -1.63899],
@@ -799,15 +799,15 @@ class TestLayers(mlx_tests.MLXTestCase):
                 ],
             ]
         )
-        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
-        expected_mean = mx.array(
+        self.assertTrue(tk.allclose(y, expected_y, atol=1e-5))
+        expected_mean = tk.array(
             [0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]
         )
-        expected_var = mx.array([0.978188, 1.07511, 0.979006, 0.93692, 0.976827])
-        self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
+        expected_var = tk.array([0.978188, 1.07511, 0.979006, 0.93692, 0.976827])
+        self.assertTrue(tk.allclose(bn.running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(tk.allclose(bn.running_var, expected_var, atol=1e-5))
 
-        x = mx.random.normal((N, L, C, L, C), dtype=mx.float32)
+        x = tk.random.normal((N, L, C, L, C), dtype=tk.float32)
         with self.assertRaises(ValueError):
             y = bn(x)
 
@@ -832,14 +832,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertIn("bias", bn_trainable)
 
         # test with 4D input (NHWC)
-        mx.random.seed(42)
-        x = mx.random.normal((2, 3, 3, 6), dtype=mx.float32)
+        tk.random.seed(42)
+        x = tk.random.normal((2, 3, 3, 6), dtype=tk.float32)
         bn = nn.BatchNorm(num_features=6, affine=True)
         y = bn(x)
         self.assertTrue(x.shape == y.shape)
         # batch norm over an NHWC input normalizes each channel across N, H, W
-        self.assertTrue(mx.allclose(y.mean(axis=(0, 1, 2)), mx.zeros((6,)), atol=1e-5))
-        self.assertTrue(mx.allclose(y.var(axis=(0, 1, 2)), mx.ones((6,)), atol=1e-2))
+        self.assertTrue(tk.allclose(y.mean(axis=(0, 1, 2)), tk.zeros((6,)), atol=1e-5))
+        self.assertTrue(tk.allclose(y.var(axis=(0, 1, 2)), tk.ones((6,)), atol=1e-2))
 
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_batch_norm_matches_torch(self):
@@ -853,11 +853,11 @@ class TestLayers(mlx_tests.MLXTestCase):
             weight_np = rng.normal(size=(features,)).astype(np.float32)
             bias_np = rng.normal(size=(features,)).astype(np.float32)
 
-            mlx_bn = nn.BatchNorm(features, eps=eps, momentum=momentum)
-            mlx_bn.weight = mx.array(weight_np)
-            mlx_bn.bias = mx.array(bias_np)
-            mlx_y = mlx_bn(mx.array(x_np))
-            mx.eval(mlx_y, mlx_bn.running_mean, mlx_bn.running_var)
+            tiki_bn = nn.BatchNorm(features, eps=eps, momentum=momentum)
+            tiki_bn.weight = tk.array(weight_np)
+            tiki_bn.bias = tk.array(bias_np)
+            tiki_y = tiki_bn(tk.array(x_np))
+            tk.eval(tiki_y, tiki_bn.running_mean, tiki_bn.running_var)
 
             torch_bn = torch_module(features, eps=eps, momentum=momentum)
             with torch.no_grad():
@@ -868,32 +868,36 @@ class TestLayers(mlx_tests.MLXTestCase):
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
 
-            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
             self.assertTrue(
-                mx.allclose(
-                    mlx_bn.running_mean,
-                    mx.array(torch_bn.running_mean.detach().numpy()),
+                tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4)
+            )
+            self.assertTrue(
+                tk.allclose(
+                    tiki_bn.running_mean,
+                    tk.array(torch_bn.running_mean.detach().numpy()),
                     rtol=1e-5,
                     atol=1e-5,
                 )
             )
             self.assertTrue(
-                mx.allclose(
-                    mlx_bn.running_var,
-                    mx.array(torch_bn.running_var.detach().numpy()),
+                tk.allclose(
+                    tiki_bn.running_var,
+                    tk.array(torch_bn.running_var.detach().numpy()),
                     rtol=1e-4,
                     atol=1e-4,
                 )
             )
 
-            mlx_bn.eval()
+            tiki_bn.eval()
             torch_bn.eval()
-            mlx_y = mlx_bn(mx.array(x_np))
-            mx.eval(mlx_y)
+            tiki_y = tiki_bn(tk.array(x_np))
+            tk.eval(tiki_y)
             torch_y = torch_bn(torch.from_numpy(x_torch_np)).detach().numpy()
             if from_torch:
                 torch_y = torch_y.transpose(from_torch)
-            self.assertTrue(mx.allclose(mlx_y, mx.array(torch_y), rtol=1e-4, atol=1e-4))
+            self.assertTrue(
+                tk.allclose(tiki_y, tk.array(torch_y), rtol=1e-4, atol=1e-4)
+            )
 
         check_batch_norm((5, 4), torch.nn.BatchNorm1d)
         check_batch_norm(
@@ -917,17 +921,17 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         batch_norm = nn.BatchNorm(num_features)
         batch_norm.train()
-        data = mx.random.normal((batch_size, h, w, num_features))
+        data = tk.random.normal((batch_size, h, w, num_features))
 
         normalized_data = batch_norm(data)
         self.assertTrue(
-            mx.allclose(
-                mx.mean(normalized_data, axis=(0, 1, 2)), mx.zeros((4,)), atol=1e-5
+            tk.allclose(
+                tk.mean(normalized_data, axis=(0, 1, 2)), tk.zeros((4,)), atol=1e-5
             )
         )
         self.assertTrue(
-            mx.allclose(
-                mx.var(normalized_data, axis=(0, 1, 2)), mx.ones((4,)), atol=1e-2
+            tk.allclose(
+                tk.var(normalized_data, axis=(0, 1, 2)), tk.ones((4,)), atol=1e-2
             )
         )
         self.assertEqual(batch_norm.running_mean.shape, (num_features,))
@@ -935,7 +939,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         batch_norm = nn.BatchNorm(num_features)
         batch_norm.train()
-        data = mx.random.normal((1, num_features))
+        data = tk.random.normal((1, num_features))
 
         with self.assertRaises(ValueError):
             batch_norm(data)
@@ -946,12 +950,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         ks = 3
         C_in = 2
         C_out = 4
-        x = mx.ones((N, L, C_in))
+        x = tk.ones((N, L, C_in))
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks)
-        c.weight = mx.ones_like(c.weight)
+        c.weight = tk.ones_like(c.weight)
         y = c(x)
         self.assertEqual(y.shape, (N, L - ks + 1, C_out))
-        self.assertTrue(mx.allclose(y, mx.full(y.shape, ks * C_in, mx.float32)))
+        self.assertTrue(tk.allclose(y, tk.full(y.shape, ks * C_in, tk.float32)))
 
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks, stride=2)
         y = c(x)
@@ -977,11 +981,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (N, L - ks + 1, C_out))
 
     def test_conv2d(self):
-        x = mx.ones((4, 8, 8, 3))
+        x = tk.ones((4, 8, 8, 3))
         c = nn.Conv2d(3, 1, 8)
         y = c(x)
         self.assertEqual(y.shape, (4, 1, 1, 1))
-        c.weight = mx.ones_like(c.weight) / 8 / 8 / 3
+        c.weight = tk.ones_like(c.weight) / 8 / 8 / 3
         y = c(x)
         self.assertTrue(np.allclose(y[:, 0, 0, 0], x.mean(axis=(1, 2, 3))))
 
@@ -989,27 +993,27 @@ class TestLayers(mlx_tests.MLXTestCase):
         c = nn.Conv2d(3, 8, 3)
         y = c(x)
         self.assertEqual(y.shape, (4, 6, 6, 8))
-        self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
+        self.assertLess(tk.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
         # 3x3 conv padding 1 stride 1
         c = nn.Conv2d(3, 8, 3, padding=1)
         y = c(x)
         self.assertEqual(y.shape, (4, 8, 8, 8))
-        self.assertLess(mx.abs(y[:, 1:7, 1:7] - c.weight.sum((1, 2, 3))).max(), 1e-4)
+        self.assertLess(tk.abs(y[:, 1:7, 1:7] - c.weight.sum((1, 2, 3))).max(), 1e-4)
         self.assertLess(
-            mx.abs(y[:, 0, 0] - c.weight[:, 1:, 1:].sum(axis=(1, 2, 3))).max(),
+            tk.abs(y[:, 0, 0] - c.weight[:, 1:, 1:].sum(axis=(1, 2, 3))).max(),
             1e-4,
         )
         self.assertLess(
-            mx.abs(y[:, 7, 7] - c.weight[:, :-1, :-1].sum(axis=(1, 2, 3))).max(),
+            tk.abs(y[:, 7, 7] - c.weight[:, :-1, :-1].sum(axis=(1, 2, 3))).max(),
             1e-4,
         )
         self.assertLess(
-            mx.abs(y[:, 1:7, 7] - c.weight[:, :, :-1].sum(axis=(1, 2, 3))).max(),
+            tk.abs(y[:, 1:7, 7] - c.weight[:, :, :-1].sum(axis=(1, 2, 3))).max(),
             1e-4,
         )
         self.assertLess(
-            mx.abs(y[:, 7, 1:7] - c.weight[:, :-1, :].sum(axis=(1, 2, 3))).max(),
+            tk.abs(y[:, 7, 1:7] - c.weight[:, :-1, :].sum(axis=(1, 2, 3))).max(),
             1e-4,
         )
 
@@ -1017,15 +1021,15 @@ class TestLayers(mlx_tests.MLXTestCase):
         c = nn.Conv2d(3, 8, 3, padding=0, stride=2)
         y = c(x)
         self.assertEqual(y.shape, (4, 3, 3, 8))
-        self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
+        self.assertLess(tk.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
         c = nn.Conv2d(3, 8, 3, dilation=2)
         y = c(x)
         self.assertEqual(y.shape, (4, 4, 4, 8))
-        self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
+        self.assertLess(tk.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
         # 3x3 conv groups > 1
-        x = mx.ones((4, 7, 7, 4))
+        x = tk.ones((4, 7, 7, 4))
         c = nn.Conv2d(4, 8, 3, padding=1, stride=1, groups=2)
         y = c(x)
         self.assertEqual(y.shape, (4, 7, 7, 8))
@@ -1041,7 +1045,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         )
 
     def test_sequential(self):
-        x = mx.ones((10, 2))
+        x = tk.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
         y = m(x)
         self.assertEqual(y.shape, (10, 1))
@@ -1054,7 +1058,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         m.layers[1] = nn.relu
         y2 = m(x)
-        self.assertTrue(mx.array_equal(y, y2))
+        self.assertTrue(tk.array_equal(y, y2))
 
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
@@ -1068,33 +1072,33 @@ class TestLayers(mlx_tests.MLXTestCase):
             [1.0091482, -0.1693441, 0.22918446, 0.60491, 0.4945476]
         )
 
-        out = nn.GELU()(mx.array(inputs))
+        out = nn.GELU()(tk.array(inputs))
         self.assertTrue(np.allclose(out, expected))
 
         # Test the precise/tanh approximation
-        out_approx = nn.GELU(approx="precise")(mx.array(inputs))
-        out_approx_tanh = nn.GELU(approx="tanh")(mx.array(inputs))
+        out_approx = nn.GELU(approx="precise")(tk.array(inputs))
+        out_approx_tanh = nn.GELU(approx="tanh")(tk.array(inputs))
         self.assertTrue(np.allclose(out_approx, expected_approx))
         self.assertTrue(np.allclose(out_approx_tanh, expected_approx))
         self.assertTrue(np.allclose(out_approx, out_approx_tanh))
 
         # Crudely check the approximations
-        x = mx.arange(-6.0, 6.0, 12 / 100)
+        x = tk.arange(-6.0, 6.0, 12 / 100)
         y = nn.gelu(x)
         y_hat1 = nn.gelu_approx(x)
         y_hat2 = nn.gelu_fast_approx(x)
-        self.assertLess(mx.abs(y - y_hat1).max(), 0.0005)
-        self.assertLess(mx.abs(y - y_hat2).max(), 0.025)
+        self.assertLess(tk.abs(y - y_hat1).max(), 0.0005)
+        self.assertLess(tk.abs(y - y_hat2).max(), 0.025)
 
     def test_sin_pe(self):
         m = nn.SinusoidalPositionalEncoding(16, min_freq=0.01)
-        x = mx.arange(10)
+        x = tk.arange(10)
         y = m(x)
 
         self.assertEqual(y.shape, (10, 16))
         similarities = y @ y.T
         self.assertLess(
-            mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
+            tk.abs(similarities[tk.arange(10), tk.arange(10)] - 1).max(), 1e-5
         )
 
         # dims=2 should be supported (single sin/cos frequency pair)
@@ -1113,11 +1117,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         m = nn.SinusoidalPositionalEncoding(16, scale=0.0)
         self.assertEqual(m.scale, 0.0)
         y = m(x)
-        self.assertTrue(mx.array_equal(y, mx.zeros_like(y)))
+        self.assertTrue(tk.array_equal(y, tk.zeros_like(y)))
 
     def test_sigmoid(self):
-        x = mx.array([1.0, 0.0, -1.0])
-        y1 = mx.sigmoid(x)
+        x = tk.array([1.0, 0.0, -1.0])
+        y1 = tk.sigmoid(x)
         y2 = nn.activations.sigmoid(x)
         y3 = nn.Sigmoid()(x)
 
@@ -1125,282 +1129,282 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqualArray(y1, y3, atol=0, rtol=0)
 
     def test_relu(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.relu(x)
-        self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
+        self.assertTrue(tk.array_equal(y, tk.array([1.0, 0.0, 0.0])))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_step(self):
-        x = mx.array([-1.0, 0.0, 1.0])
+        x = tk.array([-1.0, 0.0, 1.0])
 
         # Default threshold of 0: the boundary value is included
         y = nn.step(x)
-        self.assertTrue(mx.array_equal(y, mx.array([0, 1, 1])))
+        self.assertTrue(tk.array_equal(y, tk.array([0, 1, 1])))
         self.assertEqual(y.shape, (3,))
 
         # A custom threshold is also inclusive
         y = nn.Step(threshold=1.0)(x)
-        self.assertTrue(mx.array_equal(y, mx.array([0, 0, 1])))
+        self.assertTrue(tk.array_equal(y, tk.array([0, 0, 1])))
 
     def test_leaky_relu(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.leaky_relu(x)
-        self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.01, 0.0])))
+        self.assertTrue(tk.array_equal(y, tk.array([1.0, -0.01, 0.0])))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.LeakyReLU(negative_slope=0.1)(x)
-        self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.1, 0.0])))
+        self.assertTrue(tk.array_equal(y, tk.array([1.0, -0.1, 0.0])))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_elu(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.elu(x)
         epsilon = 1e-4
-        expected_y = mx.array([1.0, -0.6321, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([1.0, -0.6321, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.ELU(alpha=1.1)(x)
         epsilon = 1e-4
-        expected_y = mx.array([1.0, -0.6953, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([1.0, -0.6953, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_relu6(self):
-        x = mx.array([1.0, -1.0, 0.0, 7.0, -7.0])
+        x = tk.array([1.0, -1.0, 0.0, 7.0, -7.0])
         y = nn.relu6(x)
-        self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0, 6.0, 0.0])))
+        self.assertTrue(tk.array_equal(y, tk.array([1.0, 0.0, 0.0, 6.0, 0.0])))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_softmax(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.softmax(x)
         epsilon = 1e-4
-        expected_y = mx.array([0.6652, 0.0900, 0.2447])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.6652, 0.0900, 0.2447])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_softmin(self):
-        x = mx.array([1.0, 2.0, 3.0])
+        x = tk.array([1.0, 2.0, 3.0])
         y = nn.softmin(x)
         epsilon = 1e-4
-        expected_y = mx.array([0.6652, 0.2447, 0.0900])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.6652, 0.2447, 0.0900])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_softplus(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.softplus(x)
         epsilon = 1e-4
-        expected_y = mx.array([1.3133, 0.3133, 0.6931])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([1.3133, 0.3133, 0.6931])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_softsign(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.softsign(x)
         epsilon = 1e-4
-        expected_y = mx.array([0.5, -0.5, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.5, -0.5, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_softshrink(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.softshrink(x)
         epsilon = 1e-4
-        expected_y = mx.array([0.5, -0.5, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.5, -0.5, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.Softshrink(lambd=0.7)(x)
-        expected_y = mx.array([0.3, -0.3, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.3, -0.3, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_celu(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.celu(x)
         epsilon = 1e-4
-        expected_y = mx.array([1.0, -0.6321, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([1.0, -0.6321, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.CELU(alpha=1.1)(x)
-        expected_y = mx.array([1.0, -0.6568, 0.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([1.0, -0.6568, 0.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_log_softmax(self):
-        x = mx.array([1.0, 2.0, 3.0])
+        x = tk.array([1.0, 2.0, 3.0])
         y = nn.log_softmax(x)
         epsilon = 1e-4
-        expected_y = mx.array([-2.4076, -1.4076, -0.4076])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([-2.4076, -1.4076, -0.4076])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         # Equal logits normalize to log(1/n) whatever their magnitude
         for v in [1e0, 1e4, 1e8, 1e20, 1e36]:
-            y = nn.log_softmax(mx.array([[v, v]]))
-            self.assertTrue(mx.allclose(y, mx.full((1, 2), -0.6931472), atol=1e-5))
+            y = nn.log_softmax(tk.array([[v, v]]))
+            self.assertTrue(tk.allclose(y, tk.full((1, 2), -0.6931472), atol=1e-5))
 
     def test_log_sigmoid(self):
-        x = mx.array([1.0, -1.0, 0.0])
+        x = tk.array([1.0, -1.0, 0.0])
         y = nn.log_sigmoid(x)
         epsilon = 1e-4
-        expected_y = mx.array([-0.3133, -1.3133, -0.6931])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([-0.3133, -1.3133, -0.6931])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (3,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_prelu(self):
         self.assertEqualArray(
-            nn.PReLU()(mx.array([1.0, -1.0, 0.0, 0.5])),
-            mx.array([1.0, -0.25, 0.0, 0.5]),
+            nn.PReLU()(tk.array([1.0, -1.0, 0.0, 0.5])),
+            tk.array([1.0, -0.25, 0.0, 0.5]),
         )
 
     def test_mish(self):
         self.assertEqualArray(
-            nn.Mish()(mx.array([1.0, -1.0, 0.0, 0.5])),
-            mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
+            nn.Mish()(tk.array([1.0, -1.0, 0.0, 0.5])),
+            tk.array([0.8651, -0.3034, 0.0000, 0.3752]),
         )
 
     def test_hardswish(self):
-        x = mx.array([-3.0, -1.5, 0.0, 1.5, 3.0])
+        x = tk.array([-3.0, -1.5, 0.0, 1.5, 3.0])
         y = nn.hardswish(x)
         epsilon = 1e-4
-        expected_y = mx.array([0.0, -0.375, 0.0, 1.125, 3.0])
-        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        expected_y = tk.array([0.0, -0.375, 0.0, 1.125, 3.0])
+        self.assertTrue(tk.all(tk.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_glu(self):
-        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
-        y = mx.array([[[0.952574, 1.96403]]], dtype=mx.float32)
+        x = tk.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=tk.float32)
+        y = tk.array([[[0.952574, 1.96403]]], dtype=tk.float32)
         out = nn.glu(x)
         self.assertEqualArray(out, y)
 
     def test_hard_tanh(self):
-        x = mx.array([1.0, -2.0, 0.0, 0.5, 2.0])
+        x = tk.array([1.0, -2.0, 0.0, 0.5, 2.0])
         y = nn.hard_tanh(x)
-        expected_y = mx.array([1.0, -1.0, 0.0, 0.5, 1.0])
-        self.assertTrue(mx.array_equal(y, expected_y))
+        expected_y = tk.array([1.0, -1.0, 0.0, 0.5, 1.0])
+        self.assertTrue(tk.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_hard_shrink(self):
-        x = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        x = tk.array([1.0, -0.5, 0.0, 0.5, -1.5])
         y = nn.hard_shrink(x)
-        expected_y = mx.array([1.0, 0.0, 0.0, 0.0, -1.5])
-        self.assertTrue(mx.array_equal(y, expected_y))
+        expected_y = tk.array([1.0, 0.0, 0.0, 0.0, -1.5])
+        self.assertTrue(tk.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.hard_shrink(x, lambd=0.1)
-        expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
-        self.assertTrue(mx.array_equal(y, expected_y))
+        expected_y = tk.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        self.assertTrue(tk.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.HardShrink()(x)
-        expected_y = mx.array([1.0, 0.0, 0.0, 0.0, -1.5])
-        self.assertTrue(mx.array_equal(y, expected_y))
+        expected_y = tk.array([1.0, 0.0, 0.0, 0.0, -1.5])
+        self.assertTrue(tk.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
         y = nn.HardShrink(lambd=0.1)(x)
-        expected_y = mx.array([1.0, -0.5, 0.0, 0.5, -1.5])
-        self.assertTrue(mx.array_equal(y, expected_y))
+        expected_y = tk.array([1.0, -0.5, 0.0, 0.5, -1.5])
+        self.assertTrue(tk.array_equal(y, expected_y))
         self.assertEqual(y.shape, (5,))
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
     def test_rope(self):
         for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
             shape = (1, 3, 4)
-            x = mx.random.uniform(shape=shape)
+            x = tk.random.uniform(shape=shape)
             y = rope(x)
             self.assertEqual(y.shape, shape)
-            self.assertEqual(y.dtype, mx.float32)
+            self.assertEqual(y.dtype, tk.float32)
 
             y = rope(x, offset=3)
             self.assertEqual(y.shape, shape)
 
-            y = rope(x.astype(mx.float16))
-            self.assertEqual(y.dtype, mx.float16)
+            y = rope(x.astype(tk.float16))
+            self.assertEqual(y.dtype, tk.float16)
 
     def test_alibi(self):
         alibi = nn.ALiBi()
         shape = (1, 8, 20, 20)
-        x = mx.random.uniform(shape=shape)
+        x = tk.random.uniform(shape=shape)
         y = alibi(x)
         self.assertEqual(y.shape, shape)
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
-        y = alibi(x.astype(mx.float16))
-        self.assertEqual(y.dtype, mx.float16)
+        y = alibi(x.astype(tk.float16))
+        self.assertEqual(y.dtype, tk.float16)
 
     def test_dropout(self):
-        x = mx.ones((2, 4))
+        x = tk.ones((2, 4))
         y = nn.Dropout(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
-        x = mx.ones((2, 4), dtype=mx.bfloat16)
+        x = tk.ones((2, 4), dtype=tk.bfloat16)
         y = nn.Dropout(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.bfloat16)
+        self.assertEqual(y.dtype, tk.bfloat16)
 
-        x = mx.ones((2, 4), dtype=mx.float16)
+        x = tk.ones((2, 4), dtype=tk.float16)
         y = nn.Dropout(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float16)
+        self.assertEqual(y.dtype, tk.float16)
 
     def test_dropout2d(self):
-        x = mx.ones((2, 4, 4, 4))
+        x = tk.ones((2, 4, 4, 4))
         y = nn.Dropout2d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
-        x = mx.ones((2, 4, 4, 4), dtype=mx.bfloat16)
+        x = tk.ones((2, 4, 4, 4), dtype=tk.bfloat16)
         y = nn.Dropout2d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.bfloat16)
+        self.assertEqual(y.dtype, tk.bfloat16)
 
-        x = mx.ones((2, 4, 4, 4), dtype=mx.float16)
+        x = tk.ones((2, 4, 4, 4), dtype=tk.float16)
         y = nn.Dropout2d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float16)
+        self.assertEqual(y.dtype, tk.float16)
 
     def test_dropout3d(self):
-        x = mx.ones((2, 4, 4, 4, 4))
+        x = tk.ones((2, 4, 4, 4, 4))
         y = nn.Dropout3d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float32)
+        self.assertEqual(y.dtype, tk.float32)
 
-        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.bfloat16)
+        x = tk.ones((2, 4, 4, 4, 4), dtype=tk.bfloat16)
         y = nn.Dropout3d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.bfloat16)
+        self.assertEqual(y.dtype, tk.bfloat16)
 
-        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.float16)
+        x = tk.ones((2, 4, 4, 4, 4), dtype=tk.float16)
         y = nn.Dropout3d(0.5)(x)
         self.assertEqual(y.shape, x.shape)
-        self.assertEqual(y.dtype, mx.float16)
+        self.assertEqual(y.dtype, tk.float16)
 
     def test_upsample(self):
         b, h, w, c = 1, 2, 2, 1
@@ -1421,11 +1425,11 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=scale_factor, mode="nearest", align_corners=False
         )
         # Test single feature map, align corners
-        x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
-        expected_nearest = mx.array(
+        x = tk.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
+        expected_nearest = tk.array(
             [[[[0, 0, 1, 1], [0, 0, 1, 1], [2, 2, 3, 3], [2, 2, 3, 3]]]]
         ).transpose((0, 2, 3, 1))
-        expected_bilinear = mx.array(
+        expected_bilinear = tk.array(
             [
                 [
                     [
@@ -1439,11 +1443,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         ).transpose((0, 2, 3, 1))
         # Test single feature map, no align corners
         x = (
-            mx.arange(1, b * h * w * c + 1)
+            tk.arange(1, b * h * w * c + 1)
             .reshape((b, c, h, w))
             .transpose((0, 2, 3, 1))
         )
-        expected_bilinear_no_align_corners = mx.array(
+        expected_bilinear_no_align_corners = tk.array(
             [
                 [
                     [
@@ -1455,7 +1459,7 @@ class TestLayers(mlx_tests.MLXTestCase):
                 ]
             ]
         ).transpose((0, 2, 3, 1))
-        expected_nearest_no_align_corners = mx.array(
+        expected_nearest_no_align_corners = tk.array(
             [[[[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]]]
         ).transpose((0, 2, 3, 1))
         self.assertTrue(
@@ -1473,7 +1477,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         # Test a more complex batch
         b, h, w, c = 2, 3, 3, 2
         scale_factor = 2
-        x = mx.arange((b * h * w * c)).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
+        x = tk.arange((b * h * w * c)).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
 
         upsample_nearest = nn.Upsample(
             scale_factor=scale_factor, mode="nearest", align_corners=True
@@ -1482,7 +1486,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=scale_factor, mode="linear", align_corners=True
         )
 
-        expected_nearest = mx.array(
+        expected_nearest = tk.array(
             [
                 [
                     [
@@ -1522,7 +1526,7 @@ class TestLayers(mlx_tests.MLXTestCase):
                 ],
             ]
         ).transpose((0, 2, 3, 1))
-        expected_bilinear = mx.array(
+        expected_bilinear = tk.array(
             [
                 [
                     [
@@ -1567,7 +1571,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         # Test different height and width scale_factor
         b, h, w, c = 1, 2, 2, 2
-        x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
+        x = tk.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
         upsample_nearest = nn.Upsample(
             scale_factor=(2, 3), mode="nearest", align_corners=True
         )
@@ -1575,7 +1579,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=(2, 3), mode="linear", align_corners=True
         )
 
-        expected_nearest = mx.array(
+        expected_nearest = tk.array(
             [
                 [
                     [
@@ -1593,7 +1597,7 @@ class TestLayers(mlx_tests.MLXTestCase):
                 ]
             ]
         ).transpose((0, 2, 3, 1))
-        expected_bilinear = mx.array(
+        expected_bilinear = tk.array(
             [
                 [
                     [
@@ -1625,7 +1629,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         )
 
     def test_upsample_align_corners_one_dim(self):
-        x = mx.arange(1, 5).reshape((1, 2, 2, 1))
+        x = tk.arange(1, 5).reshape((1, 2, 2, 1))
 
         up = nn.Upsample(scale_factor=0.5, mode="linear", align_corners=True)
         out = up(x)
@@ -1634,13 +1638,13 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         up = nn.Upsample(scale_factor=(0.5, 2), mode="linear", align_corners=True)
         out = up(x)
-        expected = mx.array([[[[1.0], [4.0 / 3.0], [5.0 / 3.0], [2.0]]]])
+        expected = tk.array([[[[1.0], [4.0 / 3.0], [5.0 / 3.0], [2.0]]]])
         self.assertEqual(out.shape, (1, 1, 4, 1))
         self.assertTrue(np.allclose(out, expected))
 
         up = nn.Upsample(scale_factor=(2, 0.5), mode="linear", align_corners=True)
         out = up(x)
-        expected = mx.array([[[[1.0]], [[5.0 / 3.0]], [[7.0 / 3.0]], [[3.0]]]])
+        expected = tk.array([[[[1.0]], [[5.0 / 3.0]], [[7.0 / 3.0]], [[3.0]]]])
         self.assertEqual(out.shape, (1, 4, 1, 1))
         self.assertTrue(np.allclose(out, expected))
 
@@ -1649,7 +1653,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(out.shape, (1, 1, 1, 1))
         self.assertTrue(np.allclose(out, x[:, :1, :1, :]))
 
-        x_1d = mx.arange(0, 4).reshape((1, 4, 1)).astype(mx.float32)
+        x_1d = tk.arange(0, 4).reshape((1, 4, 1)).astype(tk.float32)
         up = nn.Upsample(scale_factor=0.25, mode="linear", align_corners=True)
         out = up(x_1d)
         self.assertEqual(out.shape, (1, 1, 1))
@@ -1657,7 +1661,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
     def test_pooling(self):
         # Test 1d pooling
-        x = mx.array(
+        x = tk.array(
             [
                 [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]],
                 [[12, 13, 14], [15, 16, 17], [18, 19, 20], [21, 22, 23]],
@@ -1760,7 +1764,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             )
         )
         # Test 2d pooling
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [[0, 16], [1, 17], [2, 18], [3, 19]],
@@ -1845,7 +1849,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             )
         )
         # Test multiple batches
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [[0, 1], [2, 3], [4, 5], [6, 7]],
@@ -1882,7 +1886,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             )
         )
         # Test irregular kernel (2, 4), stride (3, 1) and padding (1, 2)
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]],
@@ -1996,7 +2000,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             "AvgPool2d(kernel_size=(1, 2), stride=(2, 2), padding=(1, 2))",
         )
         # Test 3d pooling
-        x = mx.array(
+        x = tk.array(
             [
                 [
                     [
@@ -2123,26 +2127,26 @@ class TestLayers(mlx_tests.MLXTestCase):
                 self.assertEqual(v.dtype, dtype, f"dtype mismatch for {k}")
 
         layer = nn.Linear(input_dims=4, output_dims=8, bias=True)
-        assert_dtype(layer, mx.float32)
+        assert_dtype(layer, tk.float32)
 
-        layer.set_dtype(mx.bfloat16)
-        assert_dtype(layer, mx.bfloat16)
+        layer.set_dtype(tk.bfloat16)
+        assert_dtype(layer, tk.bfloat16)
 
-        layer.set_dtype(mx.float32, lambda x: False)
-        assert_dtype(layer, mx.bfloat16)
+        layer.set_dtype(tk.float32, lambda x: False)
+        assert_dtype(layer, tk.bfloat16)
 
-        layer.set_dtype(mx.int32, lambda x: True)
-        assert_dtype(layer, mx.int32)
+        layer.set_dtype(tk.int32, lambda x: True)
+        assert_dtype(layer, tk.int32)
 
-        layer.set_dtype(mx.int64, predicate=None)
-        assert_dtype(layer, mx.int64)
+        layer.set_dtype(tk.int64, predicate=None)
+        assert_dtype(layer, tk.int64)
 
-        layer.set_dtype(mx.int16, lambda x: mx.issubdtype(x, mx.integer))
-        assert_dtype(layer, mx.int16)
+        layer.set_dtype(tk.int16, lambda x: tk.issubdtype(x, tk.integer))
+        assert_dtype(layer, tk.int16)
 
     def test_rnn(self):
         layer = nn.RNN(input_size=5, hidden_size=12, bias=True)
-        inp = mx.random.normal((2, 25, 5))
+        inp = tk.random.normal((2, 25, 5))
 
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (2, 25, 12))
@@ -2151,7 +2155,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             5,
             12,
             bias=False,
-            nonlinearity=lambda x: mx.maximum(0, x),
+            nonlinearity=lambda x: tk.maximum(0, x),
         )
 
         h_out = layer(inp)
@@ -2160,7 +2164,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             nn.RNN(5, 12, nonlinearity="tanh")
 
-        inp = mx.random.normal((44, 5))
+        inp = tk.random.normal((44, 5))
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (44, 12))
 
@@ -2169,7 +2173,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
     def test_gru(self):
         layer = nn.GRU(5, 12, bias=True)
-        inp = mx.random.normal((2, 25, 5))
+        inp = tk.random.normal((2, 25, 5))
 
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (2, 25, 12))
@@ -2177,7 +2181,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp, hidden=h_out[:, -1, :])
         self.assertEqual(h_out.shape, (2, 25, 12))
 
-        inp = mx.random.normal((44, 5))
+        inp = tk.random.normal((44, 5))
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (44, 12))
 
@@ -2187,14 +2191,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         # hidden=None should be equivalent to hidden=zeros (issue #3249)
         for bias in [True, False]:
             layer = nn.GRU(5, 12, bias=bias)
-            inp = mx.random.normal((2, 25, 5))
+            inp = tk.random.normal((2, 25, 5))
             h_none = layer(inp)
-            h_zeros = layer(inp, hidden=mx.zeros((2, 12)))
-            self.assertTrue(mx.allclose(h_none, h_zeros).item())
+            h_zeros = layer(inp, hidden=tk.zeros((2, 12)))
+            self.assertTrue(tk.allclose(h_none, h_zeros).item())
 
     def test_lstm(self):
         layer = nn.LSTM(5, 12)
-        inp = mx.random.normal((2, 25, 5))
+        inp = tk.random.normal((2, 25, 5))
 
         h_out, c_out = layer(inp)
         self.assertEqual(h_out.shape, (2, 25, 12))
@@ -2204,12 +2208,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(h_out.shape, (2, 25, 12))
         self.assertEqual(c_out.shape, (2, 25, 12))
 
-        inp = mx.random.normal((44, 5))
+        inp = tk.random.normal((44, 5))
         h_out, c_out = layer(inp)
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
 
-        inp = mx.random.normal((44, 5))
+        inp = tk.random.normal((44, 5))
         h_out, c_out = layer(inp, hidden=h_out[-1, :], cell=c_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
@@ -2217,42 +2221,42 @@ class TestLayers(mlx_tests.MLXTestCase):
     def test_quantized_embedding(self):
         emb = nn.Embedding(32, 256)
         qemb = nn.QuantizedEmbedding.from_embedding(emb, bits=8)
-        x = mx.array([2, 6, 9, 3, 0, 3])
+        x = tk.array([2, 6, 9, 3, 0, 3])
         y = emb(x)
         yq = qemb(x)
         self.assertLess((y - yq).abs().max(), qemb.scales.max())
 
-        x = mx.random.uniform(shape=(2, 256))
+        x = tk.random.uniform(shape=(2, 256))
         y = emb.as_linear(x)
         yq = qemb.as_linear(x)
 
         def cosine(a, b):
             ab = (a * b).sum(-1)
-            aa = mx.linalg.norm(a, axis=-1)
-            bb = mx.linalg.norm(b, axis=-1)
+            aa = tk.linalg.norm(a, axis=-1)
+            bb = tk.linalg.norm(b, axis=-1)
             return ab / aa / bb
 
         self.assertGreater(cosine(y, yq).min(), 0.99)
 
     def test_causal_mask(self):
-        mask = nn.MultiHeadAttention.create_additive_causal_mask(4, mx.float16)
-        self.assertFalse(mx.any(mx.isnan(mask)))
+        mask = nn.MultiHeadAttention.create_additive_causal_mask(4, tk.float16)
+        self.assertFalse(tk.any(tk.isnan(mask)))
         self.assertTrue(mask[0, -1].item() < 0)
 
-        mask = nn.MultiHeadAttention.create_additive_causal_mask(4, mx.bfloat16)
-        self.assertFalse(mx.any(mx.isnan(mask)))
+        mask = nn.MultiHeadAttention.create_additive_causal_mask(4, tk.bfloat16)
+        self.assertFalse(tk.any(tk.isnan(mask)))
         self.assertTrue(mask[0, -1].item() < 0)
 
     def test_attention(self):
         attn = nn.MultiHeadAttention(32, 4)
-        x = mx.random.normal(shape=(2, 5, 32))
+        x = tk.random.normal(shape=(2, 5, 32))
         out = attn(x, x, x)
         self.assertEqual(out.shape, x.shape)
 
     def test_transformer_encoder_layer(self):
         # Test norm_first=True (default)
         layer = nn.TransformerEncoderLayer(dims=32, num_heads=4)
-        x = mx.random.normal(shape=(2, 5, 32))
+        x = tk.random.normal(shape=(2, 5, 32))
         out = layer(x, mask=None)
         self.assertEqual(out.shape, x.shape)
 
@@ -2274,8 +2278,8 @@ class TestLayers(mlx_tests.MLXTestCase):
     def test_transformer_decoder_layer(self):
         dims = 32
         num_heads = 4
-        x = mx.random.normal(shape=(2, 5, dims))
-        memory = mx.random.normal(shape=(2, 8, dims))
+        x = tk.random.normal(shape=(2, 5, dims))
+        memory = tk.random.normal(shape=(2, 8, dims))
 
         # Test norm_first=True (default)
         layer = nn.TransformerDecoderLayer(dims=dims, num_heads=num_heads)
@@ -2301,14 +2305,14 @@ class TestLayers(mlx_tests.MLXTestCase):
 
     def test_transformer_encoder(self):
         encoder = nn.TransformerEncoder(num_layers=2, dims=32, num_heads=4)
-        x = mx.random.normal(shape=(2, 5, 32))
+        x = tk.random.normal(shape=(2, 5, 32))
         out = encoder(x, mask=None)
         self.assertEqual(out.shape, x.shape)
 
     def test_transformer_decoder(self):
         decoder = nn.TransformerDecoder(num_layers=2, dims=32, num_heads=4)
-        x = mx.random.normal(shape=(2, 5, 32))
-        memory = mx.random.normal(shape=(2, 8, 32))
+        x = tk.random.normal(shape=(2, 5, 32))
+        memory = tk.random.normal(shape=(2, 8, 32))
         out = decoder(x, memory, x_mask=None, memory_mask=None)
         self.assertEqual(out.shape, x.shape)
 
@@ -2319,8 +2323,8 @@ class TestLayers(mlx_tests.MLXTestCase):
             num_encoder_layers=2,
             num_decoder_layers=2,
         )
-        src = mx.random.normal(shape=(2, 8, 32))
-        tgt = mx.random.normal(shape=(2, 5, 32))
+        src = tk.random.normal(shape=(2, 8, 32))
+        tgt = tk.random.normal(shape=(2, 5, 32))
         out = model(src, tgt, src_mask=None, tgt_mask=None, memory_mask=None)
         self.assertEqual(out.shape, tgt.shape)
 
@@ -2340,4 +2344,4 @@ class TestLayers(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

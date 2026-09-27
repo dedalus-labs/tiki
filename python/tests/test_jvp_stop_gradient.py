@@ -2,8 +2,8 @@
 
 import unittest
 
-import mlx.core as mx
-import mlx_tests
+import tiki as tk
+import tiki_tests
 
 
 def opaque_double():
@@ -12,8 +12,8 @@ def opaque_double():
     On CUDA that is a custom kernel; on a CPU-enabled build it is SVD, whose
     primitive defines no jvp. Returns None when neither is available.
     """
-    if mx.cuda.is_available():
-        kernel = mx.fast.cuda_kernel(
+    if tk.cuda.is_available():
+        kernel = tk.fast.cuda_kernel(
             name="double_it",
             input_names=["x"],
             output_names=["y"],
@@ -32,25 +32,25 @@ def opaque_double():
 
         return forward
     try:
-        mx.eval(mx.linalg.svd(mx.eye(2), stream=mx.cpu))
+        tk.eval(tk.linalg.svd(tk.eye(2), stream=tk.cpu))
     except Exception:
         return None
 
     def forward(x):
-        u, s, vt = mx.linalg.svd(mx.diag(x), stream=mx.cpu)
-        return 2 * mx.diag(u @ mx.diag(s) @ vt)
+        u, s, vt = tk.linalg.svd(tk.diag(x), stream=tk.cpu)
+        return 2 * tk.diag(u @ tk.diag(s) @ vt)
 
     return forward
 
 
-class TestJvpStopGradient(mlx_tests.MLXTestCase):
+class TestJvpStopGradient(tiki_tests.TIKITestCase):
     def test_completed_jvp_outputs_evaluate_in_independent_transforms(self):
         # Completed JVP outputs have no stale tracers, even on stopped paths.
         # Witness: async_eval of a stopped square during an independent grad.
-        (out,), (tangent,) = mx.jvp(
-            lambda x: mx.stop_gradient(x * x), [mx.array(2.0)], [mx.array(1.0)]
+        (out,), (tangent,) = tk.jvp(
+            lambda x: tk.stop_gradient(x * x), [tk.array(2.0)], [tk.array(1.0)]
         )
-        grad = mx.grad(lambda z: (mx.async_eval(out), z * z)[1])(mx.array(3.0))
+        grad = tk.grad(lambda z: (tk.async_eval(out), z * z)[1])(tk.array(3.0))
         self.assertEqual(grad.item(), 6.0)
         self.assertEqual(out.item(), 4.0)
         self.assertEqual(tangent.item(), 0.0)
@@ -63,15 +63,15 @@ class TestJvpStopGradient(mlx_tests.MLXTestCase):
         forward = opaque_double()
         if forward is None:
             self.skipTest("no backend with a JVP-less primitive available")
-        double = mx.custom_function(forward)
-        # For a single-input function MLX passes the primal and tangent as bare arrays.
+        double = tk.custom_function(forward)
+        # For a single-input function Tiki passes the primal and tangent as bare arrays.
         double.jvp(lambda primal, tangent: 2 * tangent)
-        x = mx.arange(4, dtype=mx.float32)
-        t = mx.array([1.0, 0.0, 3.0, 0.0])
-        out, tangent = mx.jvp(double, (x,), (t,))
-        mx.eval(out, tangent)
-        self.assertTrue(mx.array_equal(out[0], 2 * x))
-        self.assertTrue(mx.array_equal(tangent[0], 2 * t))
+        x = tk.arange(4, dtype=tk.float32)
+        t = tk.array([1.0, 0.0, 3.0, 0.0])
+        out, tangent = tk.jvp(double, (x,), (t,))
+        tk.eval(out, tangent)
+        self.assertTrue(tk.array_equal(out[0], 2 * x))
+        self.assertTrue(tk.array_equal(tangent[0], 2 * t))
 
     # Invariant: a subgraph reachable only through stop_gradient is not taped,
     # while the same subgraph reachable through a live path still is.
@@ -81,19 +81,19 @@ class TestJvpStopGradient(mlx_tests.MLXTestCase):
             return x * x
 
         def dead(x):
-            return mx.stop_gradient(g(x)) + 3 * x
+            return tk.stop_gradient(g(x)) + 3 * x
 
         def live(x):
             y = g(x)
-            return mx.stop_gradient(y) + y
+            return tk.stop_gradient(y) + y
 
-        x = mx.array([1.0, 2.0])
-        t = mx.array([1.0, 1.0])
+        x = tk.array([1.0, 2.0])
+        t = tk.array([1.0, 1.0])
         self.assertTrue(
-            mx.array_equal(mx.jvp(dead, (x,), (t,))[1][0], mx.array([3.0, 3.0]))
+            tk.array_equal(tk.jvp(dead, (x,), (t,))[1][0], tk.array([3.0, 3.0]))
         )
-        self.assertTrue(mx.array_equal(mx.jvp(live, (x,), (t,))[1][0], 2 * x))
+        self.assertTrue(tk.array_equal(tk.jvp(live, (x,), (t,))[1][0], 2 * x))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

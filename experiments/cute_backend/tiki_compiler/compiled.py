@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from mlx import core
+from tiki import core
 
 from .arrays import arrays, profile, single
 from .artifact import CudaIo
@@ -48,7 +48,7 @@ class Compiled:
         if any(
             not isinstance(value, core.array) or value.dtype != core.float32 for value in inputs
         ):
-            raise UnsupportedGraphError("all arguments must be float32 MLX arrays")
+            raise UnsupportedGraphError("all arguments must be float32 Tiki arrays")
         lowered = specialize(
             self.function,
             self.schedule,
@@ -64,7 +64,7 @@ class Compiled:
 
     def launch(self, *inputs: core.array) -> core.array | tuple[core.array, ...]:
         if not core.cuda.is_available():
-            raise BackendUnavailableError("tk.compile execution requires MLX CUDA")
+            raise BackendUnavailableError("compiler.compile execution requires Tiki CUDA")
         if core.device_info(core.gpu)["architecture"] != self.schedule.arch:
             raise BackendUnavailableError(f"schedule requires {self.schedule.arch}")
         lowered = self.lower(*inputs)
@@ -98,7 +98,7 @@ class Compiled:
         cotangents: core.array | tuple[core.array, ...],
         outputs: core.array | tuple[core.array, ...],
     ) -> tuple[core.array, ...]:
-        """MLX passes bare arrays for a single-output function, tuples otherwise."""
+        """Tiki passes bare arrays for a single-output function, tuples otherwise."""
         primals, cotangents = arrays(primals), arrays(cotangents)
         n = len(primals)
         cotangents = tuple(
@@ -111,7 +111,7 @@ class Compiled:
         primals: core.array | tuple[core.array, ...],
         tangents: core.array | tuple[core.array, ...],
     ) -> core.array | tuple[core.array, ...]:
-        """MLX passes (primals, tangents) and expects the output tangents."""
+        """Tiki passes (primals, tangents) and expects the output tangents."""
         primals, tangents = arrays(primals), arrays(tangents)
         n = len(primals)
         if self._tangent_kernel is None:

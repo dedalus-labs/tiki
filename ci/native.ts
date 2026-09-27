@@ -51,7 +51,7 @@ export async function sanitizer(exec: ScriptExec, mode: "ASAN" | "UBSAN"): Promi
     "-B",
     build,
     "-DCMAKE_BUILD_TYPE=Debug",
-    "-DMLX_BUILD_METAL=OFF",
+    "-DTIKI_BUILD_METAL=OFF",
     "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON",
     `-DUSE_${mode}=ON`,
   ]);
@@ -102,7 +102,7 @@ export async function fedora(exec: ScriptExec, workspace: string): Promise<void>
       ".",
       "-B",
       "build/ci-fedora",
-      "-DMLX_BUILD_METAL=OFF",
+      "-DTIKI_BUILD_METAL=OFF",
       "-DCMAKE_BUILD_TYPE=Debug",
     ]);
     await inside("cmake", [

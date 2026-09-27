@@ -3,7 +3,7 @@
 Data Parallelism
 ================
 
-MLX enables efficient data parallel distributed training through its
+Tiki enables efficient data parallel distributed training through its
 distributed communication primitives.
 
 .. _training_example:
@@ -11,7 +11,7 @@ distributed communication primitives.
 Training Example
 ----------------
 
-In this section we will adapt an MLX training loop to support data parallel
+In this section we will adapt an Tiki training loop to support data parallel
 distributed training. Namely, we will average the gradients across a set of
 hosts before applying them to the model.
 
@@ -31,31 +31,31 @@ dataset, and optimizer initialization.
 
     for x, y in dataset:
         loss = step(model, x, y)
-        mx.eval(loss, model.parameters())
+        tk.eval(loss, model.parameters())
 
 All we have to do to average the gradients across machines is perform an
-:func:`mlx.core.distributed.all_sum` and divide by the size of the
-:class:`mlx.core.distributed.Group`. Namely we
-have to :func:`mlx.utils.tree_map` the gradients with following function.
+:func:`tiki.distributed.all_sum` and divide by the size of the
+:class:`tiki.distributed.Group`. Namely we
+have to :func:`tiki.utils.tree_map` the gradients with following function.
 
 .. code:: python
 
     def all_avg(x):
-        return mx.distributed.all_sum(x) / mx.distributed.init().size()
+        return tk.distributed.all_sum(x) / tk.distributed.init().size()
 
 Putting everything together our training loop step looks as follows with
 everything else remaining the same.
 
 .. code:: python
 
-    from mlx.utils import tree_map
+    from tiki.utils import tree_map
 
     def all_reduce_grads(grads):
-        N = mx.distributed.init().size()
+        N = tk.distributed.init().size()
         if N == 1:
             return grads
         return tree_map(
-            lambda x: mx.distributed.all_sum(x) / N,
+            lambda x: tk.distributed.all_sum(x) / N,
             grads
         )
 
@@ -72,7 +72,7 @@ Although the code example above works correctly; it performs one communication
 per gradient. It is significantly more efficient to aggregate several gradients
 together and perform fewer communication steps.
 
-This is the purpose of :func:`mlx.nn.average_gradients`. The final code looks
+This is the purpose of :func:`tiki.nn.average_gradients`. The final code looks
 almost identical to the example above:
 
 .. code:: python
@@ -83,10 +83,10 @@ almost identical to the example above:
 
     def step(model, x, y):
         loss, grads = loss_grad_fn(model, x, y)
-        grads = mx.nn.average_gradients(grads)  # <---- This line was added
+        grads = tk.nn.average_gradients(grads)  # <---- This line was added
         optimizer.update(model, grads)
         return loss
 
     for x, y in dataset:
         loss = step(model, x, y)
-        mx.eval(loss, model.parameters())
+        tk.eval(loss, model.parameters())

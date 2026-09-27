@@ -3,9 +3,9 @@
 import itertools
 import unittest
 
-import mlx.core as mx
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki_tests
 
 
 def cases():
@@ -20,7 +20,7 @@ def cases():
             yield shape, (slice(None), slice(None, None, step))
 
 
-class TestSliceAutograd(mlx_tests.MLXTestCase):
+class TestSliceAutograd(tiki_tests.TIKITestCase):
     # Invariant: the VJP and JVP of a strided slice touch exactly the sliced
     # positions, including when the slice selects a single element.
     # Witness: every (start, stop, step) on lengths 1 to 7 and strided rows and
@@ -42,8 +42,8 @@ class TestSliceAutograd(mlx_tests.MLXTestCase):
             with self.subTest(
                 shape=shape, idx=[(part.start, part.stop, part.step) for part in idx]
             ):
-                vjp = mx.vjp(f, (mx.array(x),), (mx.array(cotangent),))[1][0]
-                jvp = mx.jvp(f, (mx.array(x),), (mx.array(tangent),))[1][0]
+                vjp = tk.vjp(f, (tk.array(x),), (tk.array(cotangent),))[1][0]
+                jvp = tk.jvp(f, (tk.array(x),), (tk.array(tangent),))[1][0]
                 self.assertEqual(vjp.shape, expected_vjp.shape)
                 self.assertEqual(jvp.shape, expected_jvp.shape)
                 self.assertTrue(np.allclose(np.asarray(vjp), expected_vjp))
@@ -51,4 +51,4 @@ class TestSliceAutograd(mlx_tests.MLXTestCase):
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

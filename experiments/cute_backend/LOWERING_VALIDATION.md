@@ -1,7 +1,7 @@
 # Python lowering validation
 
 Validated September 10, 2026, using Python 3.14, Ruff 0.16.5, ty 0.0.79,
-CuTe DSL 4.7.1, and the CUDA MLX wheel from the preceding collective-lowering
+CuTe DSL 4.7.1, and the CUDA Tiki wheel from the preceding collective-lowering
 change. This refactor changes no C++ or Rust implementation.
 
 | Check | Result |
@@ -38,7 +38,7 @@ registered rule. A standalone probe established that stopping traversal at the
 private forward boundary preserves both registered derivatives. The compiled
 call uses that boundary; low-level launch still rejects raw-kernel differentiation.
 
-The previous MLX GPU tree comparison disagreed with a sequential float64
+The previous Tiki GPU tree comparison disagreed with a sequential float64
 recurrence on real and complex affine derivatives. In the coupled complex case,
 Tiki's maximum error was about `1.3e-6`, while the tree comparison differed by up
 to `6.04`. Affine derivative sweeps now use independent float64 oracles with

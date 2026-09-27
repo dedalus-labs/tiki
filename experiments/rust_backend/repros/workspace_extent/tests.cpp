@@ -23,7 +23,7 @@ int cudaStreamIsCapturing(void*, int* status) {
 }
 #define CHECK_CUDA_ERROR(call) assert((call) == 0)
 
-namespace mlx::core {
+namespace tiki::core {
 using ShapeElem = int32_t;
 using Shape = std::vector<ShapeElem>;
 constexpr int int8 = 0;
@@ -69,10 +69,10 @@ Buffer malloc_async(size_t size, CommandEncoder&) {
 }
 } // namespace cu
 #include "workspace.inc"
-} // namespace mlx::core
+} // namespace tiki::core
 
 int main() {
-  using namespace mlx::core;
+  using namespace tiki::core;
   const size_t max_shape_bytes =
       size_t{std::numeric_limits<ShapeElem>::max()} * 256;
   const std::vector<size_t> sizes{

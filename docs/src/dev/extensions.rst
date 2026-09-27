@@ -1,7 +1,7 @@
-Custom Extensions in MLX
-========================
+Custom Extensions in Tiki
+=========================
 
-You can extend MLX with custom operations on the CPU or GPU. This guide
+You can extend Tiki with custom operations on the CPU or GPU. This guide
 explains how to do that with a simple example.
 
 Introducing the Example
@@ -10,23 +10,23 @@ Introducing the Example
 Let's say you would like an operation that takes in two arrays, ``x`` and
 ``y``, scales them both by coefficients ``alpha`` and ``beta`` respectively,
 and then adds them together to get the result ``z = alpha * x + beta * y``.
-You can do that in MLX directly:
+You can do that in Tiki directly:
 
 .. code-block:: python
 
-    import mlx.core as mx
+    import tiki as tk
 
-    def simple_axpby(x: mx.array, y: mx.array, alpha: float, beta: float) -> mx.array:
+    def simple_axpby(x: tk.array, y: tk.array, alpha: float, beta: float) -> tk.array:
         return alpha * x + beta * y
 
 This function performs that operation while leaving the implementation and
-function transformations to MLX.
+function transformations to Tiki.
 
 However, you may want to customize the underlying implementation, perhaps to
 make it faster. In this tutorial we will go through adding custom extensions.
 It will cover:
 
-* The structure of the MLX library.
+* The structure of the Tiki library.
 * Implementing a CPU operation.
 * Implementing a GPU operation using metal.
 * Adding the ``vjp`` and ``jvp`` function transformation.
@@ -35,7 +35,7 @@ It will cover:
 Operations and Primitives
 -------------------------
 
-Operations in MLX build the computation graph. Primitives provide the rules for
+Operations in Tiki build the computation graph. Primitives provide the rules for
 evaluating and transforming the graph. Let's start by discussing operations in
 more detail.
 
@@ -219,7 +219,7 @@ Implementing the Primitive
 --------------------------
 
 No computation happens when we call the operation alone. The operation only
-builds the computation graph. When we evaluate the output array, MLX schedules
+builds the computation graph. When we evaluate the output array, Tiki schedules
 the execution of the computation graph, and calls :meth:`Axpby::eval_cpu` or
 :meth:`Axpby::eval_gpu` depending on the stream/device specified by the user.
 
@@ -241,16 +241,16 @@ point-wise. This is captured in the templated function :meth:`axpby_impl`.
 
   template <typename T>
   void axpby_impl(
-      const mx::array& x,
-      const mx::array& y,
-      mx::array& out,
+      const tk::array& x,
+      const tk::array& y,
+      tk::array& out,
       float alpha_,
       float beta_,
-      mx::Stream stream) {
-    out.set_data(mx::allocator::malloc(out.nbytes()));
+      tk::Stream stream) {
+    out.set_data(tk::allocator::malloc(out.nbytes()));
 
     // Get the CPU command encoder and register input and output arrays
-    auto& encoder = mx::cpu::get_command_encoder(stream);
+    auto& encoder = tk::cpu::get_command_encoder(stream);
     encoder.set_input_array(x);
     encoder.set_input_array(y);
     encoder.set_output_array(out);
@@ -273,8 +273,8 @@ point-wise. This is captured in the templated function :meth:`axpby_impl`.
       // Do the element-wise operation for each output
       for (size_t out_idx = 0; out_idx < size; out_idx++) {
         // Map linear indices to offsets in x and y
-        auto x_offset = mx::elem_to_loc(out_idx, shape, x_strides);
-        auto y_offset = mx::elem_to_loc(out_idx, shape, y_strides);
+        auto x_offset = tk::elem_to_loc(out_idx, shape, x_strides);
+        auto y_offset = tk::elem_to_loc(out_idx, shape, y_strides);
 
         // We allocate the output to be contiguous and regularly strided
         // (defaults to row major) and hence it doesn't need additional mapping
@@ -290,21 +290,21 @@ Accordingly, we add dispatches for ``float32``, ``float16``, ``bfloat16`` and
 .. code-block:: C++
 
     void Axpby::eval_cpu(
-        const std::vector<mx::array>& inputs,
-        std::vector<mx::array>& outputs) {
+        const std::vector<tk::array>& inputs,
+        std::vector<tk::array>& outputs) {
       auto& x = inputs[0];
       auto& y = inputs[1];
       auto& out = outputs[0];
 
       // Dispatch to the correct dtype
-      if (out.dtype() == mx::float32) {
+      if (out.dtype() == tk::float32) {
         return axpby_impl<float>(x, y, out, alpha_, beta_, stream());
-      } else if (out.dtype() == mx::float16) {
-        return axpby_impl<mx::float16_t>(x, y, out, alpha_, beta_, stream());
-      } else if (out.dtype() == mx::bfloat16) {
-        return axpby_impl<mx::bfloat16_t>(x, y, out, alpha_, beta_, stream());
-      } else if (out.dtype() == mx::complex64) {
-        return axpby_impl<mx::complex64_t>(x, y, out, alpha_, beta_, stream());
+      } else if (out.dtype() == tk::float16) {
+        return axpby_impl<tk::float16_t>(x, y, out, alpha_, beta_, stream());
+      } else if (out.dtype() == tk::bfloat16) {
+        return axpby_impl<tk::bfloat16_t>(x, y, out, alpha_, beta_, stream());
+      } else if (out.dtype() == tk::complex64) {
+        return axpby_impl<tk::complex64_t>(x, y, out, alpha_, beta_, stream());
       } else {
         throw std::runtime_error(
             "Axpby is only supported for floating point types.");
@@ -320,7 +320,7 @@ Implementing the GPU Back-end
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Apple silicon devices address their GPUs using the Metal_ shading language, and
-GPU kernels in MLX are written using Metal.
+GPU kernels in Tiki are written using Metal.
 
 .. note::
 
@@ -352,7 +352,7 @@ GPU kernels in MLX are written using Metal.
         error: reference to type 'thread float' could not bind to an lvalue
         of type '__metal_generic float'
 
-    Metal libraries built with ``mlx_build_metallib`` are compiled with
+    Metal libraries built with ``tiki_build_metallib`` are compiled with
     ``-Wmetal-addr-spaces``, which reports a missing qualifier as a warning on
     toolchains where it is not yet an error.
 
@@ -424,13 +424,13 @@ below.
         kname = "axpby_general_" + type_to_name(out);
 
         // Load the metal library
-        auto lib = d.get_library("mlx_ext", current_binary_dir());
+        auto lib = d.get_library("tiki_ext", current_binary_dir());
 
         // Make a kernel from this metal library
         auto kernel = d.get_kernel(kname, lib);
 
         // Prepare to encode kernel
-        auto& compute_encoder = mx::metal::get_command_encoder(s);
+        auto& compute_encoder = tk::metal::get_command_encoder(s);
         compute_encoder.set_compute_pipeline_state(kernel);
 
         // Kernel parameters are registered with buffer indices corresponding to
@@ -472,11 +472,11 @@ below.
 
 We can now call the :meth:`axpby` operation on both the CPU and the GPU!
 
-A few things to note about MLX and Metal before moving on. MLX keeps track of
+A few things to note about Tiki and Metal before moving on. Tiki keeps track of
 the active ``command_buffer`` and the ``MTLCommandBuffer`` to which it is
 associated. We rely on :meth:`metal::get_command_encoder` to give us the active
 metal compute command encoder instead of building a new one and calling
-:meth:`compute_encoder->end_encoding` at the end. MLX adds kernels (compute
+:meth:`compute_encoder->end_encoding` at the end. Tiki adds kernels (compute
 pipelines) to the active command buffer until some specified limit is hit or
 the command buffer needs to be flushed for synchronization.
 
@@ -554,14 +554,14 @@ Let's look at the overall directory structure first.
 | │   ├── axpby.cpp
 | │   ├── axpby.h
 | │   └── axpby.metal
-| ├── mlx_sample_extensions
+| ├── tiki_sample_extensions
 | │   └── __init__.py
 | ├── bindings.cpp
 | ├── CMakeLists.txt
 | └── setup.py
 
 * ``extensions/axpby/`` defines the C++ extension library
-* ``extensions/mlx_sample_extensions`` sets out the structure for the
+* ``extensions/tiki_sample_extensions`` sets out the structure for the
   associated Python package
 * ``extensions/bindings.cpp`` provides Python bindings for our operation
 * ``extensions/CMakeLists.txt`` holds CMake rules to build the library and
@@ -573,13 +573,13 @@ Binding to Python
 ^^^^^^^^^^^^^^^^^^
 
 We use nanobind_ to build a Python API for the C++ library. Since bindings for
-components such as :class:`mlx.core.array`, :class:`mlx.core.stream`, etc. are
+components such as :class:`tiki.array`, :class:`tiki.stream`, etc. are
 already provided, adding our :meth:`axpby` is simple.
 
 .. code-block:: C++
 
    NB_MODULE(_ext, m) {
-        m.doc() = "Sample extension for MLX";
+        m.doc() = "Sample extension for Tiki";
 
         m.def(
             "axpby",
@@ -613,62 +613,62 @@ whistles such as the literal names and doc-strings.
 
 .. warning::
 
-    :mod:`mlx.core` must be imported before importing
-    :mod:`mlx_sample_extensions` as defined by the nanobind module above to
-    ensure that the casters for :mod:`mlx.core` components like
-    :class:`mlx.core.array` are available.
+    :mod:`tiki` must be imported before importing
+    :mod:`tiki_sample_extensions` as defined by the nanobind module above to
+    ensure that the casters for :mod:`tiki` components like
+    :class:`tiki.array` are available.
 
 .. _Building with CMake:
 
 Building with CMake
 ^^^^^^^^^^^^^^^^^^^^
 
-Building the C++ extension library only requires that you ``find_package(MLX
+Building the C++ extension library only requires that you ``find_package(Tiki
 CONFIG)`` and then link it to your library.
 
 .. code-block:: cmake
 
     # Add library
-    add_library(mlx_ext)
+    add_library(tiki_ext)
 
     # Add sources
     target_sources(
-        mlx_ext
+        tiki_ext
         PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.cpp
     )
 
     # Add include headers
     target_include_directories(
-        mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}
+        tiki_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}
     )
 
-    # Link to mlx
-    target_link_libraries(mlx_ext PUBLIC mlx)
+    # Link to tiki
+    target_link_libraries(tiki_ext PUBLIC tiki)
 
 We also need to build the attached Metal library. For convenience, we provide a
-:meth:`mlx_build_metallib` function that builds a ``.metallib`` target given
+:meth:`tiki_build_metallib` function that builds a ``.metallib`` target given
 sources, headers, destinations, etc. (defined in ``cmake/extension.cmake`` and
-automatically imported with MLX package).
+automatically imported with Tiki package).
 
 Here is what that looks like in practice:
 
 .. code-block:: cmake
 
     # Build metallib
-    if(MLX_BUILD_METAL)
+    if(TIKI_BUILD_METAL)
 
-    mlx_build_metallib(
-        TARGET mlx_ext_metallib
-        TITLE mlx_ext
+    tiki_build_metallib(
+        TARGET tiki_ext_metallib
+        TITLE tiki_ext
         SOURCES ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.metal
-        INCLUDE_DIRS ${PROJECT_SOURCE_DIR} ${MLX_INCLUDE_DIRS}
+        INCLUDE_DIRS ${PROJECT_SOURCE_DIR} ${TIKI_INCLUDE_DIRS}
         OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
     )
 
     add_dependencies(
-        mlx_ext
-        mlx_ext_metallib
+        tiki_ext
+        tiki_ext_metallib
     )
 
     endif()
@@ -680,10 +680,10 @@ Finally, we build the nanobind_ bindings
     nanobind_add_module(
       _ext
       NB_STATIC STABLE_ABI LTO NOMINSIZE
-      NB_DOMAIN mlx
+      NB_DOMAIN tiki
       ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )
-    target_link_libraries(_ext PRIVATE mlx_ext)
+    target_link_libraries(_ext PRIVATE tiki_ext)
 
     if(BUILD_SHARED_LIBS)
       target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
@@ -693,32 +693,32 @@ Building with ``setuptools``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Once we have set out the CMake build rules as described above, we can use the
-build utilities defined in :mod:`mlx.extension`:
+build utilities defined in :mod:`tiki.extension`:
 
 .. code-block:: python
 
-    from mlx import extension
+    from tiki import extension
     from setuptools import setup
 
     if __name__ == "__main__":
         setup(
-            name="mlx_sample_extensions",
+            name="tiki_sample_extensions",
             version="0.0.0",
-            description="Sample C++ and Metal extensions for MLX primitives.",
-            ext_modules=[extension.CMakeExtension("mlx_sample_extensions._ext")],
+            description="Sample C++ and Metal extensions for Tiki primitives.",
+            ext_modules=[extension.CMakeExtension("tiki_sample_extensions._ext")],
             cmdclass={"build_ext": extension.CMakeBuild},
-            packages=["mlx_sample_extensions"],
-            package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
+            packages=["tiki_sample_extensions"],
+            package_data={"tiki_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
             extras_require={"dev":[]},
             zip_safe=False,
             python_requires=">=3.10",
         )
 
 .. note::
-    We treat ``extensions/mlx_sample_extensions`` as the package directory
+    We treat ``extensions/tiki_sample_extensions`` as the package directory
     even though it only contains a ``__init__.py`` to ensure the following:
 
-    * :mod:`mlx.core` must be imported before importing :mod:`_ext`
+    * :mod:`tiki` must be imported before importing :mod:`_ext`
     * The C++ extension library and the metal library are co-located with the python
       bindings and copied together if the package is installed
 
@@ -729,16 +729,16 @@ To build the package, first install the build dependencies with ``pip install
 This results in the directory structure:
 
 | extensions
-| ├── mlx_sample_extensions
+| ├── tiki_sample_extensions
 | │   ├── __init__.py
-| │   ├── libmlx_ext.dylib # C++ extension library
-| │   ├── mlx_ext.metallib # Metal library
+| │   ├── libtiki_ext.dylib # C++ extension library
+| │   ├── tiki_ext.metallib # Metal library
 | │   └── _ext.cpython-3x-darwin.so # Python Binding
 | ...
 
 When you try to install using the command ``python -m pip install .`` (in
 ``extensions/``), the package will be installed with the same structure as
-``extensions/mlx_sample_extensions`` and the C++ and Metal library will be
+``extensions/tiki_sample_extensions`` and the C++ and Metal library will be
 copied along with the Python binding since they are specified as
 ``package_data``.
 
@@ -746,22 +746,22 @@ Usage
 -----
 
 After installing the extension as described above, you should be able to simply
-import the Python package and play with it as you would any other MLX operation.
+import the Python package and play with it as you would any other Tiki operation.
 
 Let's look at a simple script and its results:
 
 .. code-block:: python
 
-    import mlx.core as mx
-    from mlx_sample_extensions import axpby
+    import tiki as tk
+    from tiki_sample_extensions import axpby
 
-    a = mx.ones((3, 4))
-    b = mx.ones((3, 4))
-    c = axpby(a, b, 4.0, 2.0, stream=mx.cpu)
+    a = tk.ones((3, 4))
+    b = tk.ones((3, 4))
+    c = axpby(a, b, 4.0, 2.0, stream=tk.cpu)
 
     print(f"c shape: {c.shape}")
     print(f"c dtype: {c.dtype}")
-    print(f"c is correct: {mx.all(c == 6.0).item()}")
+    print(f"c is correct: {tk.all(c == 6.0).item()}")
 
 Output:
 
@@ -779,34 +779,34 @@ with the naive :meth:`simple_axpby` we first defined.
 
 .. code-block:: python
 
-    import mlx.core as mx
-    from mlx_sample_extensions import axpby
+    import tiki as tk
+    from tiki_sample_extensions import axpby
     import time
 
-    def simple_axpby(x: mx.array, y: mx.array, alpha: float, beta: float) -> mx.array:
+    def simple_axpby(x: tk.array, y: tk.array, alpha: float, beta: float) -> tk.array:
         return alpha * x + beta * y
 
     M = 4096
     N = 4096
 
-    x = mx.random.normal((M, N))
-    y = mx.random.normal((M, N))
+    x = tk.random.normal((M, N))
+    y = tk.random.normal((M, N))
     alpha = 4.0
     beta = 2.0
 
-    mx.eval(x, y)
+    tk.eval(x, y)
 
     def bench(f):
         # Warm up
         for i in range(5):
             z = f(x, y, alpha, beta)
-            mx.eval(z)
+            tk.eval(z)
 
         # Timed run
         s = time.perf_counter()
         for i in range(100):
             z = f(x, y, alpha, beta)
-            mx.eval(z)
+            tk.eval(z)
         e = time.perf_counter()
         return 1000 * (e - s) / 100
 
@@ -819,7 +819,7 @@ The results are ``Simple axpby: 1.559 ms | Custom axpby: 0.774 ms``. We see
 modest improvements right away!
 
 This operation is now good to be used to build other operations, in
-:class:`mlx.nn.Module` calls, and also as a part of graph transformations like
+:class:`tiki.nn.Module` calls, and also as a part of graph transformations like
 :meth:`grad`.
 
 Scripts
@@ -827,7 +827,7 @@ Scripts
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/extensions/>`_.
+   The full example code is available in `tiki <https://github.com/ml-explore/mlx/tree/main/examples/extensions/>`_.
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc

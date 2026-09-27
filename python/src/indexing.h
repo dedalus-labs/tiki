@@ -4,38 +4,38 @@
 
 #include <nanobind/nanobind.h>
 
-#include "mlx/array.h"
 #include "python/src/utils.h"
+#include "tiki/array.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 
-mx::array mlx_get_item(const mx::array& src, const nb::object& obj);
-void mlx_set_item(
-    mx::array& src,
+tk::array tiki_get_item(const tk::array& src, const nb::object& obj);
+void tiki_set_item(
+    tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_add_item(
-    const mx::array& src,
+tk::array tiki_add_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_subtract_item(
-    const mx::array& src,
+tk::array tiki_subtract_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_multiply_item(
-    const mx::array& src,
+tk::array tiki_multiply_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_divide_item(
-    const mx::array& src,
+tk::array tiki_divide_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_maximum_item(
-    const mx::array& src,
+tk::array tiki_maximum_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);
-mx::array mlx_minimum_item(
-    const mx::array& src,
+tk::array tiki_minimum_item(
+    const tk::array& src,
     const nb::object& obj,
     const ScalarOrArray& v);

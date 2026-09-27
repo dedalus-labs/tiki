@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import assert_never
 
-from mlx import core
+from tiki import core
 
 from .capture import TensorOperation, from_events, trace
 from .elementwise import lower

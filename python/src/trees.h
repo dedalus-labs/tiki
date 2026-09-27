@@ -2,9 +2,9 @@
 #pragma once
 #include <nanobind/nanobind.h>
 
-#include "mlx/array.h"
+#include "tiki/array.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 
 void tree_visit(
@@ -27,7 +27,7 @@ void tree_visit_update(
 /**
  * Fill a pytree (recursive dict or list of dict or list) in place with the
  * given arrays. */
-void tree_fill(nb::object& tree, const std::vector<mx::array>& values);
+void tree_fill(nb::object& tree, const std::vector<tk::array>& values);
 
 /**
  * Replace all the arrays from the src values with the dst values in the
@@ -35,28 +35,28 @@ void tree_fill(nb::object& tree, const std::vector<mx::array>& values);
  */
 void tree_replace(
     nb::object& tree,
-    const std::vector<mx::array>& src,
-    const std::vector<mx::array>& dst);
+    const std::vector<tk::array>& src,
+    const std::vector<tk::array>& dst);
 
 /**
  * Flatten a tree into a vector of arrays. If strict is true, then the
  * function will throw if the tree contains a leaf which is not an array.
  */
-std::vector<mx::array> tree_flatten(nb::handle tree, bool strict = true);
+std::vector<tk::array> tree_flatten(nb::handle tree, bool strict = true);
 
 /**
  * Unflatten a tree from a vector of arrays.
  */
 nb::object tree_unflatten(
     nb::object tree,
-    const std::vector<mx::array>& values,
+    const std::vector<tk::array>& values,
     int index = 0);
 
-std::pair<std::vector<mx::array>, nb::object> tree_flatten_with_structure(
+std::pair<std::vector<tk::array>, nb::object> tree_flatten_with_structure(
     nb::object tree,
     bool strict = true);
 
 nb::object tree_unflatten_from_structure(
     nb::object structure,
-    const std::vector<mx::array>& values,
+    const std::vector<tk::array>& values,
     int index = 0);

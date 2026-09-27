@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 DECLARATIONS = """
-from mlx import core
+from tiki import core
 from tiki_compiler.graph import Node, Operation, Symbol, Value
 from tiki_compiler.native import Collective, CollectiveOperation, GroupIndex, Matmul
 from tiki_compiler.schedule import Schedule

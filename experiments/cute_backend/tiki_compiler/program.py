@@ -1,9 +1,9 @@
-"""Execute a fixed sequence of CuTe regions and native MLX graph operations."""
+"""Execute a fixed sequence of CuTe regions and native Tiki graph operations."""
 
 from dataclasses import dataclass
 from typing import Protocol, assert_never
 
-from mlx import core
+from tiki import core
 
 from .graph import Arrays, Scalar, Shape, Value
 from .lowered import Lowered

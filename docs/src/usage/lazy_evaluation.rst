@@ -3,16 +3,16 @@
 Lazy Evaluation
 ===============
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
 Why Lazy Evaluation
 -------------------
 
-When you perform operations in MLX, no computation actually happens. Instead a
+When you perform operations in Tiki, no computation actually happens. Instead a
 compute graph is recorded. The actual computation only happens if an
 :func:`eval` is performed.
 
-MLX uses lazy evaluation because it has some nice features, some of which we
+Tiki uses lazy evaluation because it has some nice features, some of which we
 describe below.
 
 Transforming Compute Graphs
@@ -22,14 +22,14 @@ Lazy evaluation lets us record a compute graph without actually doing any
 computations. This is useful for function transformations like :func:`grad` and
 :func:`vmap` and graph optimizations.
 
-Currently, MLX does not compile and rerun compute graphs. They are all
+Currently, Tiki does not compile and rerun compute graphs. They are all
 generated dynamically. However, lazy evaluation makes it much easier to
 integrate compilation for future performance enhancements.
 
 Only Compute What You Use
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In MLX you do not need to worry as much about computing outputs that are never
+In Tiki you do not need to worry as much about computing outputs that are never
 used. For example:
 
 .. code-block:: python
@@ -47,14 +47,14 @@ that has some cost associated to it.
 
 Similarly, lazy evaluation can be beneficial for saving memory while keeping
 code simple. Say you have a very large model ``Model`` derived from
-:obj:`mlx.nn.Module`. You can instantiate this model with ``model = Model()``.
+:obj:`tiki.nn.Module`. You can instantiate this model with ``model = Model()``.
 Typically, this will initialize all of the weights as ``float32``, but the
 initialization does not actually compute anything until you perform an
 :func:`eval`. If you update the model with ``float16`` weights, your maximum
 consumed memory will be half that required if eager computation was used
 instead.
 
-This pattern is simple to do in MLX thanks to lazy computation:
+This pattern is simple to do in Tiki thanks to lazy computation:
 
 .. code-block:: python
 
@@ -73,16 +73,16 @@ For example:
 
   for _ in range(100):
        a = a + b
-       mx.eval(a)
+       tk.eval(a)
        b = b * 2
-       mx.eval(b)
+       tk.eval(b)
 
 This is a bad idea because there is some fixed overhead with each graph
 evaluation. On the other hand, there is some slight overhead which grows with
 the compute graph size, so extremely large graphs (while computationally
 correct) can be costly.
 
-Luckily, a wide range of compute graph sizes work pretty well with MLX:
+Luckily, a wide range of compute graph sizes work pretty well with Tiki:
 anything from a few tens of operations to many thousands of operations per
 evaluation should be okay.
 
@@ -104,20 +104,20 @@ Here is a concrete example:
 
        # Evaluate the loss and the new parameters which will
        # run the full gradient computation and optimizer update
-       mx.eval(loss, model.parameters())
+       tk.eval(loss, model.parameters())
 
 
 An important behavior to be aware of is when the graph will be implicitly
 evaluated. Anytime you ``print`` an array, convert it to an
 :obj:`numpy.ndarray`, or otherwise access its memory via :obj:`memoryview`,
-the graph will be evaluated. Saving arrays via :func:`save` (or any other MLX
+the graph will be evaluated. Saving arrays via :func:`save` (or any other Tiki
 saving functions) will also evaluate the array.
 
 
 Calling :func:`array.item` on a scalar array will also evaluate it. In the
 example above, printing the loss (``print(loss)``) or adding the loss scalar to
 a list (``losses.append(loss.item())``) would cause a graph evaluation. If
-these lines are before ``mx.eval(loss, model.parameters())`` then this
+these lines are before ``tk.eval(loss, model.parameters())`` then this
 will be a partial evaluation, computing only the forward pass.
 
 Also, calling :func:`eval` on an array or set of arrays multiple times is

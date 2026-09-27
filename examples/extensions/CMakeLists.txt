@@ -29,43 +29,43 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(nanobind)
 
 execute_process(
-  COMMAND "${Python_EXECUTABLE}" -m mlx --cmake-dir
+  COMMAND "${Python_EXECUTABLE}" -m tiki --cmake-dir
   OUTPUT_STRIP_TRAILING_WHITESPACE
-  OUTPUT_VARIABLE MLX_ROOT)
-find_package(MLX CONFIG REQUIRED)
+  OUTPUT_VARIABLE TIKI_ROOT)
+find_package(Tiki CONFIG REQUIRED)
 
 # ----------------------------- Extensions -----------------------------
 
 # Add library
-add_library(mlx_ext)
+add_library(tiki_ext)
 
 # Add sources
-target_sources(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.cpp)
+target_sources(tiki_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.cpp)
 
 # Add include headers
-target_include_directories(mlx_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+target_include_directories(tiki_ext PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
-# Link to mlx
-target_link_libraries(mlx_ext PUBLIC mlx)
+# Link to tiki
+target_link_libraries(tiki_ext PUBLIC tiki)
 
 # ----------------------------- Metal -----------------------------
 
 # Build metallib
-if(MLX_BUILD_METAL)
-  mlx_build_metallib(
+if(TIKI_BUILD_METAL)
+  tiki_build_metallib(
     TARGET
-    mlx_ext_metallib
+    tiki_ext_metallib
     TITLE
-    mlx_ext
+    tiki_ext
     SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/axpby/axpby.metal
     INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}
-    ${MLX_INCLUDE_DIRS}
+    ${TIKI_INCLUDE_DIRS}
     OUTPUT_DIRECTORY
     ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 
-  add_dependencies(mlx_ext mlx_ext_metallib)
+  add_dependencies(tiki_ext tiki_ext_metallib)
 
 endif()
 
@@ -77,9 +77,9 @@ nanobind_add_module(
   LTO
   NOMINSIZE
   NB_DOMAIN
-  mlx
+  tiki
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp)
-target_link_libraries(_ext PRIVATE mlx_ext)
+target_link_libraries(_ext PRIVATE tiki_ext)
 
 if(BUILD_SHARED_LIBS)
   target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)

@@ -1,7 +1,7 @@
 """Test scan lowering and execution on the target selected by TIKI_TEST_ARCH.
 
 The execution oracle is the generic Blelloch tree in ``experiments/associative_scan``
-differentiated by MLX, the way JAX checks its native cumsum gradient against
+differentiated by Tiki, the way JAX checks its native cumsum gradient against
 ``associative_scan``. Lengths straddle every level of the hierarchy: one thread's
 chunk, one warp, one block, one tile, and several levels of tile recursion.
 Affine derivatives use independent sequential float64 oracles.
@@ -13,8 +13,8 @@ import unittest
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 
 from associative_scan import (
     ArrayTree,
@@ -37,26 +37,26 @@ MEDIUM = ScanSchedule(arch=ARCH, threads=64, elements_per_thread=2)
 LARGE = ScanSchedule(arch=ARCH, threads=128, elements_per_thread=4)
 LENGTHS = (1, 2, 3, 5, 31, 32, 33, 63, 64, 65, 127, 128, 129, 511, 512, 513, 1025, 4097)
 
-ON_DEVICE = mx.cuda.is_available() and mx.device_info(mx.gpu)["architecture"] == ARCH
-device = unittest.skipUnless(ON_DEVICE, f"requires MLX CUDA on {ARCH}")
+ON_DEVICE = tk.cuda.is_available() and tk.device_info(tk.gpu)["architecture"] == ARCH
+device = unittest.skipUnless(ON_DEVICE, f"requires Tiki CUDA on {ARCH}")
 
 
-def affine(left: Sequence[mx.array], right: Sequence[mx.array]) -> tuple[mx.array, mx.array]:
+def affine(left: Sequence[tk.array], right: Sequence[tk.array]) -> tuple[tk.array, tk.array]:
     """The affine recurrence h_t = a_t h_{t-1} + b_t; non-commutative."""
     a_left, b_left = left
     a_right, b_right = right
     return (a_right * a_left, a_right * b_left + b_right)
 
 
-def random(shape: Shape, seed: int, scale: float = 1.0) -> mx.array:
-    return mx.array(np.random.default_rng(seed).standard_normal(shape).astype(np.float32) * scale)
+def random(shape: Shape, seed: int, scale: float = 1.0) -> tk.array:
+    return tk.array(np.random.default_rng(seed).standard_normal(shape).astype(np.float32) * scale)
 
 
-def close(a: mx.array, b: mx.array, tolerance: float = 1e-4) -> bool:
+def close(a: tk.array, b: tk.array, tolerance: float = 1e-4) -> bool:
     return bool(np.allclose(np.array(a), np.array(b), rtol=tolerance, atol=tolerance))
 
 
-def flat_arrays(tree: ArrayTree) -> list[mx.array]:
+def flat_arrays(tree: ArrayTree) -> list[tk.array]:
     return [leaf for _, leaf in flatten(tree)]
 
 
@@ -68,7 +68,7 @@ class LoweringTest(unittest.TestCase):
         self.assertTrue(all(value.shape == () for value in op.graph.inputs))
 
     def test_tile_kernel_addresses_through_axis_layouts(self) -> None:
-        op = operation(mx.add, ("",), 0, LARGE)
+        op = operation(tk.add, ("",), 0, LARGE)
         lowered = lower_tile_scan(op.graph, (Profile(shape=(513, 4), strides=(1, 513)),), 0, LARGE)
         self.assertIn('"((1,4),513):((0,513),1)"', lowered.mlir)
         self.assertIn('"((1,4),513):((0,1),4)"', lowered.mlir)
@@ -79,7 +79,7 @@ class LoweringTest(unittest.TestCase):
         self.assertEqual(lowered.shared_memory_bytes, 16)
 
     def test_single_warp_needs_no_shared_memory(self) -> None:
-        op = operation(mx.add, ("",), 0, SMALL)
+        op = operation(tk.add, ("",), 0, SMALL)
         lowered = lower_tile_scan(op.graph, (Profile(shape=(7,), strides=(1,)),), 0, SMALL)
         self.assertNotIn("smem", lowered.mlir)
         self.assertEqual(lowered.shared_memory_bytes, 0)
@@ -102,12 +102,12 @@ class LoweringTest(unittest.TestCase):
 
     def test_contract(self) -> None:
         with self.assertRaises(ScanContractError):
-            associative_scan(mx.add, [])
+            associative_scan(tk.add, [])
         with self.assertRaises(ScanContractError):
-            associative_scan(mx.add, mx.zeros((3, 4)), axis=2)
-        op = operation(mx.add, ("",), 0, SMALL)
+            associative_scan(tk.add, tk.zeros((3, 4)), axis=2)
+        op = operation(tk.add, ("",), 0, SMALL)
         with self.assertRaises(ScanContractError):
-            op.check((mx.zeros((3,), dtype=mx.float16),))
+            op.check((tk.zeros((3,), dtype=tk.float16),))
 
 
 @device
@@ -116,20 +116,20 @@ class ForwardTest(unittest.TestCase):
         for schedule in (SMALL, MEDIUM, LARGE):
             for length in LENGTHS:
                 x = random((3, length), length)
-                result = associative_scan(mx.add, x, axis=1, schedule=schedule)
-                self.assertTrue(close(result, mx.cumsum(x, axis=1), 1e-3), (schedule, length))
+                result = associative_scan(tk.add, x, axis=1, schedule=schedule)
+                self.assertTrue(close(result, tk.cumsum(x, axis=1), 1e-3), (schedule, length))
 
     def test_reverse_matches_reverse_cumsum(self) -> None:
         for length in (1, 2, 33, 513, 4097):
             x = random((2, length), length)
-            result = associative_scan(mx.add, x, axis=1, reverse=True, schedule=MEDIUM)
-            self.assertTrue(close(result, mx.cumsum(x, axis=1, reverse=True), 1e-3), length)
+            result = associative_scan(tk.add, x, axis=1, reverse=True, schedule=MEDIUM)
+            self.assertTrue(close(result, tk.cumsum(x, axis=1, reverse=True), 1e-3), length)
 
     def test_any_axis_of_a_rank_three_array(self) -> None:
         x = random((6, 70, 5), 7)
         for axis in (0, 1, 2, -1):
-            result = associative_scan(mx.add, x, axis=axis, schedule=SMALL)
-            self.assertTrue(close(result, mx.cumsum(x, axis=axis), 1e-3), axis)
+            result = associative_scan(tk.add, x, axis=axis, schedule=SMALL)
+            self.assertTrue(close(result, tk.cumsum(x, axis=axis), 1e-3), axis)
 
     def test_affine_matches_the_tree(self) -> None:
         for length in (1, 2, 3, 64, 65, 1000, 4097):
@@ -142,10 +142,10 @@ class ForwardTest(unittest.TestCase):
     def test_pytree_leaves(self) -> None:
         x = random((5, 100), 3)
 
-        def combine(left: dict[str, mx.array], right: dict[str, mx.array]) -> dict[str, mx.array]:
+        def combine(left: dict[str, tk.array], right: dict[str, tk.array]) -> dict[str, tk.array]:
             return {
                 "sum": left["sum"] + right["sum"],
-                "max": mx.maximum(left["max"], right["max"]),
+                "max": tk.maximum(left["max"], right["max"]),
             }
 
         with self.assertRaisesRegex(UnsupportedGraphError, "Maximum"):
@@ -156,23 +156,23 @@ class ForwardTest(unittest.TestCase):
         transposed = base.T
         sliced = base[3:, 2:6]
         for x, axis in ((transposed, 1), (sliced, 0), (base[::-1], 0)):
-            result = associative_scan(mx.add, x, axis=axis, schedule=MEDIUM)
-            self.assertTrue(close(result, mx.cumsum(x, axis=axis), 1e-3))
+            result = associative_scan(tk.add, x, axis=axis, schedule=MEDIUM)
+            self.assertTrue(close(result, tk.cumsum(x, axis=axis), 1e-3))
 
     def test_empty(self) -> None:
-        x = mx.zeros((0, 4))
-        result = associative_scan(mx.add, x, axis=1)
+        x = tk.zeros((0, 4))
+        result = associative_scan(tk.add, x, axis=1)
         self.assertEqual(result.shape, (0, 4))
 
 
 @device
 class DerivativeTest(unittest.TestCase):
-    def check_affine_derivatives(self, elems: tuple[mx.array, ...], schedule: ScanSchedule) -> None:
-        def compiled(*leaves: mx.array) -> list[mx.array]:
+    def check_affine_derivatives(self, elems: tuple[tk.array, ...], schedule: ScanSchedule) -> None:
+        def compiled(*leaves: tk.array) -> list[tk.array]:
             result = flat_arrays(associative_scan(affine, leaves, axis=1, schedule=schedule))
             return result
 
-        for transform, reference, seed in ((mx.vjp, affine_vjp, 100), (mx.jvp, affine_jvp, 200)):
+        for transform, reference, seed in ((tk.vjp, affine_vjp, 100), (tk.jvp, affine_jvp, 200)):
             directions = [random(leaf.shape, seed + i) for i, leaf in enumerate(elems)]
             derivatives = transform(compiled, list(elems), directions)[1]
             for actual, expected in zip(derivatives, reference(elems, directions), strict=True):
@@ -181,9 +181,9 @@ class DerivativeTest(unittest.TestCase):
     def test_cumsum_gradient_is_reverse_cumsum(self) -> None:
         for length in (1, 2, 33, 513, 4097):
             x = random((3, length), length)
-            grad = mx.grad(lambda v: associative_scan(mx.add, v, axis=1, schedule=MEDIUM).sum())(x)
+            grad = tk.grad(lambda v: associative_scan(tk.add, v, axis=1, schedule=MEDIUM).sum())(x)
             self.assertTrue(
-                close(grad, mx.cumsum(mx.ones_like(x), axis=1, reverse=True), 1e-3),
+                close(grad, tk.cumsum(tk.ones_like(x), axis=1, reverse=True), 1e-3),
                 length,
             )
 
@@ -197,8 +197,8 @@ class DerivativeTest(unittest.TestCase):
         leaves: associative, non-commutative, and every Jacobian block is dense."""
 
         def complex_affine(
-            left: Sequence[mx.array], right: Sequence[mx.array]
-        ) -> tuple[mx.array, ...]:
+            left: Sequence[tk.array], right: Sequence[tk.array]
+        ) -> tuple[tk.array, ...]:
             wr_l, wi_l, vr_l, vi_l = left
             wr_r, wi_r, vr_r, vi_r = right
             return (
@@ -215,11 +215,11 @@ class DerivativeTest(unittest.TestCase):
         ):
             self.assertTrue(close(got, want, 1e-3))
 
-        def compiled(*leaves: mx.array) -> list[mx.array]:
+        def compiled(*leaves: tk.array) -> list[tk.array]:
             result = flat_arrays(associative_scan(complex_affine, leaves, axis=1, schedule=SMALL))
             return result
 
-        for transform, reference, seed in ((mx.vjp, complex_vjp, 100), (mx.jvp, complex_jvp, 200)):
+        for transform, reference, seed in ((tk.vjp, complex_vjp, 100), (tk.jvp, complex_jvp, 200)):
             directions = [random((2, 200), seed + leaf) for leaf in range(4)]
             derivatives = transform(compiled, list(x), directions)[1]
             for actual, expected in zip(derivatives, reference(x, directions), strict=True):
@@ -228,17 +228,17 @@ class DerivativeTest(unittest.TestCase):
     def test_reverse_derivatives(self) -> None:
         a, b = random((2, 300), 1, 0.9), random((2, 300), 2)
 
-        def compiled(a: mx.array, b: mx.array) -> list[mx.array]:
+        def compiled(a: tk.array, b: tk.array) -> list[tk.array]:
             return flat_arrays(
                 associative_scan(affine, (a, b), axis=1, reverse=True, schedule=MEDIUM)
             )
 
-        def tree(a: mx.array, b: mx.array) -> list[mx.array]:
+        def tree(a: tk.array, b: tk.array) -> list[tk.array]:
             return flat_arrays(tree_scan(affine, (a, b), axis=1, reverse=True))
 
         cotangents = [random((2, 300), 3), random((2, 300), 4)]
-        got = mx.vjp(compiled, [a, b], cotangents)[1]
-        want = mx.vjp(tree, [a, b], cotangents)[1]
+        got = tk.vjp(compiled, [a, b], cotangents)[1]
+        want = tk.vjp(tree, [a, b], cotangents)[1]
         for actual, expected in zip(got, want, strict=True):
             self.assertTrue(close(actual, expected, 1e-3))
 
@@ -246,15 +246,15 @@ class DerivativeTest(unittest.TestCase):
         base = random((300, 3), 9, 0.9)
         other = random((300, 3), 10)
 
-        def compiled(base: mx.array, other: mx.array) -> list[mx.array]:
+        def compiled(base: tk.array, other: tk.array) -> list[tk.array]:
             return flat_arrays(associative_scan(affine, (base.T, other.T), axis=1, schedule=MEDIUM))
 
-        def tree(base: mx.array, other: mx.array) -> list[mx.array]:
+        def tree(base: tk.array, other: tk.array) -> list[tk.array]:
             return flat_arrays(tree_scan(affine, (base.T, other.T), axis=1))
 
         cotangents = [random((3, 300), 11), random((3, 300), 12)]
-        got = mx.vjp(compiled, [base, other], cotangents)[1]
-        want = mx.vjp(tree, [base, other], cotangents)[1]
+        got = tk.vjp(compiled, [base, other], cotangents)[1]
+        want = tk.vjp(tree, [base, other], cotangents)[1]
         for actual, expected in zip(got, want, strict=True):
             self.assertTrue(close(actual, expected, 1e-3))
 
@@ -266,38 +266,38 @@ class DerivativeTest(unittest.TestCase):
         teacher = {"decay": random((width,), 21, 0.5), "gain": random((width,), 22)}
 
         def model(
-            params: dict[str, mx.array], inputs: mx.array, scan: Callable[..., ArrayTree]
-        ) -> mx.array:
-            decay = mx.sigmoid(params["decay"]) * mx.ones_like(inputs)
+            params: dict[str, tk.array], inputs: tk.array, scan: Callable[..., ArrayTree]
+        ) -> tk.array:
+            decay = tk.sigmoid(params["decay"]) * tk.ones_like(inputs)
             drive = inputs * params["gain"]
             _, hidden = flat_arrays(scan(affine, (decay, drive), axis=1))
             return hidden
 
         target = model(teacher, inputs, tree_scan)
-        params = {"decay": mx.zeros((width,)), "gain": mx.ones((width,))}
+        params = {"decay": tk.zeros((width,)), "gain": tk.ones((width,))}
 
-        def loss(params: dict[str, mx.array], scan: Callable[..., ArrayTree]) -> mx.array:
-            return mx.mean((model(params, inputs, scan) - target) ** 2)
+        def loss(params: dict[str, tk.array], scan: Callable[..., ArrayTree]) -> tk.array:
+            return tk.mean((model(params, inputs, scan) - target) ** 2)
 
-        def compiled(params: dict[str, mx.array]) -> mx.array:
+        def compiled(params: dict[str, tk.array]) -> tk.array:
             return loss(
                 params,
                 lambda fn, elems, axis: associative_scan(fn, elems, axis=axis, schedule=LARGE),
             )
 
-        def reference(params: dict[str, mx.array]) -> mx.array:
+        def reference(params: dict[str, tk.array]) -> tk.array:
             return loss(params, tree_scan)
 
-        first, grads = mx.value_and_grad(compiled)(params)
-        _, expected = mx.value_and_grad(reference)(params)
+        first, grads = tk.value_and_grad(compiled)(params)
+        _, expected = tk.value_and_grad(reference)(params)
         for key in params:
             self.assertTrue(close(grads[key], expected[key], 1e-3), key)
-        step = mx.value_and_grad(compiled)
+        step = tk.value_and_grad(compiled)
         value = first
         for _ in range(30):
             value, grads = step(params)
             params = {key: params[key] - 0.5 * grads[key] for key in params}
-            mx.eval(params)
+            tk.eval(params)
         self.assertLess(float(value), 0.5 * float(first))
 
 

@@ -1,6 +1,6 @@
 import { command, type GitHubWorkflow } from "@dedalus-labs/hollywood";
 
-// These inherited jobs require MLX upstream runners and remain upstream-only.
+// These inherited jobs require Tiki upstream runners and remain upstream-only.
 export const upstreamJobs = {
   build_and_test: {
     name: "${{ matrix.os }} (${{ matrix.toolkit }}, ${{ matrix.arch }})",
@@ -59,7 +59,7 @@ export const upstreamJobs = {
       {
         name: "Check generated Python stubs with ty",
         if: "matrix.os == 'Linux' && matrix.arch == 'x86_64' && matrix.toolkit == 'cpu'",
-        run: command({ file: "uvx", args: ["ty", "check", "python/mlx/core"] }),
+        run: command({ file: "uvx", args: ["ty", "check", "python/tiki/core"] }),
       },
       {
         uses: "./.github/actions/test-linux",
@@ -115,8 +115,8 @@ export const upstreamJobs = {
         uses: "actions/upload-artifact@v7",
         if: "matrix.toolkit != 'cpu'",
         with: {
-          name: "mlx-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}",
-          path: "dist/mlx-*.whl\nbuild/mlx/backend/metal/kernels/mlx.metallib\nbuild/tests/tests\n",
+          name: "tiki-${{ matrix.toolkit }}-macos${{ matrix.macos-target }}",
+          path: "dist/tiki-*.whl\nbuild/tiki/backend/metal/kernels/tiki.metallib\nbuild/tests/tests\n",
           "if-no-files-found": "error",
         },
       },
@@ -148,7 +148,7 @@ export const upstreamJobs = {
         uses: "actions/download-artifact@v8",
         with: {
           path: "artifact",
-          pattern: "mlx-${{ matrix.toolkit }}-*",
+          pattern: "tiki-${{ matrix.toolkit }}-*",
         },
       },
       {

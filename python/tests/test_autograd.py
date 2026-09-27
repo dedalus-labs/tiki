@@ -5,9 +5,9 @@ import itertools
 import math
 import unittest
 
-import mlx.core as mx
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki_tests
 
 try:
     import torch
@@ -17,24 +17,24 @@ except ImportError:
     has_torch = False
 
 
-class TestAutograd(mlx_tests.MLXTestCase):
+class TestAutograd(tiki_tests.TIKITestCase):
     def test_jvp(self):
         fun = lambda x: 2 * x
-        out, dout = mx.jvp(fun, [mx.array(1.0)], [mx.array(2.0)])
+        out, dout = tk.jvp(fun, [tk.array(1.0)], [tk.array(2.0)])
         self.assertEqual(out[0].item(), 2.0)
         self.assertEqual(dout[0].item(), 4.0)
 
         fun = lambda x, y: x * y
-        _, out = mx.jvp(
-            fun, [mx.array(4.0), mx.array(2.0)], [mx.array(3.0), mx.array(2.0)]
+        _, out = tk.jvp(
+            fun, [tk.array(4.0), tk.array(2.0)], [tk.array(3.0), tk.array(2.0)]
         )
         self.assertEqual(out[0].item(), 4.0 * 2.0 + 2.0 * 3.0)
 
         fun = lambda x, y, z: (x * y, y * z)
-        _, out = mx.jvp(
+        _, out = tk.jvp(
             fun,
-            [mx.array(2.0), mx.array(4.0), mx.array(6.0)],
-            [mx.array(1.0), mx.array(3.0), mx.array(1.0)],
+            [tk.array(2.0), tk.array(4.0), tk.array(6.0)],
+            [tk.array(1.0), tk.array(3.0), tk.array(1.0)],
         )
         self.assertEqual(len(out), 2)
         self.assertEqual(out[0].item(), 4.0 * 1.0 + 2.0 * 3.0)
@@ -44,19 +44,19 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # Comparison op JVP tangents should preserve the input tangent's
         # dtype (e.g. float32), not return bool. Using bool tangents causes
         # downstream ops like negative to crash. (issue #3081)
-        x = mx.array([1.0, -2.0, 3.0])
-        t = mx.ones_like(x)
+        x = tk.array([1.0, -2.0, 3.0])
+        t = tk.ones_like(x)
 
         for op in [
-            mx.greater,
-            mx.less,
-            mx.equal,
-            mx.greater_equal,
-            mx.less_equal,
-            mx.not_equal,
+            tk.greater,
+            tk.less,
+            tk.equal,
+            tk.greater_equal,
+            tk.less_equal,
+            tk.not_equal,
         ]:
-            _, tangents = mx.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
-            self.assertEqual(tangents[0].dtype, mx.float32)
+            _, tangents = tk.jvp(lambda x, _op=op: _op(x, 0.0), [x], [t])
+            self.assertEqual(tangents[0].dtype, tk.float32)
 
     def test_jvp_with_constant_inputs(self):
         # JVPs of primitives with only a subset of inputs traced used to
@@ -65,53 +65,53 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
         # d/dt (t + 1)^2 = 2 at t = 0
         cases = [
-            lambda t: mx.where((t + 1) ** 2 > -1, (t + 1) ** 2, 999.0),
-            lambda t: mx.where((t + 1) ** 2 < -1, 999.0, (t + 1) ** 2),
-            lambda t: mx.where(mx.array(True), (t + 1) ** 2, 999.0),
-            lambda t: mx.where(mx.array(False), 999.0, (t + 1) ** 2),
+            lambda t: tk.where((t + 1) ** 2 > -1, (t + 1) ** 2, 999.0),
+            lambda t: tk.where((t + 1) ** 2 < -1, 999.0, (t + 1) ** 2),
+            lambda t: tk.where(tk.array(True), (t + 1) ** 2, 999.0),
+            lambda t: tk.where(tk.array(False), 999.0, (t + 1) ** 2),
         ]
         for fun in cases:
-            _, (dout,) = mx.jvp(fun, [mx.array(0.0)], [mx.array(1.0)])
+            _, (dout,) = tk.jvp(fun, [tk.array(0.0)], [tk.array(1.0)])
             self.assertEqual(dout.item(), 2.0)
 
         # Constant condition with both branches traced
-        _, (dout,) = mx.jvp(
-            lambda a, b: mx.where(mx.array([True, False]), a, b),
-            [mx.zeros(2), mx.zeros(2)],
-            [mx.array([1.0, 2.0]), mx.array([3.0, 4.0])],
+        _, (dout,) = tk.jvp(
+            lambda a, b: tk.where(tk.array([True, False]), a, b),
+            [tk.zeros(2), tk.zeros(2)],
+            [tk.array([1.0, 2.0]), tk.array([3.0, 4.0])],
         )
-        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 4.0])))
+        self.assertTrue(tk.array_equal(dout, tk.array([1.0, 4.0])))
 
         # The tangent of a where with only the condition traced is zero
         # with the output's dtype
-        _, (dout,) = mx.jvp(
-            lambda c: mx.where(c > 0, 2.0, 3.0), [mx.array(1.0)], [mx.array(1.0)]
+        _, (dout,) = tk.jvp(
+            lambda c: tk.where(c > 0, 2.0, 3.0), [tk.array(1.0)], [tk.array(1.0)]
         )
         self.assertEqual(dout.item(), 0.0)
-        self.assertEqual(dout.dtype, mx.float32)
+        self.assertEqual(dout.dtype, tk.float32)
 
         # d/dy atan2(y, x) = x / (x^2 + y^2)
-        _, (dout,) = mx.jvp(
-            lambda y: mx.arctan2(y, mx.array(2.0)), [mx.array(1.0)], [mx.array(1.0)]
+        _, (dout,) = tk.jvp(
+            lambda y: tk.arctan2(y, tk.array(2.0)), [tk.array(1.0)], [tk.array(1.0)]
         )
         self.assertAlmostEqual(dout.item(), 0.4, places=6)
 
         # d/dx atan2(y, x) = -y / (x^2 + y^2)
-        _, (dout,) = mx.jvp(
-            lambda x: mx.arctan2(mx.array(2.0), x), [mx.array(1.0)], [mx.array(1.0)]
+        _, (dout,) = tk.jvp(
+            lambda x: tk.arctan2(tk.array(2.0), x), [tk.array(1.0)], [tk.array(1.0)]
         )
         self.assertAlmostEqual(dout.item(), -0.4, places=6)
 
         # masked_scatter with a constant destination
-        mask = mx.array([True, False, True, False])
+        mask = tk.array([True, False, True, False])
 
         def masked_set(src):
-            dst = mx.zeros(4)
+            dst = tk.zeros(4)
             dst[mask] = src
             return dst
 
-        _, (dout,) = mx.jvp(masked_set, [mx.ones(2)], [mx.ones(2)])
-        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0, 0.0])))
+        _, (dout,) = tk.jvp(masked_set, [tk.ones(2)], [tk.ones(2)])
+        self.assertTrue(tk.array_equal(dout, tk.array([1.0, 0.0, 1.0, 0.0])))
 
     def test_jvp_through_bitwise_ops(self):
         # JVPs of bitwise ops returned one tangent per traced input instead
@@ -121,35 +121,35 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # catches it deterministically in debug builds.
         def fun(x):
             b = (x == 0) & (x > -1)
-            return x + b.astype(mx.float32)
+            return x + b.astype(tk.float32)
 
-        x = mx.array([0.0, 1.0, 2.0])
-        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
-        self.assertTrue(mx.array_equal(dout, mx.ones_like(x)))
+        x = tk.array([0.0, 1.0, 2.0])
+        _, (dout,) = tk.jvp(fun, [x], [tk.ones_like(x)])
+        self.assertTrue(tk.array_equal(dout, tk.ones_like(x)))
 
         def fun(x):
             b = (x == 0) | (x > 1)
-            return x * b.astype(mx.float32)
+            return x * b.astype(tk.float32)
 
-        _, (dout,) = mx.jvp(fun, [x], [mx.ones_like(x)])
-        self.assertTrue(mx.array_equal(dout, mx.array([1.0, 0.0, 1.0])))
+        _, (dout,) = tk.jvp(fun, [x], [tk.ones_like(x)])
+        self.assertTrue(tk.array_equal(dout, tk.array([1.0, 0.0, 1.0])))
 
     def test_vjp(self):
         fun = lambda x: 2 * x
-        out, dout = mx.vjp(fun, [mx.array(1.0)], [mx.array(2.0)])
+        out, dout = tk.vjp(fun, [tk.array(1.0)], [tk.array(2.0)])
         self.assertEqual(out[0].item(), 2.0)
         self.assertEqual(dout[0].item(), 4.0)
 
         fun = lambda x, y: x * y
-        _, dout = mx.vjp(fun, [mx.array(4.0), mx.array(2.0)], [mx.array(3.0)])
+        _, dout = tk.vjp(fun, [tk.array(4.0), tk.array(2.0)], [tk.array(3.0)])
         self.assertEqual(dout[0].item(), 6.0)
         self.assertEqual(dout[1].item(), 12.0)
 
         fun = lambda x, y, z: (x * y, y * z)
-        _, out = mx.vjp(
+        _, out = tk.vjp(
             fun,
-            [mx.array(2.0), mx.array(4.0), mx.array(6.0)],
-            [mx.array(1.0), mx.array(3.0)],
+            [tk.array(2.0), tk.array(4.0), tk.array(6.0)],
+            [tk.array(1.0), tk.array(3.0)],
         )
         self.assertEqual(len(out), 3)
         self.assertEqual(out[0].item(), 4.0 * 1.0)
@@ -159,137 +159,137 @@ class TestAutograd(mlx_tests.MLXTestCase):
     def test_jvp_with_partly_traced_inputs(self):
         # power: each traced input must use its own tangent (issue #3634)
         fun = lambda a, b: a**b
-        primals = [mx.array(2.0), mx.array(3.0)]
+        primals = [tk.array(2.0), tk.array(3.0)]
         dyda = 12.0  # d/da a^b = b * a^(b - 1)
         dydb = math.log(2.0) * 8.0  # d/db a^b = ln(a) * a^b
-        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(0.0)])
+        _, (j,) = tk.jvp(fun, primals, [tk.array(1.0), tk.array(0.0)])
         self.assertAlmostEqual(j.item(), dyda, places=4)
-        _, (j,) = mx.jvp(fun, primals, [mx.array(0.0), mx.array(1.0)])
+        _, (j,) = tk.jvp(fun, primals, [tk.array(0.0), tk.array(1.0)])
         self.assertAlmostEqual(j.item(), dydb, places=4)
-        _, (j,) = mx.jvp(fun, primals, [mx.array(1.0), mx.array(1.0)])
+        _, (j,) = tk.jvp(fun, primals, [tk.array(1.0), tk.array(1.0)])
         self.assertAlmostEqual(j.item(), dyda + dydb, places=4)
-        fun = lambda a: a ** mx.array(3.0)
-        _, (j,) = mx.jvp(fun, [mx.array(2.0)], [mx.array(1.0)])
+        fun = lambda a: a ** tk.array(3.0)
+        _, (j,) = tk.jvp(fun, [tk.array(2.0)], [tk.array(1.0)])
         self.assertAlmostEqual(j.item(), dyda, places=4)
-        fun = lambda b: mx.array(2.0) ** b
-        _, (j,) = mx.jvp(fun, [mx.array(3.0)], [mx.array(1.0)])
+        fun = lambda b: tk.array(2.0) ** b
+        _, (j,) = tk.jvp(fun, [tk.array(3.0)], [tk.array(1.0)])
         self.assertAlmostEqual(j.item(), dydb, places=4)
 
         # divmod: one tangent per output, and consuming the second output
         # used to crash (issue #3634)
         def fun(x):
-            q, r = mx.divmod(x, mx.array(3.0))
+            q, r = tk.divmod(x, tk.array(3.0))
             return q, -r
 
-        _, (dq, dr) = mx.jvp(fun, [mx.array(7.0)], [mx.array(1.0)])
+        _, (dq, dr) = tk.jvp(fun, [tk.array(7.0)], [tk.array(1.0)])
         self.assertEqual(dq.item(), 0.0)
         self.assertEqual(dr.item(), 0.0)
 
         # slice_update with dynamic start indices and a subset of traced
         # inputs (issue #3634)
-        src = mx.zeros(4)
-        upd = mx.ones(2)
-        start = mx.array([1])
-        fun = lambda u: mx.slice_update(src, u, start, axes=[0])
-        _, (j,) = mx.jvp(fun, [upd], [mx.ones(2)])
+        src = tk.zeros(4)
+        upd = tk.ones(2)
+        start = tk.array([1])
+        fun = lambda u: tk.slice_update(src, u, start, axes=[0])
+        _, (j,) = tk.jvp(fun, [upd], [tk.ones(2)])
         self.assertEqual(j.tolist(), [0.0, 1.0, 1.0, 0.0])
-        fun = lambda s: mx.slice_update(s, upd, start, axes=[0])
-        _, (j,) = mx.jvp(fun, [src], [mx.ones(4)])
+        fun = lambda s: tk.slice_update(s, upd, start, axes=[0])
+        _, (j,) = tk.jvp(fun, [src], [tk.ones(4)])
         self.assertEqual(j.tolist(), [1.0, 0.0, 0.0, 1.0])
-        fun = lambda s, u: mx.slice_update(s, u, start, axes=[0])
-        _, (j,) = mx.jvp(fun, [src, upd], [mx.ones(4), mx.full(2, 2.0)])
+        fun = lambda s, u: tk.slice_update(s, u, start, axes=[0])
+        _, (j,) = tk.jvp(fun, [src, upd], [tk.ones(4), tk.full(2, 2.0)])
         self.assertEqual(j.tolist(), [1.0, 2.0, 2.0, 1.0])
 
     def test_grad(self):
         fun = lambda x: x * x
 
-        value, dfdx = mx.value_and_grad(fun)(mx.array(0.5))
+        value, dfdx = tk.value_and_grad(fun)(tk.array(0.5))
         self.assertEqual(value.item(), 0.25)
         self.assertEqual(dfdx.item(), 1.0)
 
-        dfdx = mx.grad(fun)(mx.array(0.5))
+        dfdx = tk.grad(fun)(tk.array(0.5))
         self.assertEqual(dfdx.item(), 1.0)
 
-        df2dx2 = mx.grad(mx.grad(fun))(mx.array(0.5))
+        df2dx2 = tk.grad(tk.grad(fun))(tk.array(0.5))
         self.assertEqual(df2dx2.item(), 2.0)
-        df3dx3 = mx.grad(mx.grad(mx.grad(fun)))(mx.array(0.5))
+        df3dx3 = tk.grad(tk.grad(tk.grad(fun)))(tk.array(0.5))
         self.assertEqual(df3dx3.item(), 0.0)
 
         fun = lambda x, y: x * y
-        x = mx.array(2.0)
-        y = mx.array(3.0)
-        dfdx = mx.grad(fun, argnums=0)(x, y)
+        x = tk.array(2.0)
+        y = tk.array(3.0)
+        dfdx = tk.grad(fun, argnums=0)(x, y)
         self.assertEqual(dfdx.item(), 3.0)
-        dfdx = mx.grad(fun, argnums=1)(x, y)
+        dfdx = tk.grad(fun, argnums=1)(x, y)
         self.assertEqual(dfdx.item(), 2.0)
 
         # Pass non array args to functions works
         fun = lambda x, y: x
-        value, dfdx = mx.value_and_grad(fun)(mx.array(2.0), "hello")
+        value, dfdx = tk.value_and_grad(fun)(tk.array(2.0), "hello")
         self.assertEqual(value.item(), 2.0)
         self.assertEqual(dfdx.item(), 1.0)
 
-        dfdx = mx.grad(fun)(mx.array(2.0), "hello")
+        dfdx = tk.grad(fun)(tk.array(2.0), "hello")
         self.assertEqual(dfdx.item(), 1.0)
 
         # Raises when function does not return array
         fun = lambda x: "hello"
         with self.assertRaises(ValueError):
-            mx.grad(fun)(mx.array(2.0))
+            tk.grad(fun)(tk.array(2.0))
 
         # Raises for invalid argument number or argument type
         fun = lambda x: x
         with self.assertRaises(ValueError):
-            mx.grad(fun, argnums=2)(mx.array(2.0))
+            tk.grad(fun, argnums=2)(tk.array(2.0))
         with self.assertRaises(ValueError):
-            mx.grad(fun, argnums=-2)(mx.array(2.0))
+            tk.grad(fun, argnums=-2)(tk.array(2.0))
         with self.assertRaises(ValueError):
-            mx.grad(fun)("hello")
+            tk.grad(fun)("hello")
 
         # Raises when output is not a scalar array
-        fun = lambda x: mx.sum(x, keepdims=True)
+        fun = lambda x: tk.sum(x, keepdims=True)
         with self.assertRaises(ValueError):
-            mx.grad(fun)(mx.ones((2, 2)))
+            tk.grad(fun)(tk.ones((2, 2)))
 
     def test_grad_trees(self):
         fun = lambda x, y: x * y
-        value, dfdx = mx.value_and_grad(fun, (0, 1))(mx.array(0.5), mx.array(2.0))
+        value, dfdx = tk.value_and_grad(fun, (0, 1))(tk.array(0.5), tk.array(2.0))
         self.assertEqual(value.item(), 1.0)
         self.assertTrue(isinstance(dfdx, tuple))
         self.assertEqual(dfdx[0].item(), 2.0)
         self.assertEqual(dfdx[1].item(), 0.5)
 
         fun = lambda x, y: x * y
-        value, dfdx = mx.value_and_grad(fun, 1)(mx.array(0.5), mx.array(2.0))
+        value, dfdx = tk.value_and_grad(fun, 1)(tk.array(0.5), tk.array(2.0))
         self.assertEqual(value.item(), 1.0)
         self.assertEqual(dfdx.item(), 0.5)
 
         fun = lambda p: p["x"] * p["y"]
-        value, dfdx = mx.value_and_grad(fun)({"x": mx.array(0.5), "y": mx.array(2.0)})
+        value, dfdx = tk.value_and_grad(fun)({"x": tk.array(0.5), "y": tk.array(2.0)})
         self.assertEqual(value.item(), 1.0)
         self.assertEqual(dfdx["x"].item(), 2.0)
         self.assertEqual(dfdx["y"].item(), 0.5)
 
         fun = lambda p: p["x"] * p["y"]
         with self.assertRaises(ValueError):
-            mx.value_and_grad(fun)({"x": 0.5, "y": mx.array(2.0)})
+            tk.value_and_grad(fun)({"x": 0.5, "y": tk.array(2.0)})
         with self.assertRaises(ValueError):
-            mx.value_and_grad(fun, (0, 1))({"x": mx.array(0.5), "y": mx.array(2.0)})
+            tk.value_and_grad(fun, (0, 1))({"x": tk.array(0.5), "y": tk.array(2.0)})
 
-        fun = lambda p, b: mx.square(p[0]["foo"][2]) * b
-        value, dfdx = mx.value_and_grad(fun)(
-            [{"foo": [[], [], mx.array(2.0)]}], mx.array(0.5)
+        fun = lambda p, b: tk.square(p[0]["foo"][2]) * b
+        value, dfdx = tk.value_and_grad(fun)(
+            [{"foo": [[], [], tk.array(2.0)]}], tk.array(0.5)
         )
         self.assertEqual(value.item(), 2.0)
         self.assertEqual(dfdx[0]["foo"][2].item(), 2.0)
 
         fun = lambda x: x
         with self.assertRaises(TypeError):
-            mx.value_and_grad(fun, (None, None))
+            tk.value_and_grad(fun, (None, None))
         with self.assertRaises(ValueError):
-            mx.value_and_grad(fun, tuple())
+            tk.value_and_grad(fun, tuple())
         with self.assertRaises(ValueError):
-            mx.grad(fun, argnums=(0, 0))
+            tk.grad(fun, argnums=(0, 0))
 
     def test_auxiliary_values(self):
         def fun(x, y):
@@ -297,30 +297,30 @@ class TestAutograd(mlx_tests.MLXTestCase):
             extra = {"loss": l, "foo": y.square() + x.square(), "bar": [1, 2, 3, y, x]}
             return l, extra
 
-        fun_value_grad = mx.value_and_grad(fun)
-        fun_grad = mx.grad(fun)
+        fun_value_grad = tk.value_and_grad(fun)
+        fun_grad = tk.grad(fun)
 
-        (loss, a), b = fun_value_grad(mx.ones((2, 2)), mx.ones((2, 2)))
+        (loss, a), b = fun_value_grad(tk.ones((2, 2)), tk.ones((2, 2)))
         self.assertEqual(a["loss"].item(), 4)
-        self.assertTrue(mx.array_equal(b, mx.ones((2, 2))))
-        self.assertTrue(mx.array_equal(a["foo"], 2 * mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(b, tk.ones((2, 2))))
+        self.assertTrue(tk.array_equal(a["foo"], 2 * tk.ones((2, 2))))
         self.assertEqual(a["bar"][:3], [1, 2, 3])
-        self.assertTrue(mx.array_equal(a["bar"][3], mx.ones((2, 2))))
-        self.assertTrue(mx.array_equal(a["bar"][4], mx.ones((2, 2))))
+        self.assertTrue(tk.array_equal(a["bar"][3], tk.ones((2, 2))))
+        self.assertTrue(tk.array_equal(a["bar"][4], tk.ones((2, 2))))
 
         with self.assertRaises(ValueError):
-            _ = fun_grad(mx.ones((2, 2)), mx.ones((2, 2)))
+            _ = fun_grad(tk.ones((2, 2)), tk.ones((2, 2)))
 
     def test_grad_kwargs(self):
         fun = lambda x, y: x * y
-        a, b = mx.array(0.5), mx.array(2.0)
-        dfdx = mx.grad(fun)
+        a, b = tk.array(0.5), tk.array(2.0)
+        dfdx = tk.grad(fun)
         self.assertEqual(dfdx(a, b).item(), 2.0)
         self.assertEqual(dfdx(a, y=b).item(), 2.0)
         with self.assertRaises(ValueError):
             dfdx(x=a, y=b).item()
 
-        dfdy = mx.grad(fun, argnums=[], argnames=["y"])
+        dfdy = tk.grad(fun, argnums=[], argnames=["y"])
         with self.assertRaises(ValueError):
             dfdy(a, b)
         grads = dfdy(a, y=b)
@@ -332,7 +332,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(grads[1]["y"].item(), 0.5)
         self.assertEqual(len(grads[1]), 1)
 
-        dfdxy = mx.grad(fun, argnums=[0], argnames=["y"])
+        dfdxy = tk.grad(fun, argnums=[0], argnames=["y"])
         with self.assertRaises(ValueError):
             dfdxy(a, b)
         with self.assertRaises(ValueError):
@@ -344,8 +344,8 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(grads[1]["y"].item(), 0.5)
 
         fun = lambda x, y, z: x * y * z
-        dfdxyz = mx.grad(fun, argnums=[0, 1], argnames=["z"])
-        c = mx.array(4.0)
+        dfdxyz = tk.grad(fun, argnums=[0, 1], argnames=["z"])
+        c = tk.array(4.0)
         grads = dfdxyz(a, b, z=c)
         self.assertTrue(isinstance(grads, tuple))
         self.assertTrue(isinstance(grads[0], tuple))
@@ -355,7 +355,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(grads[1]["z"].item(), 1.0)
 
         fun = lambda x, y: x * y
-        dfdy = mx.grad(fun, argnames=["y"])
+        dfdy = tk.grad(fun, argnames=["y"])
         grads = dfdy(a, y=b)
         self.assertTrue(isinstance(grads, tuple))
         self.assertTrue(grads[0] is None)
@@ -363,56 +363,56 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertEqual(grads[1]["y"].item(), 0.5)
 
     def test_captured(self):
-        a = mx.array(5.0)
+        a = tk.array(5.0)
         f = lambda x: a + x
         g = lambda x: a + a
         h = lambda x: x + x
 
-        dfdx = mx.grad(f)
+        dfdx = tk.grad(f)
         self.assertEqual(dfdx(a).item(), 1.0)
 
-        dgdx = mx.grad(g)
+        dgdx = tk.grad(g)
         self.assertEqual(dgdx(a).item(), 0.0)
 
-        dhdx = mx.grad(h)
+        dhdx = tk.grad(h)
         self.assertEqual(dhdx(a).item(), 2.0)
 
-        d2fdx2 = mx.grad(dfdx)
+        d2fdx2 = tk.grad(dfdx)
         self.assertEqual(d2fdx2(a).item(), 0.0)
 
-        d2gdx2 = mx.grad(dgdx)
+        d2gdx2 = tk.grad(dgdx)
         self.assertEqual(d2gdx2(a).item(), 0.0)
 
-        d2hdx2 = mx.grad(dhdx)
+        d2hdx2 = tk.grad(dhdx)
         self.assertEqual(d2hdx2(a).item(), 0.0)
 
     def test_stop_gradient(self):
         shape_in = (4, 4)
-        w_in = mx.ones(shape_in)
-        x_in = mx.ones(shape_in)
-        cotan = mx.ones(shape_in)
+        w_in = tk.ones(shape_in)
+        x_in = tk.ones(shape_in)
+        cotan = tk.ones(shape_in)
 
         def h(w, x):
             x1 = 2 * x
-            y = mx.stop_gradient(x1)
+            y = tk.stop_gradient(x1)
             y1 = 3 * y
             return w @ y1
 
-        vals, vjps = mx.vjp(h, [w_in, x_in], [cotan])
-        mx.eval(vjps)
+        vals, vjps = tk.vjp(h, [w_in, x_in], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], 24.0 * mx.ones(shape_in)))
-        self.assertTrue(mx.allclose(vjps[1], mx.zeros(shape_in)))
+        self.assertTrue(tk.allclose(vjps[0], 24.0 * tk.ones(shape_in)))
+        self.assertTrue(tk.allclose(vjps[1], tk.zeros(shape_in)))
 
         g = lambda x: h(w_in, x)
-        vals, vjps = mx.vjp(g, [x_in], [cotan])
-        mx.eval(vjps)
+        vals, vjps = tk.vjp(g, [x_in], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.zeros(shape_in)))
+        self.assertTrue(tk.allclose(vjps[0], tk.zeros(shape_in)))
 
     def test_update_state(self):
-        y = mx.array([1.0])
-        state = mx.zeros((2,))
+        y = tk.array([1.0])
+        state = tk.zeros((2,))
 
         def fn(y, x):
             nonlocal state
@@ -420,240 +420,240 @@ class TestAutograd(mlx_tests.MLXTestCase):
             state = state + x
             return x.sum()
 
-        x = mx.ones((2,))
-        mx.grad(fn)(y, x)
-        mx.eval(state)
-        self.assertTrue(mx.allclose(state, mx.ones((2,))))
+        x = tk.ones((2,))
+        tk.grad(fn)(y, x)
+        tk.eval(state)
+        self.assertTrue(tk.allclose(state, tk.ones((2,))))
 
     def test_scatter_vjp(self):
         def fun(x, idx):
             x[idx] = 2.0
             return x.sum()
 
-        dfdx = mx.grad(fun)(mx.array([1.0, 2.0, 3.0, 4.0]), mx.array([1, 3]))
-        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 0.0, 1.0, 0.0])))
-        self.assertEqual(dfdx.dtype, mx.float32)
+        dfdx = tk.grad(fun)(tk.array([1.0, 2.0, 3.0, 4.0]), tk.array([1, 3]))
+        self.assertTrue(tk.array_equal(dfdx, tk.array([1.0, 0.0, 1.0, 0.0])))
+        self.assertEqual(dfdx.dtype, tk.float32)
 
-        y = mx.array([0.0, 1.0, 2.0, 3.0])
+        y = tk.array([0.0, 1.0, 2.0, 3.0])
 
         def fun(x, idx):
             y[idx] = x
             return y.sum()
 
-        dfdx = mx.grad(fun)(mx.array([2.0, 3.0]), mx.array([1, 3]))
-        self.assertTrue(mx.array_equal(dfdx, mx.array([1.0, 1.0])))
-        self.assertEqual(dfdx.dtype, mx.float32)
+        dfdx = tk.grad(fun)(tk.array([2.0, 3.0]), tk.array([1, 3]))
+        self.assertTrue(tk.array_equal(dfdx, tk.array([1.0, 1.0])))
+        self.assertEqual(dfdx.dtype, tk.float32)
 
     def test_index_vjp_requires_stop_gradient(self):
         msg = "stop_gradient"
-        x = mx.array([1.0, 2.0, 3.0, 4.0])
-        idx = mx.array([1, 3])
-        updates = mx.array([5.0, 6.0])
+        x = tk.array([1.0, 2.0, 3.0, 4.0])
+        idx = tk.array([1, 3])
+        updates = tk.array([5.0, 6.0])
         x_axis = x[:, None]
         idx_axis = idx[:, None]
         updates_axis = updates[:, None]
 
         def gather_fun(x, idx):
-            return mx.take(x, idx)
+            return tk.take(x, idx)
 
         with self.assertRaisesRegex(ValueError, msg):
-            mx.vjp(gather_fun, [x, idx], [mx.ones((2,))])
+            tk.vjp(gather_fun, [x, idx], [tk.ones((2,))])
 
         def gather_axis_fun(x, idx):
-            return mx.take_along_axis(x, idx, axis=0)
+            return tk.take_along_axis(x, idx, axis=0)
 
         with self.assertRaisesRegex(ValueError, msg):
-            mx.vjp(gather_axis_fun, [x_axis, idx_axis], [mx.ones((2, 1))])
+            tk.vjp(gather_axis_fun, [x_axis, idx_axis], [tk.ones((2, 1))])
 
         def scatter_fun(x, idx, updates):
             return x.at[idx].add(updates)
 
         with self.assertRaisesRegex(ValueError, msg):
-            mx.vjp(scatter_fun, [x, idx, updates], [mx.ones((4,))])
+            tk.vjp(scatter_fun, [x, idx, updates], [tk.ones((4,))])
 
         def scatter_axis_fun(x, idx, updates):
-            return mx.put_along_axis(x, idx, updates, axis=0)
+            return tk.put_along_axis(x, idx, updates, axis=0)
 
         with self.assertRaisesRegex(ValueError, msg):
-            mx.vjp(
+            tk.vjp(
                 scatter_axis_fun,
                 [x_axis, idx_axis, updates_axis],
-                [mx.ones((4, 1))],
+                [tk.ones((4, 1))],
             )
 
     def test_stop_gradient_computed_indices(self):
         def gather_fun(w):
-            idx = mx.stop_gradient(mx.argsort(w)[:2])
-            return mx.take(w, idx).sum()
+            idx = tk.stop_gradient(tk.argsort(w)[:2])
+            return tk.take(w, idx).sum()
 
-        grad = mx.grad(gather_fun)(mx.array([4.0, 3.0, 2.0, 1.0]))
-        self.assertTrue(mx.array_equal(grad, mx.array([0.0, 0.0, 1.0, 1.0])))
+        grad = tk.grad(gather_fun)(tk.array([4.0, 3.0, 2.0, 1.0]))
+        self.assertTrue(tk.array_equal(grad, tk.array([0.0, 0.0, 1.0, 1.0])))
 
         def gather_axis_fun(w):
-            idx = mx.stop_gradient(mx.argsort(w, axis=1)[:, :1])
-            return mx.take_along_axis(w, idx, axis=1).sum()
+            idx = tk.stop_gradient(tk.argsort(w, axis=1)[:, :1])
+            return tk.take_along_axis(w, idx, axis=1).sum()
 
-        grad = mx.grad(gather_axis_fun)(mx.array([[3.0, 2.0, 1.0], [1.0, 3.0, 2.0]]))
+        grad = tk.grad(gather_axis_fun)(tk.array([[3.0, 2.0, 1.0], [1.0, 3.0, 2.0]]))
         self.assertTrue(
-            mx.array_equal(
+            tk.array_equal(
                 grad,
-                mx.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]),
+                tk.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]),
             )
         )
 
         def scatter_fun(w):
-            idx = mx.stop_gradient(mx.argsort(w)[:2])
-            out = mx.zeros((4,))
+            idx = tk.stop_gradient(tk.argsort(w)[:2])
+            out = tk.zeros((4,))
             out[idx] = w[:2]
             return out.sum()
 
-        grad = mx.grad(scatter_fun)(mx.array([4.0, 3.0, 2.0, 1.0]))
-        self.assertTrue(mx.array_equal(grad, mx.array([1.0, 1.0, 0.0, 0.0])))
+        grad = tk.grad(scatter_fun)(tk.array([4.0, 3.0, 2.0, 1.0]))
+        self.assertTrue(tk.array_equal(grad, tk.array([1.0, 1.0, 0.0, 0.0])))
 
         def scatter_axis_fun(w):
-            idx = mx.stop_gradient(mx.argsort(w, axis=1)[:, :1])
+            idx = tk.stop_gradient(tk.argsort(w, axis=1)[:, :1])
             updates = w.sum(axis=1, keepdims=True)
-            out = mx.put_along_axis(mx.zeros((3, 3)), idx, updates, axis=1)
+            out = tk.put_along_axis(tk.zeros((3, 3)), idx, updates, axis=1)
             return out.sum()
 
-        grad = mx.grad(scatter_axis_fun)(mx.ones((3, 3)))
-        self.assertTrue(mx.array_equal(grad, mx.ones((3, 3))))
+        grad = tk.grad(scatter_axis_fun)(tk.ones((3, 3)))
+        self.assertTrue(tk.array_equal(grad, tk.ones((3, 3))))
 
     def test_take_along_axis_complex_vjp(self):
-        x = mx.zeros((4,), dtype=mx.complex64)
-        indices = mx.array([3, 3], dtype=mx.int32)
-        cotangent = mx.array([1 + 2j, 3 + 4j], dtype=mx.complex64)
-        _, (gradient,) = mx.vjp(
-            lambda z: mx.take_along_axis(z, indices, axis=0),
+        x = tk.zeros((4,), dtype=tk.complex64)
+        indices = tk.array([3, 3], dtype=tk.int32)
+        cotangent = tk.array([1 + 2j, 3 + 4j], dtype=tk.complex64)
+        _, (gradient,) = tk.vjp(
+            lambda z: tk.take_along_axis(z, indices, axis=0),
             [x],
             [cotangent],
         )
-        mx.eval(gradient)
+        tk.eval(gradient)
         self.assertEqualArray(
             gradient,
-            mx.array([0j, 0j, 0j, 4 + 6j], dtype=mx.complex64),
+            tk.array([0j, 0j, 0j, 4 + 6j], dtype=tk.complex64),
             atol=0,
             rtol=0,
         )
 
     def test_scatter_add_vjp(self):
         def fun(src, updates):
-            x = src.at[mx.array([1, 3])].add(updates)
+            x = src.at[tk.array([1, 3])].add(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([1.0, 2.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([1.0, 2.0])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([5.0, 7.0])))
 
     def test_scatter_max_vjp(self):
         def fun(src, updates):
-            x = src.at[mx.array([1, 3])].maximum(updates)
+            x = src.at[tk.array([1, 3])].maximum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([1.0, 2.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([1.0, 2.0])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([0.0, 0.0])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([0.0, 0.0])))
 
-        updates = mx.array([5.0, 6.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        updates = tk.array([5.0, 6.0])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0, 0.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 0.0, 6.0, 0.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([5.0, 7.0])))
 
     def test_scatter_min_vjp(self):
         def fun(src, updates):
-            x = src.at[mx.array([1, 3])].minimum(updates)
+            x = src.at[tk.array([1, 3])].minimum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([5.0, 6.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([5.0, 6.0])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([0.0, 0.0])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([0.0, 0.0])))
 
-        updates = mx.array([1.0, 1.0])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        updates = tk.array([1.0, 1.0])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 6.0, 0.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 0.0, 6.0, 0.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([5.0, 7.0])))
 
     def test_slice_update_max_vjp(self):
         def fun(src, updates):
             x = src.at[1:3].maximum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([[1.0, 2.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([[1.0, 2.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[0.0, 0.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[0.0, 0.0]])))
 
-        updates = mx.array([[5.0, 6.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        updates = tk.array([[5.0, 6.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 0.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 0.0, 0.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[5.0, 6.0]])))
 
     def test_slice_update_min_vjp(self):
         def fun(src, updates):
             x = src.at[1:3].minimum(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([[5.0, 6.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([[5.0, 6.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[0.0, 0.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[0.0, 0.0]])))
 
-        updates = mx.array([[1.0, 1.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        updates = tk.array([[1.0, 1.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 0.0, 0.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 0.0, 0.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[5.0, 6.0]])))
 
     def test_slice_update_add_vjp(self):
         def fun(src, updates):
             x = src.at[1:3].add(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([[1.0, 2.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([[1.0, 2.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[5.0, 6.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 5.0, 6.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[5.0, 6.0]])))
 
     def test_slice_update_multiply_vjp(self):
         def fun(src, updates):
             x = src.at[1:3].multiply(updates)
             return x
 
-        cotan = mx.array([4.0, 5.0, 6.0, 7.0])
-        updates = mx.array([[2.0, 3.0]])
-        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
-        mx.eval(vjps)
+        cotan = tk.array([4.0, 5.0, 6.0, 7.0])
+        updates = tk.array([[2.0, 3.0]])
+        _, vjps = tk.vjp(fun, [tk.array([1.0, 2.0, 3.0, 4.0]), updates], [cotan])
+        tk.eval(vjps)
 
-        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 10.0, 18.0, 7.0])))
-        self.assertTrue(mx.allclose(vjps[1], mx.array([[10.0, 18.0]])))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([4.0, 10.0, 18.0, 7.0])))
+        self.assertTrue(tk.allclose(vjps[1], tk.array([[10.0, 18.0]])))
 
     def test_split_against_slice(self):
         def f_split(x):
@@ -666,53 +666,53 @@ class TestAutograd(mlx_tests.MLXTestCase):
             b = x[..., -step:]
             return (a * b).sum()
 
-        x = mx.random.uniform(shape=(100, 300))
-        mx.eval(x)
+        x = tk.random.uniform(shape=(100, 300))
+        tk.eval(x)
 
-        df1 = mx.grad(f_split)
-        df2 = mx.grad(f_slice)
+        df1 = tk.grad(f_split)
+        df2 = tk.grad(f_slice)
 
-        self.assertTrue(mx.allclose(df1(x), df2(x)))
+        self.assertTrue(tk.allclose(df1(x), df2(x)))
 
     def test_vjp_types(self):
         def fun(x):
             return x
 
-        for t in [mx.float16, mx.bfloat16, mx.float32]:
-            out = mx.grad(fun)(mx.array(1.0, t))
+        for t in [tk.float16, tk.bfloat16, tk.float32]:
+            out = tk.grad(fun)(tk.array(1.0, t))
             self.assertEqual(out.dtype, t)
 
         def fun(x):
             return x.sum()
 
-        for t in [mx.float16, mx.bfloat16, mx.float32]:
-            out = mx.grad(fun)(mx.array(1.0, t))
+        for t in [tk.float16, tk.bfloat16, tk.float32]:
+            out = tk.grad(fun)(tk.array(1.0, t))
             self.assertEqual(out.dtype, t)
 
         def fun(x, y):
             return (x + y).sum()
 
-        for t in [mx.float16, mx.bfloat16, mx.float32]:
-            out = mx.grad(fun)(mx.array(1.0, t), mx.array(1.0, t))
+        for t in [tk.float16, tk.bfloat16, tk.float32]:
+            out = tk.grad(fun)(tk.array(1.0, t), tk.array(1.0, t))
             self.assertEqual(out.dtype, t)
 
     def test_power_grad(self):
-        x = mx.array(0.0)
-        g = mx.grad(lambda x: x**2)(x)
+        x = tk.array(0.0)
+        g = tk.grad(lambda x: x**2)(x)
         self.assertEqual(g.item(), 0.0)
 
-        x = mx.array(0.0)
-        g = mx.grad(lambda x: x**1.5)(x)
+        x = tk.array(0.0)
+        g = tk.grad(lambda x: x**1.5)(x)
         self.assertEqual(g.item(), 0.0)
 
-        x = mx.array(2.0)
-        g = mx.grad(lambda x: x**2)(x)
+        x = tk.array(2.0)
+        g = tk.grad(lambda x: x**2)(x)
         self.assertAlmostEqual(g.item(), 4.0)
 
     def test_eval_in_grad(self):
-        arr = mx.array([1.0])
-        cotan = mx.array([1.0, 1.0])
-        y = mx.array([2.0, 2.0])
+        arr = tk.array([1.0])
+        cotan = tk.array([1.0, 1.0])
+        y = tk.array([2.0, 2.0])
 
         def func(x):
             x = x + y
@@ -720,15 +720,15 @@ class TestAutograd(mlx_tests.MLXTestCase):
             cond.tolist()
             return x**2
 
-        _, vjps = mx.vjp(func, (arr,), (cotan,))
+        _, vjps = tk.vjp(func, (arr,), (cotan,))
         self.assertEqual(vjps[0].item(), 12.0)
 
         def func(x):
-            x = x + mx.array([1.0, 1.0])
-            mx.eval(x)
+            x = x + tk.array([1.0, 1.0])
+            tk.eval(x)
             return x**2
 
-        _, vjps = mx.vjp(func, (arr,), (cotan,))
+        _, vjps = tk.vjp(func, (arr,), (cotan,))
         self.assertEqual(vjps[0].item(), 8.0)
 
     def test_power_grad(self):
@@ -736,179 +736,179 @@ class TestAutograd(mlx_tests.MLXTestCase):
             res = x - y
             return res**x
 
-        grad = mx.grad(fun)(mx.array(1.0), mx.array(1.0))
+        grad = tk.grad(fun)(tk.array(1.0), tk.array(1.0))
         self.assertEqual(grad.item(), 1.0)
 
     def test_cumprod_grad(self):
         def fun(y):
-            return mx.cumprod(y).sum()
+            return tk.cumprod(y).sum()
 
-        y = mx.array([2.0, 1.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([20.0, 38.0, 18.0, 16.0, 8.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 1.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([20.0, 38.0, 18.0, 16.0, 8.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([1.0, 38.0, 0.0, 0.0, 0.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([1.0, 38.0, 0.0, 0.0, 0.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 0.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([1.0, 6.0, 0.0, 0.0, 0.0])
-        self.assertTrue(mx.allclose(out, expected))
-
-        def fun(y):
-            return mx.cumprod(y, inclusive=False).sum()
-
-        y = mx.array([2.0, 1.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([8.0, 14.0, 6.0, 4.0, 0.0])
-        self.assertTrue(mx.allclose(out, expected))
-
-        y = mx.array([2.0, 0.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([1.0, 14.0, 0.0, 0.0, 0.0])
-        self.assertTrue(mx.allclose(out, expected))
-
-        y = mx.array([2.0, 0.0, 2.0, 0.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([1.0, 6.0, 0.0, 0.0, 0.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 0.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([1.0, 6.0, 0.0, 0.0, 0.0])
+        self.assertTrue(tk.allclose(out, expected))
 
         def fun(y):
-            return mx.cumprod(y, inclusive=False, reverse=True).sum()
+            return tk.cumprod(y, inclusive=False).sum()
 
-        y = mx.array([2.0, 1.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([0.0, 12.0, 12.0, 15.0, 11.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 1.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([8.0, 14.0, 6.0, 4.0, 0.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([0.0, 12.0, 6.0, 9.0, 7.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([1.0, 14.0, 0.0, 0.0, 0.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 0.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([0.0, 0.0, 0.0, 9.0, 1.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 0.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([1.0, 6.0, 0.0, 0.0, 0.0])
+        self.assertTrue(tk.allclose(out, expected))
 
         def fun(y):
-            return mx.cumprod(y, reverse=True).sum()
+            return tk.cumprod(y, inclusive=False, reverse=True).sum()
 
-        y = mx.array([2.0, 1.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([12.0, 36.0, 24.0, 27.0, 19.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 1.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([0.0, 12.0, 12.0, 15.0, 11.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 2.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([0.0, 36.0, 6.0, 9.0, 7.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([0.0, 12.0, 6.0, 9.0, 7.0])
+        self.assertTrue(tk.allclose(out, expected))
 
-        y = mx.array([2.0, 0.0, 2.0, 0.0, 3.0])
-        out = mx.grad(fun)(y)
-        expected = mx.array([0.0, 0.0, 0.0, 9.0, 1.0])
-        self.assertTrue(mx.allclose(out, expected))
+        y = tk.array([2.0, 0.0, 2.0, 0.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([0.0, 0.0, 0.0, 9.0, 1.0])
+        self.assertTrue(tk.allclose(out, expected))
+
+        def fun(y):
+            return tk.cumprod(y, reverse=True).sum()
+
+        y = tk.array([2.0, 1.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([12.0, 36.0, 24.0, 27.0, 19.0])
+        self.assertTrue(tk.allclose(out, expected))
+
+        y = tk.array([2.0, 0.0, 2.0, 2.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([0.0, 36.0, 6.0, 9.0, 7.0])
+        self.assertTrue(tk.allclose(out, expected))
+
+        y = tk.array([2.0, 0.0, 2.0, 0.0, 3.0])
+        out = tk.grad(fun)(y)
+        expected = tk.array([0.0, 0.0, 0.0, 9.0, 1.0])
+        self.assertTrue(tk.allclose(out, expected))
 
     def test_cummax_grad(self):
         # Ties route to the latest occurrence, matching the cummax indices.
-        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+        a = tk.array([3.0, 3.0, 1.0, 5.0, 5.0])
 
         def fun(y):
-            return mx.cummax(y).sum()
+            return tk.cummax(y).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 1.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([1.0, 2.0, 0.0, 1.0, 1.0]))
         )
 
         def fun(y):
-            return mx.cummax(y, inclusive=False).sum()
+            return tk.cummax(y, inclusive=False).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 2.0, 0.0, 1.0, 0.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([1.0, 2.0, 0.0, 1.0, 0.0]))
         )
 
         def fun(y):
-            return mx.cummax(y, reverse=True).sum()
+            return tk.cummax(y, reverse=True).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 4.0, 1.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([0.0, 0.0, 0.0, 4.0, 1.0]))
         )
 
         def fun(y):
-            return mx.cummax(y, reverse=True, inclusive=False).sum()
+            return tk.cummax(y, reverse=True, inclusive=False).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 0.0, 3.0, 1.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([0.0, 0.0, 0.0, 3.0, 1.0]))
         )
 
         # Non-uniform cotangents are routed to the owning index.
-        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
-        _, vjps = mx.vjp(lambda y: mx.cummax(y), (a,), (cot,))
-        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 2.0, 0.0, 100.0, 1000.0])))
+        cot = tk.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = tk.vjp(lambda y: tk.cummax(y), (a,), (cot,))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([10.0, 2.0, 0.0, 100.0, 1000.0])))
 
         # 2D along an inner axis.
-        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+        m = tk.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
 
         def fun(y):
-            return mx.cummax(y, axis=1).sum()
+            return tk.cummax(y, axis=1).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 1.0], [2.0, 0.0, 1.0]]))
+            tk.allclose(tk.grad(fun)(m), tk.array([[1.0, 1.0, 1.0], [2.0, 0.0, 1.0]]))
         )
 
         def fun(y):
-            return mx.cummax(y, axis=1, inclusive=False).sum()
+            return tk.cummax(y, axis=1, inclusive=False).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(m), mx.array([[1.0, 1.0, 0.0], [2.0, 0.0, 0.0]]))
+            tk.allclose(tk.grad(fun)(m), tk.array([[1.0, 1.0, 0.0], [2.0, 0.0, 0.0]]))
         )
 
     def test_cummin_grad(self):
-        a = mx.array([3.0, 3.0, 1.0, 5.0, 5.0])
+        a = tk.array([3.0, 3.0, 1.0, 5.0, 5.0])
 
         def fun(y):
-            return mx.cummin(y).sum()
+            return tk.cummin(y).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 3.0, 0.0, 0.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([1.0, 1.0, 3.0, 0.0, 0.0]))
         )
 
         def fun(y):
-            return mx.cummin(y, inclusive=False).sum()
+            return tk.cummin(y, inclusive=False).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([1.0, 1.0, 2.0, 0.0, 0.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([1.0, 1.0, 2.0, 0.0, 0.0]))
         )
 
         def fun(y):
-            return mx.cummin(y, reverse=True).sum()
+            return tk.cummin(y, reverse=True).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 3.0, 1.0, 1.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([0.0, 0.0, 3.0, 1.0, 1.0]))
         )
 
         def fun(y):
-            return mx.cummin(y, reverse=True, inclusive=False).sum()
+            return tk.cummin(y, reverse=True, inclusive=False).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(a), mx.array([0.0, 0.0, 2.0, 1.0, 1.0]))
+            tk.allclose(tk.grad(fun)(a), tk.array([0.0, 0.0, 2.0, 1.0, 1.0]))
         )
 
-        cot = mx.array([10.0, 1.0, 1.0, 100.0, 1000.0])
-        _, vjps = mx.vjp(lambda y: mx.cummin(y), (a,), (cot,))
-        self.assertTrue(mx.allclose(vjps[0], mx.array([10.0, 1.0, 1101.0, 0.0, 0.0])))
+        cot = tk.array([10.0, 1.0, 1.0, 100.0, 1000.0])
+        _, vjps = tk.vjp(lambda y: tk.cummin(y), (a,), (cot,))
+        self.assertTrue(tk.allclose(vjps[0], tk.array([10.0, 1.0, 1101.0, 0.0, 0.0])))
 
         # 2D along the outer axis.
-        m = mx.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
+        m = tk.array([[1.0, 3.0, 3.0], [4.0, 2.0, 4.0]])
 
         def fun(y):
-            return mx.cummin(y, axis=0).sum()
+            return tk.cummin(y, axis=0).sum()
 
         self.assertTrue(
-            mx.allclose(mx.grad(fun)(m), mx.array([[2.0, 1.0, 2.0], [0.0, 1.0, 0.0]]))
+            tk.allclose(tk.grad(fun)(m), tk.array([[2.0, 1.0, 2.0], [0.0, 1.0, 0.0]]))
         )
 
     @unittest.skipIf(not has_torch, "requires Torch")
@@ -929,7 +929,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
             return torch.flip(c, [axis]) if reverse else c
 
         def mx_scan(z, axis, reverse, inclusive, op):
-            scan = mx.cummax if op == "max" else mx.cummin
+            scan = tk.cummax if op == "max" else tk.cummin
             return scan(z, axis=axis, reverse=reverse, inclusive=inclusive)
 
         inputs = [
@@ -958,10 +958,10 @@ class TestAutograd(mlx_tests.MLXTestCase):
                             inclusive=inclusive,
                             cotangent=cot_name,
                         ):
-                            _, (mx_grad,) = mx.vjp(
+                            _, (mx_grad,) = tk.vjp(
                                 lambda z: mx_scan(z, axis, reverse, inclusive, op),
-                                (mx.array(x_np),),
-                                (mx.array(cot_np),),
+                                (tk.array(x_np),),
+                                (tk.array(cot_np),),
                             )
 
                             xt = torch.tensor(x_np, requires_grad=True)
@@ -975,134 +975,134 @@ class TestAutograd(mlx_tests.MLXTestCase):
                             )
 
     def test_topk_grad(self):
-        a = mx.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], mx.float32)
+        a = tk.array([[1, 2, 6, 4, 5], [9, 5, 6, 7, 8]], tk.float32)
 
         def fun(x):
-            return mx.topk(x, 2)
+            return tk.topk(x, 2)
 
-        out = mx.vjp(fun, (a,), (mx.ones((2, 2)),))[1][0]
-        expected = mx.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], mx.float32)
-        self.assertTrue(mx.array_equal(out, expected))
+        out = tk.vjp(fun, (a,), (tk.ones((2, 2)),))[1][0]
+        expected = tk.array([[0, 0, 1, 0, 1], [1, 0, 0, 0, 1]], tk.float32)
+        self.assertTrue(tk.array_equal(out, expected))
 
     def test_sort_grad(self):
         # Sort permutes the input, so its vjp must scatter the cotangents back
         # to the original positions (the transpose of the permutation), not
         # gather them forward. A non-involutive permutation exposes the bug.
-        x = mx.array([3.0, 1.0, 2.0, 5.0, 4.0])
-        cotan = mx.array([10.0, 20.0, 30.0, 40.0, 50.0])
-        grad = mx.vjp(lambda a: mx.sort(a), (x,), (cotan,))[1][0]
-        self.assertTrue(mx.array_equal(grad, mx.array([30.0, 10.0, 20.0, 50.0, 40.0])))
+        x = tk.array([3.0, 1.0, 2.0, 5.0, 4.0])
+        cotan = tk.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        grad = tk.vjp(lambda a: tk.sort(a), (x,), (cotan,))[1][0]
+        self.assertTrue(tk.array_equal(grad, tk.array([30.0, 10.0, 20.0, 50.0, 40.0])))
 
         # vjp must be the transpose of the jvp (adjoint test) along each axis.
-        mx.random.seed(0)
+        tk.random.seed(0)
         for axis in (0, 1, -1):
-            a = mx.random.normal((4, 6))
-            v = mx.random.normal(a.shape)
-            w = mx.random.normal(a.shape)
-            jv = mx.jvp(lambda z: mx.sort(z, axis=axis), (a,), (v,))[1][0]
-            jtw = mx.vjp(lambda z: mx.sort(z, axis=axis), (a,), (w,))[1][0]
+            a = tk.random.normal((4, 6))
+            v = tk.random.normal(a.shape)
+            w = tk.random.normal(a.shape)
+            jv = tk.jvp(lambda z: tk.sort(z, axis=axis), (a,), (v,))[1][0]
+            jtw = tk.vjp(lambda z: tk.sort(z, axis=axis), (a,), (w,))[1][0]
             self.assertAlmostEqual(
-                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+                tk.sum(w * jv).item(), tk.sum(v * jtw).item(), places=4
             )
 
     def test_logsumexp_grad(self):
         # The jvp of logsumexp reduces along the axis (sum of softmax * tangent),
         # so the tangent it returns must have the reduced output shape, not the
         # input shape.
-        x = mx.array([[1.0, 2.0, 3.0], [4.0, 1.0, 0.0]])
-        v = mx.array([[1.0, 0.0, -1.0], [2.0, 1.0, 0.0]])
-        jv = mx.jvp(lambda z: mx.logsumexp(z, axis=-1, keepdims=True), (x,), (v,))[1][0]
+        x = tk.array([[1.0, 2.0, 3.0], [4.0, 1.0, 0.0]])
+        v = tk.array([[1.0, 0.0, -1.0], [2.0, 1.0, 0.0]])
+        jv = tk.jvp(lambda z: tk.logsumexp(z, axis=-1, keepdims=True), (x,), (v,))[1][0]
         self.assertEqual(jv.shape, (2, 1))
-        expected = mx.sum(mx.softmax(x, axis=-1) * v, axis=-1, keepdims=True)
-        self.assertTrue(mx.allclose(jv, expected))
+        expected = tk.sum(tk.softmax(x, axis=-1) * v, axis=-1, keepdims=True)
+        self.assertTrue(tk.allclose(jv, expected))
 
         # vjp must be the transpose of the jvp (adjoint test).
-        mx.random.seed(0)
+        tk.random.seed(0)
         for keepdims in (True, False):
-            a = mx.random.normal((4, 6))
-            v = mx.random.normal(a.shape)
+            a = tk.random.normal((4, 6))
+            v = tk.random.normal(a.shape)
 
             def fun(z):
-                return mx.logsumexp(z, axis=-1, keepdims=keepdims)
+                return tk.logsumexp(z, axis=-1, keepdims=keepdims)
 
-            w = mx.random.normal(fun(a).shape)
-            jv = mx.jvp(fun, (a,), (v,))[1][0]
-            jtw = mx.vjp(fun, (a,), (w,))[1][0]
+            w = tk.random.normal(fun(a).shape)
+            jv = tk.jvp(fun, (a,), (v,))[1][0]
+            jtw = tk.vjp(fun, (a,), (w,))[1][0]
             self.assertAlmostEqual(
-                mx.sum(w * jv).item(), mx.sum(v * jtw).item(), places=4
+                tk.sum(w * jv).item(), tk.sum(v * jtw).item(), places=4
             )
 
     def test_custom_function(self):
         # Make a custom function
-        my_exp = mx.custom_function(mx.exp)
+        my_exp = tk.custom_function(tk.exp)
 
         # Ensure everything works
-        dy = mx.grad(my_exp)(mx.array(1.0))
-        self.assertTrue(mx.allclose(dy, mx.exp(mx.array(1.0))))
-        (ex,), (dex,) = mx.jvp(my_exp, [mx.array(1.0)], [mx.array(1.0)])
-        self.assertTrue(mx.allclose(dex, mx.exp(mx.array(1.0))))
-        self.assertTrue(mx.allclose(ex, dex))
-        ex = mx.vmap(my_exp)(mx.ones(10))
-        self.assertTrue(mx.allclose(ex, mx.exp(mx.ones(10))))
+        dy = tk.grad(my_exp)(tk.array(1.0))
+        self.assertTrue(tk.allclose(dy, tk.exp(tk.array(1.0))))
+        (ex,), (dex,) = tk.jvp(my_exp, [tk.array(1.0)], [tk.array(1.0)])
+        self.assertTrue(tk.allclose(dex, tk.exp(tk.array(1.0))))
+        self.assertTrue(tk.allclose(ex, dex))
+        ex = tk.vmap(my_exp)(tk.ones(10))
+        self.assertTrue(tk.allclose(ex, tk.exp(tk.ones(10))))
 
         # Ensure that the vjp is being overriden but everything else still
         # works.
         @my_exp.vjp
         def my_exp_vjp(x, dx, ex):
-            return mx.ones_like(x) * 42
+            return tk.ones_like(x) * 42
 
-        dy = mx.grad(my_exp)(mx.array(1.0))
-        self.assertTrue(mx.allclose(dy, mx.array(42.0)))
-        (ex,), (dex,) = mx.jvp(my_exp, [mx.array(1.0)], [mx.array(1.0)])
-        self.assertTrue(mx.allclose(dex, mx.exp(mx.array(1.0))))
-        self.assertTrue(mx.allclose(ex, dex))
-        ex = mx.vmap(my_exp)(mx.ones(10))
-        self.assertTrue(mx.allclose(ex, mx.exp(mx.ones(10))))
+        dy = tk.grad(my_exp)(tk.array(1.0))
+        self.assertTrue(tk.allclose(dy, tk.array(42.0)))
+        (ex,), (dex,) = tk.jvp(my_exp, [tk.array(1.0)], [tk.array(1.0)])
+        self.assertTrue(tk.allclose(dex, tk.exp(tk.array(1.0))))
+        self.assertTrue(tk.allclose(ex, dex))
+        ex = tk.vmap(my_exp)(tk.ones(10))
+        self.assertTrue(tk.allclose(ex, tk.exp(tk.ones(10))))
 
         # Ensure that setting the jvp and vmap also works.
         @my_exp.jvp
         def my_exp_jvp(x, dx):
-            return mx.ones_like(x) * 7 * dx
+            return tk.ones_like(x) * 7 * dx
 
         @my_exp.vmap
         def my_exp_vmap(x, axis):
-            return mx.ones_like(x) * 3, axis
+            return tk.ones_like(x) * 3, axis
 
-        dy = mx.grad(my_exp)(mx.array(1.0))
-        self.assertTrue(mx.allclose(dy, mx.array(42.0)))
-        (ex,), (dex,) = mx.jvp(my_exp, [mx.array(1.0)], [mx.array(1.0)])
-        self.assertTrue(mx.allclose(dex, mx.array(7.0)))
-        self.assertTrue(mx.allclose(ex, mx.exp(mx.array(1.0))))
-        ex = mx.vmap(my_exp)(mx.ones(10))
-        self.assertTrue(mx.allclose(ex, 3 * mx.ones(10)))
+        dy = tk.grad(my_exp)(tk.array(1.0))
+        self.assertTrue(tk.allclose(dy, tk.array(42.0)))
+        (ex,), (dex,) = tk.jvp(my_exp, [tk.array(1.0)], [tk.array(1.0)])
+        self.assertTrue(tk.allclose(dex, tk.array(7.0)))
+        self.assertTrue(tk.allclose(ex, tk.exp(tk.array(1.0))))
+        ex = tk.vmap(my_exp)(tk.ones(10))
+        self.assertTrue(tk.allclose(ex, 3 * tk.ones(10)))
 
         # Test pytrees
-        @mx.custom_function
+        @tk.custom_function
         def my_double(params):
             return {"out": 2 * params["x"] * params["y"]}
 
-        dy = mx.grad(lambda p: my_double(p)["out"].sum())(
-            {"x": mx.ones(2), "y": mx.ones(2)}
+        dy = tk.grad(lambda p: my_double(p)["out"].sum())(
+            {"x": tk.ones(2), "y": tk.ones(2)}
         )
-        self.assertTrue(mx.allclose(dy["x"], mx.ones(2) * 2))
-        self.assertTrue(mx.allclose(dy["y"], mx.ones(2) * 2))
+        self.assertTrue(tk.allclose(dy["x"], tk.ones(2) * 2))
+        self.assertTrue(tk.allclose(dy["y"], tk.ones(2) * 2))
 
         @my_double.vjp
         def random_grads(primals, cotangents, outputs):
-            return {"x": mx.zeros_like(primals["x"]), "y": mx.ones_like(primals["y"])}
+            return {"x": tk.zeros_like(primals["x"]), "y": tk.ones_like(primals["y"])}
 
-        dy = mx.grad(lambda p: my_double(p)["out"].sum())(
-            {"x": mx.ones(2), "y": mx.ones(2)}
+        dy = tk.grad(lambda p: my_double(p)["out"].sum())(
+            {"x": tk.ones(2), "y": tk.ones(2)}
         )
-        self.assertTrue(mx.allclose(dy["x"], mx.zeros(2)))
-        self.assertTrue(mx.allclose(dy["y"], mx.ones(2)))
+        self.assertTrue(tk.allclose(dy["x"], tk.zeros(2)))
+        self.assertTrue(tk.allclose(dy["y"], tk.ones(2)))
 
         def outer_f(a, b):
             return my_double({"x": a, "y": b})["out"]
 
-        inputs = [mx.random.normal(shape=(2,)) for i in range(2)]
-        tans = [mx.random.normal(shape=(2,)) for i in range(2)]
-        out1, dout1 = mx.jvp(outer_f, inputs, tans)
+        inputs = [tk.random.normal(shape=(2,)) for i in range(2)]
+        tans = [tk.random.normal(shape=(2,)) for i in range(2)]
+        out1, dout1 = tk.jvp(outer_f, inputs, tans)
 
         @my_double.jvp
         def random_grads(primals, tangents):
@@ -1112,165 +1112,165 @@ class TestAutograd(mlx_tests.MLXTestCase):
                 + 1
             }
 
-        out2, dout2 = mx.jvp(outer_f, inputs, tans)
-        self.assertTrue(mx.allclose(out1[0], out2[0]))
-        self.assertTrue(mx.allclose(dout1[0] + 1, dout2[0]))
+        out2, dout2 = tk.jvp(outer_f, inputs, tans)
+        self.assertTrue(tk.allclose(out1[0], out2[0]))
+        self.assertTrue(tk.allclose(dout1[0] + 1, dout2[0]))
 
     def test_complex_vjps(self):
         def fun(x):
-            return (2.0 * mx.real(x)).sum()
+            return (2.0 * tk.real(x)).sum()
 
-        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
-        dfdx = mx.grad(fun)(x)
-        self.assertTrue(mx.allclose(dfdx, 2 * mx.ones_like(x)))
+        x = tk.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = tk.grad(fun)(x)
+        self.assertTrue(tk.allclose(dfdx, 2 * tk.ones_like(x)))
 
         def fun(x):
-            return (2.0 * mx.imag(x)).sum()
+            return (2.0 * tk.imag(x)).sum()
 
-        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
-        dfdx = mx.grad(fun)(x)
-        self.assertTrue(mx.allclose(dfdx, 2j * mx.ones_like(x)))
+        x = tk.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = tk.grad(fun)(x)
+        self.assertTrue(tk.allclose(dfdx, 2j * tk.ones_like(x)))
 
     def test_flatten_unflatten_vjps(self):
         def fun(x):
-            y = mx.unflatten(x, 0, (2, 2))
+            y = tk.unflatten(x, 0, (2, 2))
             return y.sum()
 
-        x = mx.zeros((4, 8))
-        self.assertEqual(mx.grad(fun)(x).shape, (4, 8))
+        x = tk.zeros((4, 8))
+        self.assertEqual(tk.grad(fun)(x).shape, (4, 8))
 
         def fun(x):
-            y = mx.flatten(x, 0, 2)
+            y = tk.flatten(x, 0, 2)
             return y.sum()
 
-        x = mx.zeros((2, 4, 8))
-        self.assertEqual(mx.grad(fun)(x).shape, (2, 4, 8))
+        x = tk.zeros((2, 4, 8))
+        self.assertEqual(tk.grad(fun)(x).shape, (2, 4, 8))
 
     def test_concatenate_vjps(self):
         def fun(x, y):
-            return mx.concatenate([x, y])
+            return tk.concatenate([x, y])
 
-        x = mx.array([1, 2, 3], mx.float32)
-        y = mx.array([1, 2, 3], mx.float16)
-        grads = mx.vjp(fun, (x, y), (mx.ones((6,)),))[1]
-        self.assertTrue(mx.allclose(grads[0], mx.ones(3)))
-        self.assertTrue(mx.allclose(grads[1], mx.ones(3)))
-        self.assertEqual(grads[0].dtype, mx.float32)
-        self.assertEqual(grads[1].dtype, mx.float16)
+        x = tk.array([1, 2, 3], tk.float32)
+        y = tk.array([1, 2, 3], tk.float16)
+        grads = tk.vjp(fun, (x, y), (tk.ones((6,)),))[1]
+        self.assertTrue(tk.allclose(grads[0], tk.ones(3)))
+        self.assertTrue(tk.allclose(grads[1], tk.ones(3)))
+        self.assertEqual(grads[0].dtype, tk.float32)
+        self.assertEqual(grads[1].dtype, tk.float16)
 
     def test_matmul_jvps(self):
-        a = mx.random.uniform(shape=(4, 4))
-        b = mx.random.uniform(shape=(4, 4))
-        c = mx.random.uniform(shape=(4, 4))
-        d = mx.random.uniform(shape=(4, 4))
+        a = tk.random.uniform(shape=(4, 4))
+        b = tk.random.uniform(shape=(4, 4))
+        c = tk.random.uniform(shape=(4, 4))
+        d = tk.random.uniform(shape=(4, 4))
 
-        _, tangent = mx.jvp(lambda a: a @ b, (a,), (c,))
-        self.assertTrue(mx.allclose(tangent[0], c @ b))
+        _, tangent = tk.jvp(lambda a: a @ b, (a,), (c,))
+        self.assertTrue(tk.allclose(tangent[0], c @ b))
 
-        _, tangent = mx.jvp(lambda b: a @ b, (b,), (d,))
-        self.assertTrue(mx.allclose(tangent[0], a @ d))
+        _, tangent = tk.jvp(lambda b: a @ b, (b,), (d,))
+        self.assertTrue(tk.allclose(tangent[0], a @ d))
 
-        _, tangent = mx.jvp(lambda a, b: a @ b, (a, b), (c, d))
-        self.assertTrue(mx.allclose(tangent[0], a @ d + c @ b))
+        _, tangent = tk.jvp(lambda a, b: a @ b, (a, b), (c, d))
+        self.assertTrue(tk.allclose(tangent[0], a @ d + c @ b))
 
-        x = mx.random.uniform(shape=(4, 4))
-        y = mx.random.uniform(shape=(4, 4))
-        z = mx.random.uniform(shape=(4, 4))
+        x = tk.random.uniform(shape=(4, 4))
+        y = tk.random.uniform(shape=(4, 4))
+        z = tk.random.uniform(shape=(4, 4))
 
-        _, (tangent,) = mx.jvp(lambda a, b, c: a @ b + c, (a, b, c), (x, y, z))
-        _, (expected,) = mx.jvp(lambda a, b, c: mx.addmm(c, a, b), (a, b, c), (x, y, z))
-        self.assertTrue(mx.allclose(tangent, expected))
+        _, (tangent,) = tk.jvp(lambda a, b, c: a @ b + c, (a, b, c), (x, y, z))
+        _, (expected,) = tk.jvp(lambda a, b, c: tk.addmm(c, a, b), (a, b, c), (x, y, z))
+        self.assertTrue(tk.allclose(tangent, expected))
 
-        _, (tangent,) = mx.jvp(lambda a, c: a @ b + c, (a, c), (x, z))
-        _, (expected,) = mx.jvp(lambda a, c: mx.addmm(c, a, b), (a, c), (x, z))
-        self.assertTrue(mx.allclose(tangent, expected))
+        _, (tangent,) = tk.jvp(lambda a, c: a @ b + c, (a, c), (x, z))
+        _, (expected,) = tk.jvp(lambda a, c: tk.addmm(c, a, b), (a, c), (x, z))
+        self.assertTrue(tk.allclose(tangent, expected))
 
-        _, (tangent,) = mx.jvp(lambda b, c: a @ b + c, (b, c), (y, z))
-        _, (expected,) = mx.jvp(lambda b, c: mx.addmm(c, a, b), (b, c), (y, z))
-        self.assertTrue(mx.allclose(tangent, expected))
+        _, (tangent,) = tk.jvp(lambda b, c: a @ b + c, (b, c), (y, z))
+        _, (expected,) = tk.jvp(lambda b, c: tk.addmm(c, a, b), (b, c), (y, z))
+        self.assertTrue(tk.allclose(tangent, expected))
 
-        _, (tangent,) = mx.jvp(lambda c: a @ b + c, (c,), (z,))
-        _, (expected,) = mx.jvp(lambda c: mx.addmm(c, a, b), (c,), (z,))
-        self.assertTrue(mx.allclose(tangent, expected))
+        _, (tangent,) = tk.jvp(lambda c: a @ b + c, (c,), (z,))
+        _, (expected,) = tk.jvp(lambda c: tk.addmm(c, a, b), (c,), (z,))
+        self.assertTrue(tk.allclose(tangent, expected))
 
     def test_put_along_axis_grads(self):
-        a = mx.zeros((5, 1))
-        b = mx.ones((2, 1))
+        a = tk.zeros((5, 1))
+        b = tk.ones((2, 1))
 
         def fun(a, b):
-            idx = mx.array([[0], [3]])
-            return mx.put_along_axis(a, idx, b, axis=0)
+            idx = tk.array([[0], [3]])
+            return tk.put_along_axis(a, idx, b, axis=0)
 
         # Test VJP
-        cotan = mx.full((5, 1), 2.0)
-        _, (da, db) = mx.vjp(fun, (a, b), (cotan,))
-        expected_da = mx.array([0.0, 2.0, 2.0, 0.0, 2.0])[:, None]
-        expected_db = mx.array([2.0, 2.0])[:, None]
-        self.assertTrue(mx.allclose(expected_da, da))
-        self.assertTrue(mx.allclose(expected_db, db))
+        cotan = tk.full((5, 1), 2.0)
+        _, (da, db) = tk.vjp(fun, (a, b), (cotan,))
+        expected_da = tk.array([0.0, 2.0, 2.0, 0.0, 2.0])[:, None]
+        expected_db = tk.array([2.0, 2.0])[:, None]
+        self.assertTrue(tk.allclose(expected_da, da))
+        self.assertTrue(tk.allclose(expected_db, db))
 
         # Test JVP
-        tan_a = mx.full((5, 1), 2.0)
-        tan_b = mx.full((2, 1), 3.0)
-        _, (jout,) = mx.jvp(fun, (a, b), (tan_a, tan_b))
-        expected = mx.array([3.0, 2.0, 2.0, 3.0, 2.0])[:, None]
-        self.assertTrue(mx.allclose(expected, jout))
+        tan_a = tk.full((5, 1), 2.0)
+        tan_b = tk.full((2, 1), 3.0)
+        _, (jout,) = tk.jvp(fun, (a, b), (tan_a, tan_b))
+        expected = tk.array([3.0, 2.0, 2.0, 3.0, 2.0])[:, None]
+        self.assertTrue(tk.allclose(expected, jout))
 
         def fun(a):
-            idx = mx.array([[0], [3]])
-            return mx.put_along_axis(a, idx, b, axis=0)
+            idx = tk.array([[0], [3]])
+            return tk.put_along_axis(a, idx, b, axis=0)
 
-        _, (jout,) = mx.jvp(fun, (a,), (tan_a,))
-        expected = mx.array([0.0, 2.0, 2.0, 0.0, 2.0])[:, None]
-        self.assertTrue(mx.allclose(expected, jout))
+        _, (jout,) = tk.jvp(fun, (a,), (tan_a,))
+        expected = tk.array([0.0, 2.0, 2.0, 0.0, 2.0])[:, None]
+        self.assertTrue(tk.allclose(expected, jout))
 
     def test_slice_grads(self):
         # Slice
         def fun(a):
             return a[5:-6:-1]
 
-        a = mx.ones(shape=(5,))
-        cotan = mx.random.uniform(shape=(5,))
-        _, (grad,) = mx.vjp(fun, (a,), (cotan,))
-        self.assertTrue(mx.allclose(grad, cotan[::-1]))
+        a = tk.ones(shape=(5,))
+        cotan = tk.random.uniform(shape=(5,))
+        _, (grad,) = tk.vjp(fun, (a,), (cotan,))
+        self.assertTrue(tk.allclose(grad, cotan[::-1]))
 
-        tan = mx.random.uniform(shape=(5,))
-        mx.eval(tan)
-        _, (grad,) = mx.jvp(fun, (a,), (tan,))
-        self.assertTrue(mx.allclose(grad, tan[::-1]))
+        tan = tk.random.uniform(shape=(5,))
+        tk.eval(tan)
+        _, (grad,) = tk.jvp(fun, (a,), (tan,))
+        self.assertTrue(tk.allclose(grad, tan[::-1]))
 
         # Slice update
         def fun(a, b):
             a[4:-5:-2] = b
             return a
 
-        a = mx.ones(shape=(4,))
-        b = mx.zeros(shape=(2,))
+        a = tk.ones(shape=(4,))
+        b = tk.zeros(shape=(2,))
 
-        cotan = mx.random.uniform(shape=(4,))
-        _, (grad_a, grad_b) = mx.vjp(fun, (a, b), (cotan,))
-        expected_a = mx.array(cotan)
+        cotan = tk.random.uniform(shape=(4,))
+        _, (grad_a, grad_b) = tk.vjp(fun, (a, b), (cotan,))
+        expected_a = tk.array(cotan)
         expected_a[1::2] = 0.0
-        self.assertTrue(mx.allclose(grad_a, expected_a))
-        self.assertTrue(mx.allclose(grad_b, cotan[4:-5:-2]))
+        self.assertTrue(tk.allclose(grad_a, expected_a))
+        self.assertTrue(tk.allclose(grad_b, cotan[4:-5:-2]))
 
-        tan_a = mx.random.uniform(shape=(4,))
-        tan_b = mx.random.uniform(shape=(2,))
-        _, (grad,) = mx.jvp(fun, (a, b), (tan_a, tan_b))
+        tan_a = tk.random.uniform(shape=(4,))
+        tan_b = tk.random.uniform(shape=(2,))
+        _, (grad,) = tk.jvp(fun, (a, b), (tan_a, tan_b))
         expected = tan_a
         expected[4:-5:-2] = tan_b
-        self.assertTrue(mx.allclose(grad, expected))
+        self.assertTrue(tk.allclose(grad, expected))
 
     def test_leaks(self):
         for transform in [
-            mx.grad,
-            mx.value_and_grad,
-            mx.custom_function,
-            mx.checkpoint,
+            tk.grad,
+            tk.value_and_grad,
+            tk.custom_function,
+            tk.checkpoint,
         ]:
-            mx.synchronize()
+            tk.synchronize()
             gc.collect()
-            mem_pre = mx.get_active_memory()
+            mem_pre = tk.get_active_memory()
 
             def outer():
                 d = {}
@@ -1279,22 +1279,22 @@ class TestAutograd(mlx_tests.MLXTestCase):
                     return d["x"]
 
                 d["f"] = transform(f)
-                d["x"] = mx.array([0] * 1000)
+                d["x"] = tk.array([0] * 1000)
 
             for _ in range(5):
                 outer()
                 gc.collect()
-            mem_post = mx.get_active_memory()
+            mem_post = tk.get_active_memory()
             self.assertEqual(mem_pre, mem_post)
 
     def test_grad_with_copies(self):
-        a = mx.array(2.0)
+        a = tk.array(2.0)
         arrays = [a, a, a]
 
         def fun(arrays):
             return arrays[0] + arrays[2]
 
-        grads = mx.grad(fun)(arrays)
+        grads = tk.grad(fun)(arrays)
         self.assertEqual(grads[0].item(), 1.0)
         self.assertEqual(grads[2].item(), 1.0)
 
@@ -1302,34 +1302,34 @@ class TestAutograd(mlx_tests.MLXTestCase):
         def fun(arrs):
             return arrs[0]
 
-        arrs = [mx.array(1.0)]
+        arrs = [tk.array(1.0)]
         arr = arrs[0]
-        mx.grad(fun)(arrs)
+        tk.grad(fun)(arrs)
         self.assertEqual(id(arr), id(arrs[0]))
 
         def fun(arrs):
             arrs[1] = sum(arrs)
             return arrs[1]
 
-        arrs = [mx.array(1.0), mx.array(1.0), mx.array(1.0)]
+        arrs = [tk.array(1.0), tk.array(1.0), tk.array(1.0)]
         a_0, a_1, a_2 = arrs
 
-        mx.grad(fun)(arrs)
+        tk.grad(fun)(arrs)
         self.assertEqual(id(a_0), id(arrs[0]))
         self.assertNotEqual(id(a_1), id(arrs[1]))
         self.assertEqual(id(a_2), id(arrs[2]))
 
     def test_grad_with_inplace_update(self):
         def loss_fn(model):
-            model[1] = mx.array(2.0)
+            model[1] = tk.array(2.0)
             return model[0]
 
         model = [
-            mx.array(0.0),
-            mx.array(1.0),
+            tk.array(0.0),
+            tk.array(1.0),
         ]
 
-        grad_fn = mx.grad(loss_fn)
+        grad_fn = tk.grad(loss_fn)
         grad_fn(model)
         self.assertEqual(model[1].item(), 2.0)
 
@@ -1340,8 +1340,8 @@ class TestAutograd(mlx_tests.MLXTestCase):
             pass
 
         class State(NamedTuple):
-            a: mx.array
-            b: mx.array
+            a: tk.array
+            b: tk.array
 
         def transform(x: State):
             return State(x.a + 10, x.b * 10)
@@ -1364,149 +1364,149 @@ class TestAutograd(mlx_tests.MLXTestCase):
             out = transform_vector(x)
             return out[0].sum() + out[1].sum()
 
-        x_batch = State(mx.array([1, 2, 3]), mx.array([4, 5, 6]))
-        grads = mx.grad(loss_fn)(x_batch)
+        x_batch = State(tk.array([1, 2, 3]), tk.array([4, 5, 6]))
+        grads = tk.grad(loss_fn)(x_batch)
         self.assertTrue(isinstance(grads, State))
-        self.assertTrue(mx.array_equal(grads.a, mx.ones(3)))
-        self.assertTrue(mx.array_equal(grads.b, mx.ones(3) * 10))
+        self.assertTrue(tk.array_equal(grads.a, tk.ones(3)))
+        self.assertTrue(tk.array_equal(grads.b, tk.ones(3) * 10))
 
-        x_batch_tuple = (mx.array([1, 2, 3]), mx.array([4, 5, 6]))
-        grads = mx.grad(loss_fn_tuple)(x_batch_tuple)
+        x_batch_tuple = (tk.array([1, 2, 3]), tk.array([4, 5, 6]))
+        grads = tk.grad(loss_fn_tuple)(x_batch_tuple)
         self.assertTrue(isinstance(grads, tuple))
-        self.assertTrue(mx.array_equal(grads[0], mx.ones(3)))
-        self.assertTrue(mx.array_equal(grads[1], mx.ones(3) * 10))
+        self.assertTrue(tk.array_equal(grads[0], tk.ones(3)))
+        self.assertTrue(tk.array_equal(grads[1], tk.ones(3) * 10))
 
-        x_batch_vector = Vector([mx.array([1, 2, 3]), mx.array([4, 5, 6])])
-        grads = mx.grad(loss_fn_vector)(x_batch_vector)
+        x_batch_vector = Vector([tk.array([1, 2, 3]), tk.array([4, 5, 6])])
+        grads = tk.grad(loss_fn_vector)(x_batch_vector)
         self.assertTrue(isinstance(grads, Vector))
-        self.assertTrue(mx.array_equal(grads[0], mx.ones(3)))
-        self.assertTrue(mx.array_equal(grads[1], mx.ones(3) * 10))
+        self.assertTrue(tk.array_equal(grads[0], tk.ones(3)))
+        self.assertTrue(tk.array_equal(grads[1], tk.ones(3) * 10))
 
     def test_reduce_jvp(self):
-        a = mx.arange(4)
-        b = mx.array([3, 2, 1, 0])
+        a = tk.arange(4)
+        b = tk.array([3, 2, 1, 0])
 
-        out, jout = mx.jvp(mx.sum, primals=(a,), tangents=(b,))
+        out, jout = tk.jvp(tk.sum, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 6)
 
-        out, jout = mx.jvp(mx.prod, primals=(a,), tangents=(b,))
+        out, jout = tk.jvp(tk.prod, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 18)
 
-        out, jout = mx.jvp(mx.min, primals=(a,), tangents=(b,))
+        out, jout = tk.jvp(tk.min, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 3)
 
-        out, jout = mx.jvp(mx.max, primals=(a,), tangents=(b,))
+        out, jout = tk.jvp(tk.max, primals=(a,), tangents=(b,))
         self.assertEqual(jout[0].item(), 0)
 
     def test_complex_prod_vjp(self):
         def prod(x):
             return x.prod(axis=0)
 
-        primal = mx.random.normal((2, 20), dtype=mx.complex64)
-        cotangent = mx.random.normal((20,), dtype=mx.complex64)
+        primal = tk.random.normal((2, 20), dtype=tk.complex64)
+        cotangent = tk.random.normal((20,), dtype=tk.complex64)
 
-        _, vjps = mx.vjp(prod, [primal], [cotangent])
+        _, vjps = tk.vjp(prod, [primal], [cotangent])
 
-        expected = mx.stack(
-            [mx.conj(primal[1]) * cotangent, mx.conj(primal[0]) * cotangent]
+        expected = tk.stack(
+            [tk.conj(primal[1]) * cotangent, tk.conj(primal[0]) * cotangent]
         )
 
         # Check against hand-computed vjps
-        self.assertTrue(mx.array_equal(vjps[0], expected))
+        self.assertTrue(tk.array_equal(vjps[0], expected))
 
         # Ensure that prod agrees with multiply for complex values
-        _, vjps_multiply = mx.vjp(mx.multiply, [primal[0], primal[1]], [cotangent])
+        _, vjps_multiply = tk.vjp(tk.multiply, [primal[0], primal[1]], [cotangent])
 
-        self.assertTrue(mx.array_equal(mx.stack(vjps_multiply), vjps[0]))
+        self.assertTrue(tk.array_equal(tk.stack(vjps_multiply), vjps[0]))
 
     def test_complex_exp_vjp(self):
-        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
-        cotangent = mx.random.normal(
+        primal = tk.random.normal((3, 4, 5), dtype=tk.complex64)
+        cotangent = tk.random.normal(
             (
                 3,
                 4,
                 5,
             ),
-            dtype=mx.complex64,
+            dtype=tk.complex64,
         )
 
-        _, vjps = mx.vjp(mx.exp, [primal], [cotangent])
+        _, vjps = tk.vjp(tk.exp, [primal], [cotangent])
 
-        expected = cotangent * mx.conj(mx.exp(primal))
+        expected = cotangent * tk.conj(tk.exp(primal))
 
         # Check against hand-computed vjps
-        self.assertTrue(mx.allclose(vjps[0], expected))
+        self.assertTrue(tk.allclose(vjps[0], expected))
 
     def test_complex_log_vjp(self):
-        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
-        cotangent = mx.random.normal(
+        primal = tk.random.normal((3, 4, 5), dtype=tk.complex64)
+        cotangent = tk.random.normal(
             (
                 3,
                 4,
                 5,
             ),
-            dtype=mx.complex64,
+            dtype=tk.complex64,
         )
 
         # guard against values too close to the origin
-        primal = mx.where(abs(primal) < 1e-3, 1e-3, primal)
+        primal = tk.where(abs(primal) < 1e-3, 1e-3, primal)
 
-        _, vjps = mx.vjp(mx.log, [primal], [cotangent])
+        _, vjps = tk.vjp(tk.log, [primal], [cotangent])
 
-        expected = cotangent * mx.conj(1 / primal)
+        expected = cotangent * tk.conj(1 / primal)
 
         # Check against hand-computed vjps
-        self.assertTrue(mx.allclose(vjps[0], expected))
+        self.assertTrue(tk.allclose(vjps[0], expected))
 
     def test_complex_unary_vjps(self):
         # For a holomorphic f the vjp is cotangent * conj(f'(z)); these ops used
         # to delegate to their jvp and drop the conjugate for complex inputs.
-        mx.random.seed(0)
-        z = mx.random.normal((3, 4, 5), dtype=mx.complex64)
-        cotangent = mx.random.normal((3, 4, 5), dtype=mx.complex64)
-        z = mx.where(abs(z) < 1e-3, 1e-3 + 0j, z)
+        tk.random.seed(0)
+        z = tk.random.normal((3, 4, 5), dtype=tk.complex64)
+        cotangent = tk.random.normal((3, 4, 5), dtype=tk.complex64)
+        z = tk.where(abs(z) < 1e-3, 1e-3 + 0j, z)
 
         ops = {
-            mx.square: lambda x: 2 * x,
-            mx.sin: mx.cos,
-            mx.sinh: mx.cosh,
-            mx.cosh: mx.sinh,
-            mx.tan: lambda x: 1 / mx.cos(x) ** 2,
-            mx.tanh: lambda x: 1 - mx.tanh(x) ** 2,
-            mx.log1p: lambda x: 1 / (1 + x),
+            tk.square: lambda x: 2 * x,
+            tk.sin: tk.cos,
+            tk.sinh: tk.cosh,
+            tk.cosh: tk.sinh,
+            tk.tan: lambda x: 1 / tk.cos(x) ** 2,
+            tk.tanh: lambda x: 1 - tk.tanh(x) ** 2,
+            tk.log1p: lambda x: 1 / (1 + x),
         }
         for fn, deriv in ops.items():
-            _, (vjp,) = mx.vjp(fn, [z], [cotangent])
-            expected = cotangent * mx.conj(deriv(z))
-            self.assertTrue(mx.allclose(vjp, expected, atol=1e-5), msg=str(fn))
+            _, (vjp,) = tk.vjp(fn, [z], [cotangent])
+            expected = cotangent * tk.conj(deriv(z))
+            self.assertTrue(tk.allclose(vjp, expected, atol=1e-5), msg=str(fn))
 
     def test_complex_abs_grad(self):
-        mx.random.seed(0)
-        primal = mx.random.normal((3, 4, 5), dtype=mx.complex64)
+        tk.random.seed(0)
+        primal = tk.random.normal((3, 4, 5), dtype=tk.complex64)
         # guard against values too close to the origin where |z| is not smooth
-        primal = mx.where(abs(primal) < 1e-3, 1e-3 + 0j, primal)
+        primal = tk.where(abs(primal) < 1e-3, 1e-3 + 0j, primal)
 
         # |z| is real-valued, so its jvp is real:
         #   d|z| = Re(conj(z) * t) / |z|
-        tangent = mx.random.normal(primal.shape, dtype=mx.complex64)
-        _, (jvp,) = mx.jvp(mx.abs, [primal], [tangent])
-        expected = mx.real(mx.conj(primal) * tangent) / mx.abs(primal)
-        self.assertEqual(jvp.dtype, mx.float32)
-        self.assertTrue(mx.allclose(jvp, expected, atol=1e-5))
+        tangent = tk.random.normal(primal.shape, dtype=tk.complex64)
+        _, (jvp,) = tk.jvp(tk.abs, [primal], [tangent])
+        expected = tk.real(tk.conj(primal) * tangent) / tk.abs(primal)
+        self.assertEqual(jvp.dtype, tk.float32)
+        self.assertTrue(tk.allclose(jvp, expected, atol=1e-5))
 
         # The vjp's real and imaginary parts are the gradients w.r.t. Re(z) and
         # Im(z); for a real cotangent this is cotangent * sign(z).
-        cotangent = mx.random.normal(primal.shape)
-        _, (vjp,) = mx.vjp(mx.abs, [primal], [cotangent])
+        cotangent = tk.random.normal(primal.shape)
+        _, (vjp,) = tk.vjp(tk.abs, [primal], [cotangent])
         self.assertTrue(
-            mx.allclose(vjp, cotangent * (primal / mx.abs(primal)), atol=1e-5)
+            tk.allclose(vjp, cotangent * (primal / tk.abs(primal)), atol=1e-5)
         )
 
         # Real inputs are unaffected.
-        x = mx.random.normal((10,))
-        t = mx.random.normal((10,))
-        _, (jvp,) = mx.jvp(mx.abs, [x], [t])
-        self.assertTrue(mx.allclose(jvp, mx.sign(x) * t))
+        x = tk.random.normal((10,))
+        t = tk.random.normal((10,))
+        _, (jvp,) = tk.jvp(tk.abs, [x], [t])
+        self.assertTrue(tk.allclose(jvp, tk.sign(x) * t))
 
     def test_second_order_permutation_ops(self):
         # The permutation these ops apply is locally constant in the input, so
@@ -1514,44 +1514,44 @@ class TestAutograd(mlx_tests.MLXTestCase):
         # vjp a second time fails with "Cannot calculate VJP with respect to
         # indices".
         def hvp(f, x, v):
-            return mx.grad(lambda a: mx.sum(mx.grad(f)(a) * v))(x)
+            return tk.grad(lambda a: tk.sum(tk.grad(f)(a) * v))(x)
 
         def numerical_hvp(f, x, v, eps=1e-3):
             # The values below are well separated, so the permutation does not
             # change over this step and the difference is exact enough.
-            return (mx.grad(f)(x + eps * v) - mx.grad(f)(x - eps * v)) / (2 * eps)
+            return (tk.grad(f)(x + eps * v) - tk.grad(f)(x - eps * v)) / (2 * eps)
 
-        x = mx.array([3.0, 1.0, 2.0, 5.0])
-        v = mx.array([1.0, -2.0, 0.5, 1.5])
+        x = tk.array([3.0, 1.0, 2.0, 5.0])
+        v = tk.array([1.0, -2.0, 0.5, 1.5])
 
         for fn in (
-            lambda a: mx.sort(a),
-            lambda a: mx.partition(a, 2),
-            lambda a: mx.topk(a, 2),
-            lambda a: mx.cummax(a, axis=0),
-            lambda a: mx.cummin(a, axis=0),
-            lambda a: mx.cummax(a, axis=0, reverse=True),
-            lambda a: mx.cummax(a, axis=0, inclusive=False),
-            lambda a: mx.cummin(a, axis=0, reverse=True, inclusive=False),
+            lambda a: tk.sort(a),
+            lambda a: tk.partition(a, 2),
+            lambda a: tk.topk(a, 2),
+            lambda a: tk.cummax(a, axis=0),
+            lambda a: tk.cummin(a, axis=0),
+            lambda a: tk.cummax(a, axis=0, reverse=True),
+            lambda a: tk.cummax(a, axis=0, inclusive=False),
+            lambda a: tk.cummin(a, axis=0, reverse=True, inclusive=False),
         ):
-            f = lambda a: mx.sum(fn(a) ** 2)
+            f = lambda a: tk.sum(fn(a) ** 2)
             self.assertTrue(
-                mx.allclose(hvp(f, x, v), numerical_hvp(f, x, v), atol=1e-3)
+                tk.allclose(hvp(f, x, v), numerical_hvp(f, x, v), atol=1e-3)
             )
 
         # A non-trailing axis
-        y = mx.array([[3.0, 1.0], [2.0, 5.0]])
-        w = mx.array([[1.0, -2.0], [0.5, 1.5]])
+        y = tk.array([[3.0, 1.0], [2.0, 5.0]])
+        w = tk.array([[1.0, -2.0], [0.5, 1.5]])
         for fn in (
-            lambda a: mx.sort(a, axis=0),
-            lambda a: mx.partition(a, 1, axis=0),
-            lambda a: mx.cummax(a, axis=0),
+            lambda a: tk.sort(a, axis=0),
+            lambda a: tk.partition(a, 1, axis=0),
+            lambda a: tk.cummax(a, axis=0),
         ):
-            f = lambda a: mx.sum(fn(a) ** 2)
+            f = lambda a: tk.sum(fn(a) ** 2)
             self.assertTrue(
-                mx.allclose(hvp(f, y, w), numerical_hvp(f, y, w), atol=1e-3)
+                tk.allclose(hvp(f, y, w), numerical_hvp(f, y, w), atol=1e-3)
             )
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

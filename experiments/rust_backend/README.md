@@ -24,7 +24,7 @@ eviction.
 
 The port is tracked in [#65](https://github.com/dedalus-labs/tiki/issues/65).
 The Rust runtime owns CUDA storage: the crate in
-[`mlx/backend/cuda/runtime`](../../mlx/backend/cuda/runtime) implements
+[`tiki/backend/cuda/runtime`](../../tiki/backend/cuda/runtime) implements
 allocation, size classes, the small pool, the cache, memory limits, and
 migration of device storage to unified memory. Migration enqueues the copy and
 the release of the device source on one stream, so the source outlives the
@@ -35,6 +35,6 @@ This guarantee covers the migration copy and its source release. It does not
 establish completion of producers on other streams or extend buffer ownership
 through arbitrary asynchronous work. Callers retain those responsibilities.
 
-Kernel execution still uses the MLX CUDA command encoder. Submission
+Kernel execution still uses the Tiki CUDA command encoder. Submission
 retention, completion tracking, and graph replay ownership move to Rust next,
 each once it passes the qualification gates in ADR-0001.

@@ -120,9 +120,9 @@ layout by the tile shape ``(2, 2)`` returns the layout above:
 .. code-block:: console
 
    $ python
-   >>> import mlx.tiki as tk
-   >>> base = tk.Layout((4, 4), stride=(4, 1))
-   >>> tiles = tk.logical_divide(base, (2, 2))
+   >>> import tiki.layout as tl
+   >>> base = tl.Layout((4, 4), stride=(4, 1))
+   >>> tiles = tl.logical_divide(base, (2, 2))
    >>> tiles
    Layout(shape=((2, 2), (2, 2)), stride=((4, 8), (1, 2)))
    >>> print(tiles.describe())
@@ -149,13 +149,13 @@ integer strides describes this map on the ``(4, 4)`` domain:
 
 .. code-block:: console
 
-   >>> swizzled = tk.compose(tk.Swizzle(bits=2, base=0, shift=2), base)
+   >>> swizzled = tl.compose(tl.Swizzle(bits=2, base=0, shift=2), base)
    >>> [swizzled(1, column) for column in range(4)]
    [5, 4, 7, 6]
    >>> swizzled.stride
    Traceback (most recent call last):
      ...
-   mlx.tiki._layout.LayoutError: a composed layout has no stride. Require an affine layout
+   tiki.layout._layout.LayoutError: a composed layout has no stride. Require an affine layout
 
 Every row permutes its four indices differently:
 
@@ -229,7 +229,7 @@ The algebra has three operations:
 
 Each operation is defined only under conditions on the shapes and strides.
 Tiki checks the conditions when it builds a map, and an invalid map raises
-:class:`mlx.tiki.LayoutError` instead of producing a wrong offset.
+:class:`tiki.layout.LayoutError` instead of producing a wrong offset.
 
 Shah [1]_ states sufficient conditions and closed formulas for complement,
 composition, and logical division. Carlisle, Shah, Stern, and VanKoughnett
@@ -278,24 +278,24 @@ Expected result: the extension is importable and computes offsets.
 
 .. code-block:: sh
 
-   python -c "import mlx.tiki as tk; print(tk.Layout((4, 4), stride=(4, 1))(2, 3))"
+   python -c "import tiki.layout as tl; print(tl.Layout((4, 4), stride=(4, 1))(2, 3))"
 
 This command prints ``11``.
 
 Build only the layout extension
 -------------------------------
 
-Use this procedure to change the extension without rebuilding ``mlx.core``.
+Use this procedure to change the extension without rebuilding ``tiki``.
 
 1. With the framework installed, configure a build that disables every
    backend and writes the Python bindings into the checkout::
 
       cmake -S . -B build/indexing \
-        -DMLX_BUILD_CPU=OFF -DMLX_BUILD_METAL=OFF -DMLX_BUILD_CUDA=OFF \
-        -DMLX_BUILD_TESTS=OFF -DMLX_BUILD_EXAMPLES=OFF \
-        -DMLX_BUILD_PYTHON_BINDINGS=ON -DMLX_BUILD_PYTHON_STUBS=OFF \
+        -DTIKI_BUILD_CPU=OFF -DTIKI_BUILD_METAL=OFF -DTIKI_BUILD_CUDA=OFF \
+        -DTIKI_BUILD_TESTS=OFF -DTIKI_BUILD_EXAMPLES=OFF \
+        -DTIKI_BUILD_PYTHON_BINDINGS=ON -DTIKI_BUILD_PYTHON_STUBS=OFF \
         -DPython_EXECUTABLE="$(command -v python)" \
-        -DMLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY="$PWD/python/mlx"
+        -DTIKI_PYTHON_BINDINGS_OUTPUT_DIRECTORY="$PWD/python/tiki"
 
    On macOS, set ``CMAKE_OSX_DEPLOYMENT_TARGET`` to the minimum OS version of
    the installed core. CMake forwards the value to Cargo.
@@ -308,17 +308,17 @@ Use this procedure to change the extension without rebuilding ``mlx.core``.
 
       export PYTHONPATH=python
 
-Expected result: ``import mlx.tiki`` loads the extension from ``python/mlx``
-and ``mlx.core`` from the installed package.
+Expected result: ``import tiki.layout`` loads the extension from ``python/tiki``
+and ``tiki`` from the installed package.
 
 Run the checks
 --------------
 
 Run the Rust and Python checks from the repository root::
 
-   cargo test --manifest-path mlx/layout/Cargo.toml --all-features
-   cargo fmt --manifest-path mlx/layout/Cargo.toml --check
-   cargo clippy --manifest-path mlx/layout/Cargo.toml --all-targets --all-features -- -D warnings
+   cargo test --manifest-path tiki/layout/Cargo.toml --all-features
+   cargo fmt --manifest-path tiki/layout/Cargo.toml --check
+   cargo clippy --manifest-path tiki/layout/Cargo.toml --all-targets --all-features -- -D warnings
    PYTHONPATH=python:python/tests python -m unittest discover -s python/tests -p 'test_tiki_*.py'
 
 ``test_tiki_docs`` parses :doc:`../usage/layouts` and
@@ -329,7 +329,7 @@ Build and test the documentation
 --------------------------------
 
 1. Install Doxygen and the packages in ``docs/requirements.txt``.
-2. With ``mlx.core`` and the extension importable, build the site and run the
+2. With ``tiki`` and the extension importable, build the site and run the
    doctest directives::
 
       cd docs

@@ -6,7 +6,7 @@ from enum import StrEnum
 from math import prod
 from typing import NamedTuple, NewType, assert_never
 
-from mlx import core
+from tiki import core
 
 type Shape = tuple[int, ...]
 type Strides = tuple[int, ...]

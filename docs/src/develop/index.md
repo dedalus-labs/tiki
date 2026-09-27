@@ -15,5 +15,5 @@ Extensions <../dev/extensions>
 Metal debugger <../dev/metal_debugger>
 Metal logging <../dev/metal_logging>
 Custom Metal kernels <../dev/custom_metal_kernels>
-Tiki in C++ <../dev/mlx_in_cpp>
+Tiki in C++ <../dev/tiki_in_cpp>
 ```

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from functools import reduce
 from operator import add
 
-from mlx import core
+from tiki import core
 
 from .graph import Arrays
 

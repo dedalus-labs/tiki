@@ -12,11 +12,11 @@ include(CMakeParseArguments)
 # the .metallib OUTPUT_DIRECTORY: Where to place ${TITLE}.metallib SOURCES: List
 # of source files INCLUDE_DIRS: List of include dirs DEPS: List of dependency
 # files (like headers) DEBUG: Boolean, if true, enables debug compile options
-# for this specific library. If not provided, uses global MLX_METAL_DEBUG.
+# for this specific library. If not provided, uses global TIKI_METAL_DEBUG.
 #
 # clang format on
 
-macro(mlx_build_metallib)
+macro(tiki_build_metallib)
   # Parse args
   set(oneValueArgs TARGET TITLE OUTPUT_DIRECTORY DEBUG)
   set(multiValueArgs SOURCES INCLUDE_DIRS DEPS)
@@ -28,7 +28,7 @@ macro(mlx_build_metallib)
   # Collect compile options
   set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math -Wno-c++17-extensions
                              -Wmetal-addr-spaces)
-  if(MLX_METAL_DEBUG OR MTLLIB_DEBUG)
+  if(TIKI_METAL_DEBUG OR MTLLIB_DEBUG)
     set(MTLLIB_COMPILE_OPTIONS ${MTLLIB_COMPILE_OPTIONS} -gline-tables-only
                                -frecord-sources)
   endif()
@@ -48,4 +48,4 @@ macro(mlx_build_metallib)
   # Add metallib custom target
   add_custom_target(${MTLLIB_TARGET} DEPENDS ${MTLLIB_BUILD_TARGET})
 
-endmacro(mlx_build_metallib)
+endmacro(tiki_build_metallib)

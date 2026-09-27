@@ -9,10 +9,10 @@ Current hardware results and diagnostic limitations are in
 The [exemplar audit](EXEMPLAR_AUDIT.md) adds measured NVCC comparisons and
 subwarp scheduling for narrow rows.
 
-## Native MLX graph compilation
+## Native Tiki graph compilation
 
-The experimental `tiki.py` module implements `tk.compile` for elementwise
-graphs, one row sum with fused arithmetic, and tiled transpose. It uses MLX's
+The experimental `compiler.py` module implements `compiler.compile` for elementwise
+graphs, one row sum with fused arithmetic, and tiled transpose. It uses Tiki's
 `export_function` callback to capture the native graph, constructs an explicit
 thread schedule, emits CuTe MLIR directly, and passes it to `CuteCompiler`.
 No reference CuTe kernel or generated Python source participates in this path.
@@ -22,28 +22,28 @@ and the Python/C++/Rust implementation boundary.
 
 ```python
 # Run with experiments/cute_backend on PYTHONPATH.
-import mlx.core as mx
 import tiki as tk
+import compiler
 from tiki_compiler.lowered import Lowered
 
 
-@tk.compile(schedule=tk.Schedule(threads=128, elements_per_thread=4))
-def affine(x: mx.array, y: mx.array) -> mx.array:
+@compiler.compile(schedule=compiler.Schedule(threads=128, elements_per_thread=4))
+def affine(x: tk.array, y: tk.array) -> tk.array:
     return x * y + 2.0 - y
 
 
-x = mx.arange(513, dtype=mx.float32)
-y = mx.array(3.0)
+x = tk.arange(513, dtype=tk.float32)
+y = tk.array(3.0)
 lowered = affine.lower(x, y)
 assert isinstance(lowered, Lowered)
 print(lowered.schedule)
 print(lowered.mlir)
-mx.eval(affine(x, y))  # Requires MLX CUDA on sm_90.
+tk.eval(affine(x, y))  # Requires Tiki CUDA on sm_90.
 ```
 
-`lower()` runs on a Mac with MLX alone; it does not import the CuTe compiler or
+`lower()` runs on a Mac with Tiki alone; it does not import the CuTe compiler or
 execute the generated kernel. CUDA execution requires the CuTe dependency and
-a CUDA-enabled MLX build. The provided demo writes the graph, schedule, and
+a CUDA-enabled Tiki build. The provided demo writes the graph, schedule, and
 MLIR to a fresh output directory:
 
 ```sh
@@ -81,9 +81,9 @@ we have not measured its overhead against direct CuTe DSL.
 ## Cooperating on a row
 
 ```python
-@tk.compile(schedule=tk.RowSchedule(threads_per_row=64, rows_per_block=2))
+@compiler.compile(schedule=compiler.RowSchedule(threads_per_row=64, rows_per_block=2))
 def rms_norm(x, weight):
-    return x * mx.rsqrt(mx.mean(x * x, axis=-1, keepdims=True) + 1e-6) * weight
+    return x * tk.rsqrt(tk.mean(x * x, axis=-1, keepdims=True) + 1e-6) * weight
 ```
 
 The row schedule requires a 2D output and one sum over the last axis. It fuses
@@ -107,7 +107,7 @@ unused row in the last block. Each warp then combines the shared partials.
 For 64 threads per row and two rows per block, that scratch buffer is 16 bytes.
 There is no shared scratch for a one-warp row.
 
-MLX removes the sum when the width is one. The same row schedule accepts that
+Tiki removes the sum when the width is one. The same row schedule accepts that
 simplified graph and emits only its arithmetic. Zero rows are valid; zero
 width and other reduction axes/kinds are rejected. This is a correctness-first
 two-pass implementation: it rereads input values for the output computation.
@@ -115,9 +115,9 @@ two-pass implementation: it rereads input values for the output computation.
 ## Controlling shared-memory banks
 
 ```python
-@tk.compile(schedule=tk.TransposeSchedule(
+@compiler.compile(schedule=compiler.TransposeSchedule(
     threads=128,
-    swizzle=tk.Swizzle(bits=5, base=0, shift=5),
+    swizzle=compiler.Swizzle(bits=5, base=0, shift=5),
 ))
 def transposed(x):
     return x.T
@@ -162,7 +162,7 @@ carry, hidden = associative_scan(affine, (decay, drive), axis=1)
 `associative_scan(fn, elems, reverse=False, axis=0, schedule=ScanSchedule())`
 has the interface of `jax.lax.associative_scan`: `fn` combines two pytrees of
 float32 leaves of one shape and must be associative. The combine is captured
-once on scalar placeholders through the same graph capture as `tk.compile`, so
+once on scalar placeholders through the same graph capture as `compiler.compile`, so
 any elementwise combine over any number of leaves lowers; a non-elementwise
 combine is rejected at capture.
 
@@ -181,14 +181,14 @@ built from its live strides, so any axis of a transposed or sliced view is
 consumed in place. `reverse` is a negatively strided view in and out; the
 kernels have no reverse path.
 
-Derivatives are registered on `mx.custom_function`. With `J_y(t)` and `J_x(t)`
-the Jacobians of the combine at step `t` (compiled from `mx.jvp` of the combine
+Derivatives are registered on `tk.custom_function`. With `J_y(t)` and `J_x(t)`
+the Jacobians of the combine at step `t` (compiled from `tk.jvp` of the combine
 as one elementwise kernel), the cotangent follows the reverse affine recurrence
 `gy_t = g_t + J_y(t+1)^T gy_{t+1}` and the tangent the forward one
 `dy_t = J_y(t) dy_{t-1} + J_x(t) dx_t`; both are associative scans over
 `(matrix, vector)` leaves and reuse the kernels above. The tests check forward,
 VJP, and JVP against the generic tree in `experiments/associative_scan` under
-MLX autodiff, at lengths across every level of the hierarchy, and train a
+Tiki autodiff, at lengths across every level of the hierarchy, and train a
 linear recurrence with `value_and_grad`.
 
 ## Inspect the emitted program
@@ -235,17 +235,17 @@ CuTe DSL has three separate responsibilities:
    code and a host launcher.
 3. The CUDA runtime loads and executes the device code.
 
-Tiki intends to replace the first responsibility for supported MLX graph
+Tiki intends to replace the first responsibility for supported Tiki graph
 regions. The reference source kernel in `probe.py` exists only to produce a
-known-good artifact against which a future MLX-to-CuTe-MLIR emitter can be
+known-good artifact against which a future Tiki-to-CuTe-MLIR emitter can be
 compared.
 
 ```text
-MLX region -> Tiki schedule -> CuTe MLIR -> CuteCompiler -> cubin -> MLX runtime
+Tiki region -> Tiki schedule -> CuTe MLIR -> CuteCompiler -> cubin -> Tiki runtime
 ```
 
 The experiment establishes the boundary at serialized and textual CuTe MLIR.
-Both forms compile to a host object and a cubin. It does not claim that MLX
+Both forms compile to a host object and a cubin. It does not claim that Tiki
 currently contains enough scheduling information to generate a fast kernel.
 Scheduling, layout selection, and autotuning remain explicit compiler
 responsibilities.
@@ -257,7 +257,7 @@ Use Linux, Python 3.13, an NVIDIA GPU, and CUDA 12.9 or newer.
 ```sh
 python -m pip install -r experiments/cute_backend/requirements.txt
 python experiments/cute_backend/probe.py --arch sm_90 --output /tmp/tiki-cute
-python experiments/cute_backend/run_mlx.py --arch sm_90
+python experiments/cute_backend/run_tiki.py --arch sm_90
 ```
 
 The probe performs two compilation stages. It serializes the pre-pass MLIR,
@@ -267,10 +267,10 @@ asks `CuteCompiler` to produce an object and cubin. No generated Python file is
 used after the MLIR stage.
 
 The probe also reparses the textual MLIR with no CuTe function metadata and
-compiles it with the undecided ABI. This is the path a native MLX emitter can
+compiles it with the undecided ABI. This is the path a native Tiki emitter can
 use when it owns kernel launch and does not need CuTe's host wrapper.
 
-`run_mlx.py` launches the cubin emitted from the serialized MLIR through MLX's
+`run_tiki.py` launches the cubin emitted from the serialized MLIR through Tiki's
 `precompiled_cuda_kernel` primitive. This tests buffer ownership, argument
 ordering, stream integration, and execution without using DLPack or CuTe's host
 executor.

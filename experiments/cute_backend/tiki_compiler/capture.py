@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import assert_never
 
-from mlx import core
+from tiki import core
 
 from .events import Descriptor, ExportEvent, PrimitiveEvent
 from .graph import (
@@ -200,7 +200,7 @@ def tensor_operation(event: PrimitiveEvent, output: Value) -> Operation:
                 raise UnsupportedGraphError(f"{name} must have no primitive arguments")
             operation = Operation(name)
         case _:
-            raise UnsupportedGraphError(f"unsupported MLX primitive: {name}")
+            raise UnsupportedGraphError(f"unsupported Tiki primitive: {name}")
     return operation
 
 

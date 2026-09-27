@@ -4,7 +4,7 @@ from functools import lru_cache
 from math import prod
 from typing import cast
 
-from mlx import core
+from tiki import core
 
 from .arrays import arrays, profile
 from .artifact import CudaIo, binary
@@ -46,7 +46,7 @@ def apply_kernel(
 
 def launch(io: CudaIo, lowered: ScanLowered, inputs: Leaves) -> Leaves:
     if not core.cuda.is_available():
-        raise BackendUnavailableError("associative_scan execution requires MLX CUDA")
+        raise BackendUnavailableError("associative_scan execution requires Tiki CUDA")
     if core.device_info(core.gpu)["architecture"] != lowered.schedule.arch:
         raise BackendUnavailableError(f"schedule requires {lowered.schedule.arch}")
     outputs = tuple(

@@ -1,14 +1,14 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import mlx.core as mx
-import mlx.nn as nn
+import tiki as tk
+import tiki.nn as nn
 from time_utils import time_fn
 
 
 def rms_norm(x, w, eps):
     ot = x.dtype
-    x = x.astype(mx.float32)
-    n = mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
+    x = x.astype(tk.float32)
+    n = tk.rsqrt(x.square().mean(-1, keepdims=True) + eps)
     y = (x * n).astype(ot)
     if w is not None:
         y = y * w
@@ -17,14 +17,14 @@ def rms_norm(x, w, eps):
 
 def time_rms_norm():
     f1 = lambda x, w, y: (rms_norm(x, w, 1e-5) * y).sum()
-    f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, 1e-5) * y).sum()
-    g1 = mx.grad(f1, argnums=(0, 1))
-    g2 = mx.grad(f2, argnums=(0, 1))
+    f2 = lambda x, w, y: (tk.fast.rms_norm(x, w, 1e-5) * y).sum()
+    g1 = tk.grad(f1, argnums=(0, 1))
+    g2 = tk.grad(f2, argnums=(0, 1))
 
-    x = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
-    w = mx.random.uniform(shape=(4096,)).astype(mx.float16)
-    y = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
-    mx.eval(x, w, y)
+    x = tk.random.uniform(shape=(8, 1024, 4096)).astype(tk.float16)
+    w = tk.random.uniform(shape=(4096,)).astype(tk.float16)
+    y = tk.random.uniform(shape=(8, 1024, 4096)).astype(tk.float16)
+    tk.eval(x, w, y)
 
     def rms_norm_loop(g, x, w):
         gx, gw = x, w
@@ -34,18 +34,18 @@ def time_rms_norm():
 
     time_fn(rms_norm_loop, g1, x, w)
     time_fn(rms_norm_loop, g2, x, w)
-    time_fn(rms_norm_loop, mx.compile(g1), x, w)
-    time_fn(rms_norm_loop, mx.compile(g2), x, w)
+    time_fn(rms_norm_loop, tk.compile(g1), x, w)
+    time_fn(rms_norm_loop, tk.compile(g2), x, w)
 
     f1 = lambda x, y: (rms_norm(x, None, 1e-5) * y).sum()
-    f2 = lambda x, y: (mx.fast.rms_norm(x, None, 1e-5) * y).sum()
-    g1 = mx.grad(f1, argnums=(0,))
-    g2 = mx.grad(f2, argnums=(0,))
+    f2 = lambda x, y: (tk.fast.rms_norm(x, None, 1e-5) * y).sum()
+    g1 = tk.grad(f1, argnums=(0,))
+    g2 = tk.grad(f2, argnums=(0,))
 
-    x = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
-    w = mx.random.uniform(shape=(4096,)).astype(mx.float16)
-    y = mx.random.uniform(shape=(8, 1024, 4096)).astype(mx.float16)
-    mx.eval(x, w, y)
+    x = tk.random.uniform(shape=(8, 1024, 4096)).astype(tk.float16)
+    w = tk.random.uniform(shape=(4096,)).astype(tk.float16)
+    y = tk.random.uniform(shape=(8, 1024, 4096)).astype(tk.float16)
+    tk.eval(x, w, y)
 
     def rms_norm_loop(g, x):
         gx = x
@@ -55,8 +55,8 @@ def time_rms_norm():
 
     time_fn(rms_norm_loop, g1, x)
     time_fn(rms_norm_loop, g2, x)
-    time_fn(rms_norm_loop, mx.compile(g1), x)
-    time_fn(rms_norm_loop, mx.compile(g2), x)
+    time_fn(rms_norm_loop, tk.compile(g1), x)
+    time_fn(rms_norm_loop, tk.compile(g2), x)
 
 
 if __name__ == "__main__":

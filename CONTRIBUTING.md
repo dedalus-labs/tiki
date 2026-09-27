@@ -24,7 +24,7 @@ the work, and never claim human authorship or verification that did not occur.
 - Write issues, pull requests, commit messages, and review replies in plain English.
 - Describe the problem, resulting behavior, and evidence. Report failures and
   untested cases explicitly. Do not paste unreviewed model output or chat transcripts.
-- Preserve upstream license and attribution notices. Changes submitted to MLX
+- Preserve upstream license and attribution notices. Changes submitted to Tiki
   upstream must follow that project's contribution policy.
 
 ## Commits

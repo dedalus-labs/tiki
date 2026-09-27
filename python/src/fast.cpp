@@ -8,37 +8,37 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/fast.h"
-#include "mlx/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/fast.h"
+#include "tiki/ops.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace {
 
 struct PyCustomKernelFunction {
-  PyCustomKernelFunction(mx::fast::CustomKernelFunction kernel, const char* tag)
+  PyCustomKernelFunction(tk::fast::CustomKernelFunction kernel, const char* tag)
       : kernel_(std::move(kernel)), tag_(tag) {}
 
-  std::vector<mx::array> operator()(
+  std::vector<tk::array> operator()(
       const std::vector<ScalarOrArray>& inputs_,
-      const std::vector<mx::Shape>& output_shapes,
-      const std::vector<mx::Dtype>& output_dtypes,
+      const std::vector<tk::Shape>& output_shapes,
+      const std::vector<tk::Dtype>& output_dtypes,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
       const std::optional<std::vector<std::pair<std::string, nb::object>>>&
           template_args_ = std::nullopt,
       std::optional<float> init_value = std::nullopt,
       bool verbose = false,
-      mx::StreamOrDevice s = {}) const {
-    std::vector<mx::array> inputs;
+      tk::StreamOrDevice s = {}) const {
+    std::vector<tk::array> inputs;
     for (const auto& value : inputs_) {
       inputs.push_back(to_array(value, std::nullopt));
     }
-    std::vector<std::pair<std::string, mx::fast::TemplateArg>> template_args;
+    std::vector<std::pair<std::string, tk::fast::TemplateArg>> template_args;
     if (template_args_) {
       for (const auto& [name, value] : template_args_.value()) {
         // Handle bool, int and dtype template args
@@ -48,13 +48,13 @@ struct PyCustomKernelFunction {
         } else if (nb::isinstance<int>(value)) {
           int int_val = nb::cast<int>(value);
           template_args.emplace_back(name, int_val);
-        } else if (nb::isinstance<mx::Dtype>(value)) {
-          mx::Dtype dtype = nb::cast<mx::Dtype>(value);
+        } else if (nb::isinstance<tk::Dtype>(value)) {
+          tk::Dtype dtype = nb::cast<tk::Dtype>(value);
           template_args.emplace_back(name, dtype);
         } else {
           std::ostringstream msg;
           msg << tag_
-              << " Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.";
+              << " Invalid template argument. Must be `tiki.Dtype`, `int` or `bool`.";
           throw std::invalid_argument(msg.str());
         }
       }
@@ -71,24 +71,24 @@ struct PyCustomKernelFunction {
         s);
   }
 
-  mx::fast::CustomKernelFunction kernel_;
+  tk::fast::CustomKernelFunction kernel_;
   const char* tag_;
 };
 
-mx::MathMode parse_metal_math_mode(const std::string& math_mode) {
+tk::MathMode parse_metal_math_mode(const std::string& math_mode) {
   if (math_mode == "safe") {
-    return mx::MathMode::Safe;
+    return tk::MathMode::Safe;
   } else if (math_mode == "relaxed") {
-    return mx::MathMode::Relaxed;
+    return tk::MathMode::Relaxed;
   } else if (math_mode == "fast") {
-    return mx::MathMode::Fast;
+    return tk::MathMode::Fast;
   }
   throw std::invalid_argument(
       "[metal_kernel] Expected math_mode to be 'safe', 'relaxed', or 'fast'.");
 }
 
-mx::CompileOptions parse_compile_options(const nb::object& obj) {
-  mx::CompileOptions result;
+tk::CompileOptions parse_compile_options(const nb::object& obj) {
+  tk::CompileOptions result;
   if (obj.is_none()) {
     return result;
   }
@@ -115,12 +115,11 @@ mx::CompileOptions parse_compile_options(const nb::object& obj) {
 } // namespace
 
 void init_fast(nb::module_& parent_module) {
-  auto m =
-      parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
+  auto m = parent_module.def_submodule("fast", "tiki.fast: fast operations");
 
   m.def(
       "rms_norm",
-      &mx::fast::rms_norm,
+      &tk::fast::rms_norm,
       "x"_a,
       "weight"_a.none(),
       "eps"_a,
@@ -146,7 +145,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "layer_norm",
-      &mx::fast::layer_norm,
+      &tk::fast::layer_norm,
       "x"_a,
       "weight"_a.none(),
       "bias"_a.none(),
@@ -176,7 +175,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "cross_entropy",
-      &mx::fast::cross_entropy,
+      &tk::fast::cross_entropy,
       "logits"_a,
       "targets"_a,
       nb::kw_only(),
@@ -206,15 +205,15 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rope",
-      [](const mx::array& a,
+      [](const tk::array& a,
          int dims,
          bool traditional,
          std::optional<float> base,
          float scale,
          const ScalarOrArray& offset,
-         const std::optional<mx::array>& freqs /* = std::nullopt */,
-         mx::StreamOrDevice s /* = {} */) {
-        return mx::fast::rope(
+         const std::optional<tk::array>& freqs /* = std::nullopt */,
+         tk::StreamOrDevice s /* = {} */) {
+        return tk::fast::rope(
             a, dims, traditional, base, scale, to_array(offset), freqs, s);
       },
       "a"_a,
@@ -258,18 +257,18 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "scaled_dot_product_attention",
-      [](const mx::array& queries,
-         const mx::array& keys,
-         const mx::array& values,
+      [](const tk::array& queries,
+         const tk::array& keys,
+         const tk::array& values,
          const float scale,
-         const std::variant<std::monostate, std::string, mx::array>& mask,
-         const std::optional<mx::array>& sinks,
+         const std::variant<std::monostate, std::string, tk::array>& mask,
+         const std::optional<tk::array>& sinks,
          bool force_fused,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         bool has_mask = !std::holds_alternative<std::monostate>(mask);
         bool has_str_mask =
             has_mask && std::holds_alternative<std::string>(mask);
-        bool has_arr_mask = has_mask && std::holds_alternative<mx::array>(mask);
+        bool has_arr_mask = has_mask && std::holds_alternative<tk::array>(mask);
 
         if (has_mask) {
           if (has_str_mask) {
@@ -280,7 +279,7 @@ void init_fast(nb::module_& parent_module) {
                   << mask_str << "'. Must be 'causal', or an array.";
               throw std::invalid_argument(msg.str());
             }
-            return mx::fast::scaled_dot_product_attention(
+            return tk::fast::scaled_dot_product_attention(
                 queries,
                 keys,
                 values,
@@ -291,8 +290,8 @@ void init_fast(nb::module_& parent_module) {
                 force_fused,
                 s);
           } else {
-            auto mask_arr = std::get<mx::array>(mask);
-            return mx::fast::scaled_dot_product_attention(
+            auto mask_arr = std::get<tk::array>(mask);
+            return tk::fast::scaled_dot_product_attention(
                 queries,
                 keys,
                 values,
@@ -305,7 +304,7 @@ void init_fast(nb::module_& parent_module) {
           }
 
         } else {
-          return mx::fast::scaled_dot_product_attention(
+          return tk::fast::scaled_dot_product_attention(
               queries, keys, values, scale, "", {}, sinks, force_fused, s);
         }
       },
@@ -379,11 +378,11 @@ void init_fast(nb::module_& parent_module) {
             T_q = T_kv = 1000
             D = 128
 
-            q = mx.random.normal(shape=(B, N_q, T_q, D))
-            k = mx.random.normal(shape=(B, N_kv, T_kv, D))
-            v = mx.random.normal(shape=(B, N_kv, T_kv, D))
+            q = tk.random.normal(shape=(B, N_q, T_q, D))
+            k = tk.random.normal(shape=(B, N_kv, T_kv, D))
+            v = tk.random.normal(shape=(B, N_kv, T_kv, D))
             scale = D ** -0.5
-            out = mx.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
+            out = tk.fast.scaled_dot_product_attention(q, k, v, scale=scale, mask="causal")
       )pbdoc");
 
   m.def(
@@ -396,7 +395,7 @@ void init_fast(nb::module_& parent_module) {
          bool ensure_row_contiguous,
          bool atomic_outputs,
          const nb::object& compile_options) {
-        auto kernel = mx::fast::metal_kernel(
+        auto kernel = tk::fast::metal_kernel(
             name,
             input_names,
             output_names,
@@ -436,7 +435,7 @@ void init_fast(nb::module_& parent_module) {
                   By default, output arrays are uninitialized. Default: ``None``.
               verbose (bool, optional): Whether to print the full generated source code of the kernel
                   when it is run. Default: ``False``.
-              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+              stream (tk.stream, optional): Stream to run the kernel on. Default: ``None``.
 
             Returns:
               List[array]: The list of output arrays.)pbdoc");
@@ -483,14 +482,14 @@ void init_fast(nb::module_& parent_module) {
 
         .. code-block:: python
 
-          def exp_elementwise(a: mx.array):
+          def exp_elementwise(a: tk.array):
               source = '''
                   uint elem = thread_position_in_grid.x;
                   T tmp = inp[elem];
                   out[elem] = metal::exp(tmp);
               '''
 
-              kernel = mx.fast.metal_kernel(
+              kernel = tk.fast.metal_kernel(
                   name="myexp",
                   input_names=["inp"],
                   output_names=["out"],
@@ -498,7 +497,7 @@ void init_fast(nb::module_& parent_module) {
               )
               outputs = kernel(
                   inputs=[a],
-                  template=[("T", mx.float32)],
+                  template=[("T", tk.float32)],
                   grid=(a.size, 1, 1),
                   threadgroup=(256, 1, 1),
                   output_shapes=[a.shape],
@@ -507,9 +506,9 @@ void init_fast(nb::module_& parent_module) {
               )
               return outputs[0]
 
-          a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
+          a = tk.random.normal(shape=(4, 16)).astype(tk.float16)
           b = exp_elementwise(a)
-          assert mx.allclose(b, mx.exp(a))
+          assert tk.allclose(b, tk.exp(a))
      )pbdoc");
 
   m.def(
@@ -521,7 +520,7 @@ void init_fast(nb::module_& parent_module) {
          const std::string& header,
          bool ensure_row_contiguous,
          int shared_mem) {
-        auto kernel = mx::fast::cuda_kernel(
+        auto kernel = tk::fast::cuda_kernel(
             name,
             input_names,
             output_names,
@@ -559,7 +558,7 @@ void init_fast(nb::module_& parent_module) {
                   By default, output arrays are uninitialized. Default: ``None``.
               verbose (bool, optional): Whether to print the full generated source code of the kernel
                   when it is run. Default: ``False``.
-              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+              stream (tk.stream, optional): Stream to run the kernel on. Default: ``None``.
 
             Returns:
               List[array]: The list of output arrays.)pbdoc");
@@ -599,14 +598,14 @@ void init_fast(nb::module_& parent_module) {
 
         .. code-block:: python
 
-          def exp_elementwise(a: mx.array):
+          def exp_elementwise(a: tk.array):
               source = '''
                   auto elem = cooperative_groups::this_grid().thread_rank();
                   T tmp = inp[elem];
                   out[elem] = exp(tmp);
               '''
 
-              kernel = mx.fast.cuda_kernel(
+              kernel = tk.fast.cuda_kernel(
                   name="myexp",
                   input_names=["inp"],
                   output_names=["out"],
@@ -614,7 +613,7 @@ void init_fast(nb::module_& parent_module) {
               )
               outputs = kernel(
                   inputs=[a],
-                  template=[("T", mx.float32)],
+                  template=[("T", tk.float32)],
                   grid=(a.size, 1, 1),
                   threadgroup=(256, 1, 1),
                   output_shapes=[a.shape],
@@ -623,9 +622,9 @@ void init_fast(nb::module_& parent_module) {
               )
               return outputs[0]
 
-          a = mx.random.normal(shape=(16, 16)).astype(mx.float16)
+          a = tk.random.normal(shape=(16, 16)).astype(tk.float16)
           b = exp_elementwise(a)
-          assert mx.allclose(b, mx.exp(a))
+          assert tk.allclose(b, tk.exp(a))
      )pbdoc");
 
   m.def(
@@ -633,23 +632,23 @@ void init_fast(nb::module_& parent_module) {
       [](const std::string& name,
          const nb::bytes compiled_source,
          const std::vector<ScalarOrArray>& inputs_,
-         const std::vector<mx::Shape>& output_shapes,
-         const std::vector<mx::Dtype>& output_dtypes,
+         const std::vector<tk::Shape>& output_shapes,
+         const std::vector<tk::Dtype>& output_dtypes,
          const std::vector<nb::object>& scalars_,
          std::tuple<int, int, int> grid,
          std::tuple<int, int, int> threadgroup,
          int shared_memory,
          std::optional<float> init_value = std::nullopt,
          bool ensure_row_contiguous = false,
-         mx::StreamOrDevice s = {}) {
+         tk::StreamOrDevice s = {}) {
         // Collect the inputs and cast them to array
-        std::vector<mx::array> inputs;
+        std::vector<tk::array> inputs;
         for (const auto& value : inputs_) {
           inputs.push_back(to_array(value, std::nullopt));
         }
 
         // Collect the scalar inputs
-        std::vector<mx::fast::ScalarArg> scalars;
+        std::vector<tk::fast::ScalarArg> scalars;
         scalars.reserve(scalars_.size());
         for (const auto& v : scalars_) {
           if (nb::isinstance<bool>(v)) {
@@ -670,7 +669,7 @@ void init_fast(nb::module_& parent_module) {
           }
         }
 
-        return mx::fast::precompiled_cuda_kernel(
+        return tk::fast::precompiled_cuda_kernel(
             name,
             std::string(
                 static_cast<const char*>(compiled_source.data()),
@@ -721,6 +720,6 @@ void init_fast(nb::module_& parent_module) {
             By default, output arrays are uninitialized. Default: ``None``.
         ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
            before the kernel runs. Default: ``False``.
-        stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+        stream (tk.stream, optional): Stream to run the kernel on. Default: ``None``.
       )pbdoc");
 }

@@ -10,7 +10,7 @@ communication. AI assistance is welcome under the same standards as human work.
 - Write descriptions and review replies in plain English. Verify generated text.
 - Never claim tests passed or a human wrote content without evidence.
 - Push, publish, or reply on a contributor's behalf only when authorized.
-- Follow MLX's own contribution policy for submissions to MLX upstream.
+- Follow Tiki's own contribution policy for submissions to Tiki upstream.
 
 ## Code standards
 

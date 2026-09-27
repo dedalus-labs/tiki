@@ -16,11 +16,11 @@ pip install -r requirements.txt
 
 Tiki uses this Sphinx/reStructuredText site, with Doxygen and Breathe for C++.
 It does not use MkDocs. The Tiki layout pages require a Tiki build that includes
-the Rust indexing extension, not only the upstream `mlx` package.
+the Rust indexing extension, not only the upstream `tiki` package.
 
 ### Build
 
-Build the docs from `mlx/docs/`
+Build the docs from `tiki/docs/`
 
 ```
 doxygen && make html
@@ -29,7 +29,7 @@ doxygen && make html
 See `src/dev/tiki_layouts.rst` for the native extension build and executable
 layout documentation checks.
 
-View the docs by running a server in `mlx/docs/build/html/`:
+View the docs by running a server in `tiki/docs/build/html/`:
 
 ```
 python -m http.server <port>

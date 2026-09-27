@@ -7,12 +7,12 @@ import statistics
 import subprocess
 from pathlib import Path
 
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 from cuda.bindings import driver as cuda
 from cutlass import testing
 
-import tiki as tk
+import compiler
 from demo_cooperative import rms_norm
 from tiki_compiler.artifact import CudaIo, binary
 from tiki_compiler.lowered import Lowered
@@ -25,7 +25,7 @@ def checked(result):
 
 
 def compile_reference(
-    shape: tuple[int, int], schedule: tk.RowSchedule, output: Path
+    shape: tuple[int, int], schedule: compiler.RowSchedule, output: Path
 ) -> bytes:
     rows, width = shape
     subprocess.run(
@@ -51,14 +51,14 @@ def compile_reference(
 
 def benchmark_case(
     shape: tuple[int, int],
-    schedule: tk.RowSchedule,
+    schedule: compiler.RowSchedule,
     stream,
     output: Path,
     reverse: bool,
 ):
     rows, width = shape
-    lowered = tk.compile(schedule=schedule)(rms_norm).lower(
-        mx.zeros(shape), mx.zeros((width,))
+    lowered = compiler.compile(schedule=schedule)(rms_norm).lower(
+        tk.zeros(shape), tk.zeros((width,))
     )
     assert isinstance(lowered, Lowered)
     cute_binary = binary(CudaIo(), lowered)
@@ -189,7 +189,9 @@ def main() -> None:
                 reports.append(
                     benchmark_case(
                         shape,
-                        tk.RowSchedule(threads_per_row=threads, rows_per_block=rows),
+                        compiler.RowSchedule(
+                            threads_per_row=threads, rows_per_block=rows
+                        ),
                         stream,
                         args.output,
                         args.reverse,

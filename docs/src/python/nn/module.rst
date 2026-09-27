@@ -1,7 +1,7 @@
 Module
 ======
 
-.. currentmodule:: mlx.nn
+.. currentmodule:: tiki.nn
 
 .. autoclass:: Module
 

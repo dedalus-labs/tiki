@@ -4,9 +4,9 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test random key") {
   auto key = random::key(0);

@@ -2,20 +2,20 @@
 import math
 import unittest
 
-import mlx.core as mx
-import mlx.nn.init as init
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki.nn.init as init
+import tiki_tests
 
 
-class TestInit(mlx_tests.MLXTestCase):
+class TestInit(tiki_tests.TIKITestCase):
     def test_constant(self):
         value = 5.0
 
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.constant(value, dtype)
             for shape in [(3,), (3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(mx.zeros(shape)))
+                result = initializer(tk.array(tk.zeros(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
@@ -23,10 +23,10 @@ class TestInit(mlx_tests.MLXTestCase):
     def test_normal(self):
         mean = 0.0
         std = 1.0
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.normal(mean, std, dtype=dtype)
             for shape in [(3,), (3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
@@ -35,57 +35,57 @@ class TestInit(mlx_tests.MLXTestCase):
         low = -1.0
         high = 1.0
 
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.uniform(low, high, dtype)
             for shape in [(3,), (3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
-                    self.assertTrue(mx.all(result >= low) and mx.all(result <= high))
+                    self.assertTrue(tk.all(result >= low) and tk.all(result <= high))
 
     def test_identity(self):
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.identity(dtype)
             for shape in [(3,), (3, 3), (3, 3, 3)]:
-                result = initializer(mx.zeros((3, 3)))
-                self.assertTrue(mx.array_equal(result, mx.eye(3)))
+                result = initializer(tk.zeros((3, 3)))
+                self.assertTrue(tk.array_equal(result, tk.eye(3)))
                 self.assertEqual(result.dtype, dtype)
                 with self.assertRaises(ValueError):
-                    result = initializer(mx.zeros((3, 2)))
+                    result = initializer(tk.zeros((3, 2)))
 
     def test_glorot_normal(self):
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.glorot_normal(dtype)
             for shape in [(3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
 
     def test_glorot_uniform(self):
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.glorot_uniform(dtype)
             for shape in [(3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
 
     def test_he_normal(self):
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.he_normal(dtype)
             for shape in [(3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
 
     def test_he_uniform(self):
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.he_uniform(dtype)
             for shape in [(3, 3), (3, 3, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
@@ -94,18 +94,18 @@ class TestInit(mlx_tests.MLXTestCase):
         mean = 0.0
         std = 1.0
         sparsity = 0.5
-        for dtype in [mx.float32, mx.float16]:
+        for dtype in [tk.float32, tk.float16]:
             initializer = init.sparse(sparsity, mean, std, dtype=dtype)
             for shape in [(3, 2), (2, 2), (4, 3)]:
-                result = initializer(mx.array(np.empty(shape)))
+                result = initializer(tk.array(np.empty(shape)))
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
                     self.assertEqual(
-                        (mx.sum(result == 0) >= 0.5 * shape[0] * shape[1]), True
+                        (tk.sum(result == 0) >= 0.5 * shape[0] * shape[1]), True
                     )
             with self.assertRaises(ValueError):
-                result = initializer(mx.zeros((1,)))
+                result = initializer(tk.zeros((1,)))
 
     def test_sparse_zeros_per_row(self):
         # Sparsity is applied along each row: every row drops exactly
@@ -115,44 +115,44 @@ class TestInit(mlx_tests.MLXTestCase):
         for sparsity, shape in [(0.5, (4, 10)), (0.3, (5, 10)), (0.5, (2, 2))]:
             _, cols = shape
             expected = int(math.ceil(sparsity * cols))
-            result = init.sparse(sparsity)(mx.zeros(shape))
-            zeros_per_row = mx.sum(result == 0, axis=1)
+            result = init.sparse(sparsity)(tk.zeros(shape))
+            zeros_per_row = tk.sum(result == 0, axis=1)
             with self.subTest(shape=shape, sparsity=sparsity):
-                self.assertTrue(mx.all(zeros_per_row == expected).item())
+                self.assertTrue(tk.all(zeros_per_row == expected).item())
 
     def test_orthogonal(self):
-        initializer = init.orthogonal(gain=1.0, dtype=mx.float32)
+        initializer = init.orthogonal(gain=1.0, dtype=tk.float32)
 
         # Test with a square matrix
         shape = (4, 4)
-        result = initializer(mx.zeros(shape, dtype=mx.float32))
+        result = initializer(tk.zeros(shape, dtype=tk.float32))
         self.assertEqual(result.shape, shape)
-        self.assertEqual(result.dtype, mx.float32)
+        self.assertEqual(result.dtype, tk.float32)
 
         I = result @ result.T
-        eye = mx.eye(shape[0], dtype=mx.float32)
+        eye = tk.eye(shape[0], dtype=tk.float32)
         self.assertTrue(
-            mx.allclose(I, eye, atol=1e-5), "Orthogonal init failed on a square matrix."
+            tk.allclose(I, eye, atol=1e-5), "Orthogonal init failed on a square matrix."
         )
 
         # Test with a rectangular matrix: more rows than cols
         shape = (6, 4)
-        result = initializer(mx.zeros(shape, dtype=mx.float32))
+        result = initializer(tk.zeros(shape, dtype=tk.float32))
         self.assertEqual(result.shape, shape)
-        self.assertEqual(result.dtype, mx.float32)
+        self.assertEqual(result.dtype, tk.float32)
 
         I = result.T @ result
-        eye = mx.eye(shape[1], dtype=mx.float32)
+        eye = tk.eye(shape[1], dtype=tk.float32)
         self.assertTrue(
-            mx.allclose(I, eye, atol=1e-5),
+            tk.allclose(I, eye, atol=1e-5),
             "Orthogonal init failed on a rectangular matrix.",
         )
 
         # A non-2D input reports its actual number of dimensions
         with self.assertRaises(ValueError) as cm:
-            initializer(mx.zeros((2, 3, 4), dtype=mx.float32))
+            initializer(tk.zeros((2, 3, 4), dtype=tk.float32))
         self.assertIn("3D array", str(cm.exception))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()
