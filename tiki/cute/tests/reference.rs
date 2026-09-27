@@ -51,7 +51,7 @@ fn run(operation: &str, args: &[&str]) -> Result<Layout, LayoutError> {
 
 // Every recorded call against its recorded outcome.
 #[test]
-fn every_reference_case_matches_pycute() {
+fn every_reference_case_matches() {
     let mut mismatches = Vec::new();
     let mut count = 0;
     for line in CASES.lines().filter(|line| !line.starts_with('#')) {
