@@ -510,8 +510,8 @@ assumed:
                return Err(LaunchError::Fact { parameter: "N", fact: "a positive multiple of 512" });
            }
            let shape = LaunchShape { blocks: n / 512, threads: 128 };
-           // Orders the launch after x's last write and y's last access, and
-           // retains both arrays in the batch until the device passes it.
+           // Waits on the event of any argument another stream produced, and
+           // leases both arrays' storage to the batch until the device passes it.
            stream.launch(&self.function, shape, (alpha, x, y, n as i64), batch)
        }
    }
