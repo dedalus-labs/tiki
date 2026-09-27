@@ -1,0 +1,20 @@
+[package]
+name = "tiki-algebra"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "Algebraic structures as Rust traits: monoids, semirings, rings, fields and modules"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
+[dev-dependencies]
+proptest = "1"
