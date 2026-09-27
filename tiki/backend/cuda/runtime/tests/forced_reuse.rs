@@ -5,6 +5,7 @@
 //! `cargo test --release -- --ignored`.
 
 use std::ffi::c_void;
+use std::sync::Mutex;
 
 use tiki_cuda_runtime as rt;
 
@@ -16,6 +17,9 @@ extern "C" {
 
 const BYTES: usize = 1 << 20;
 const ROUNDS: usize = 100;
+
+// Each test owns the process-wide cache until its assertions complete.
+static TEST_SESSION: Mutex<()> = Mutex::new(());
 
 fn stream() -> *mut c_void {
     let mut stream = std::ptr::null_mut();
@@ -44,15 +48,12 @@ fn holds(ptr: usize, pattern: u8) -> bool {
         .all(|&x| x == pattern)
 }
 
-// Invariant: a blocking host export returns the bytes the device wrote even
-// when the freed device address is immediately reallocated and overwritten.
-// Witness: 100 rounds of fill, export, reallocate, fill with another pattern;
-// every exported buffer still holds its own pattern, and the device address
-// was reused at least once so the ordering was actually exercised. The cache
-// is cleared each round so every round allocates device memory afresh.
+// Invariant: blocking export keeps bytes after the device address is reused.
+// Witness: 100 synchronized fill/export/overwrite rounds preserve each pattern.
 #[test]
 #[ignore = "needs a CUDA device"]
-fn blocking_export_survives_address_reuse() {
+pub(crate) fn blocking_export_survives_address_reuse() {
+    let _session = TEST_SESSION.lock().unwrap();
     rt::init().expect("init");
     let stream = stream();
     let mut reused = 0;
@@ -80,13 +81,12 @@ fn blocking_export_survives_address_reuse() {
     );
 }
 
-// Invariant: a stream-ordered export makes the bytes visible on the host once
-// that stream completes, and the device source is released behind the copy.
-// Witness: fill, migrate on the same stream, allocate again on it, overwrite,
-// synchronize; the host copy holds the original pattern.
+// Invariant: stream completion makes exported bytes visible before source reuse.
+// Witness: fill, migrate, reallocate, overwrite, and sync preserve the first fill.
 #[test]
 #[ignore = "needs a CUDA device"]
-fn stream_ordered_export_keeps_data() {
+pub(crate) fn stream_ordered_export_keeps_data() {
+    let _session = TEST_SESSION.lock().unwrap();
     rt::init().expect("init");
     let stream = stream();
     for round in 0..ROUNDS {
@@ -105,13 +105,12 @@ fn stream_ordered_export_keeps_data() {
     }
 }
 
-// Invariant: released storage is cached and reused for a request of the same
-// class; clearing the cache releases it.
-// Witness: a 100-byte unified request rounds to 128; after release the cache
-// holds 128 bytes, a second request takes it back, and clear_cache empties it.
+// Invariant: release retains reusable capacity until the cache is cleared.
+// Witness: 100 bytes round to 128 and a 90-byte request reuses that address.
 #[test]
 #[ignore = "needs a CUDA device"]
-fn cache_accounting() {
+pub(crate) fn cache_accounting() {
+    let _session = TEST_SESSION.lock().unwrap();
     rt::init().expect("init");
     let runtime = rt::runtime();
     runtime.clear_cache().expect("clear");

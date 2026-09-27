@@ -29,7 +29,7 @@ impl<A> SizeClassCache<A> {
         self.bytes
     }
 
-    pub fn reuse(&mut self, size: usize) -> Option<A> {
+    pub fn reuse(&mut self, size: usize) -> Option<(usize, A)> {
         let limit = (2 * size).min(size + 2 * self.page);
         let class = *self.classes.range(size..).next()?.0;
         if class >= limit {
@@ -37,7 +37,7 @@ impl<A> SizeClassCache<A> {
         }
         let (_, a) = self.pop_front(class);
         self.bytes -= class;
-        Some(a)
+        Some((class, a))
     }
 
     pub fn recycle(&mut self, size: usize, a: A) {
@@ -115,9 +115,9 @@ mod tests {
         cache.recycle(80, "c");
         cache.recycle(64, "a");
         cache.recycle(64, "b");
-        assert_eq!(cache.reuse(60), Some("a"));
-        assert_eq!(cache.reuse(60), Some("b"));
-        assert_eq!(cache.reuse(60), Some("c"));
+        assert_eq!(cache.reuse(60), Some((64, "a")));
+        assert_eq!(cache.reuse(60), Some((64, "b")));
+        assert_eq!(cache.reuse(60), Some((80, "c")));
         assert_eq!(cache.reuse(60), None);
         assert_eq!(cache.bytes(), 0);
     }
@@ -130,7 +130,7 @@ mod tests {
         cache.recycle(132, "x");
         assert_eq!(cache.reuse(100), None);
         cache.recycle(131, "y");
-        assert_eq!(cache.reuse(100), Some("y"));
+        assert_eq!(cache.reuse(100), Some((131, "y")));
     }
 
     // Invariant: release evicts the least recently recycled entries across classes.
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(cache.release(64, &mut |a| freed.push(a)), 1);
         assert_eq!(freed, ["old"]);
         assert_eq!(cache.bytes(), 192);
-        assert_eq!(cache.reuse(64), Some("new"));
+        assert_eq!(cache.reuse(64), Some((64, "new")));
     }
 
     // Invariant: a request for at least 90% of the cache clears it entirely.
