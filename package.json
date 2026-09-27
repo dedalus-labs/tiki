@@ -1,12 +1,19 @@
 {
-  "name": "tiki-workflows",
+  "name": "tiki-ci",
   "private": true,
-  "description": "Typed GitHub Actions definitions; run `npm run generate` after editing gha/",
+  "type": "module",
   "scripts": {
-    "generate": "hollywood generate",
-    "check": "hollywood check"
+    "ci": "node ci/cli.ts"
   },
   "devDependencies": {
-    "@dedalus-labs/hollywood": "0.0.5"
+    "@actions/expressions": "0.3.61",
+    "@dedalus-labs/hollywood": "0.0.5",
+    "@types/node": "26.2.0",
+    "oxfmt": "0.59.0",
+    "typescript": "7.0.2",
+    "yaml": "2.8.4"
+  },
+  "engines": {
+    "node": ">=24.11"
   }
 }
