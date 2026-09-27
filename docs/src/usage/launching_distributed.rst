@@ -5,30 +5,30 @@
 Launching Distributed Programs
 ==============================
 
-.. currentmodule:: mlx.core.distributed
+.. currentmodule:: tiki.distributed
 
-The MLX python package provides two utilities to help you configure
+The Tiki python package provides two utilities to help you configure
 your Macs for distributed computation and also launch distributed programs on
 multiple nodes or with many processes in a single node. These utilities are aptly named
 
-- ``mlx.launch``
-- ``mlx.distributed_config``
+- ``tiki.launch``
+- ``tiki.distributed_config``
 
 See the :doc:`distributed docs <distributed>` for an introduction and
 getting-started guides to the various backends.
 
-``mlx.distributed_config`` 
+``tiki.distributed_config`` 
 ---------------------------
 
 Unless you are launching distributed jobs locally for development or multi-gpu
 CUDA environments, then you have several Macs that you need to configure for
-distributed communication with MLX.
+distributed communication with Tiki.
 
-``mlx.distributed_config`` aims to automate the process of configuring the
+``tiki.distributed_config`` aims to automate the process of configuring the
 network interfaces (especially for communication over thunderbolt) and also
-creating the hostfile to be used with ``mlx.launch``.
+creating the hostfile to be used with ``tiki.launch``.
 
-We will analyse 3 cases of using ``mlx.distributed_config``
+We will analyse 3 cases of using ``tiki.distributed_config``
 
 1. RDMA over thunderbolt using JACCL
 2. TCP/IP over thunderbolt using the ring backend
@@ -42,7 +42,7 @@ following command to configure the nodes and create the hostfile.
 
 .. code-block::
 
-   mlx.distributed_config --verbose --backend jaccl \
+   tiki.distributed_config --verbose --backend jaccl \
         --hosts m3-ultra-1,m3-ultra-2,m3-ultra-3,m3-ultra-4 --over thunderbolt \
         --auto-setup --output m3-ultra-jaccl.json
 
@@ -87,14 +87,14 @@ writes the hostfile.
 Debugging cable connections
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``mlx.distributed_config`` can help you debug the connectivity of your nodes
+``tiki.distributed_config`` can help you debug the connectivity of your nodes
 over thunderbolt by exporting a graph of the connections.
 
 Running
 
 .. code-block::
 
-   mlx.distributed_config --verbose \
+   tiki.distributed_config --verbose \
         --hosts host1,host2,host3,host4 \
         --over thunderbolt --dot
 
@@ -105,24 +105,24 @@ cable is not connected correctly.
 See :ref:`the JACCL section <jaccl_section>` for an example.
 
 
-``mlx.launch``
---------------
+``tiki.launch``
+---------------
 
-The minimal usage example of ``mlx.launch`` is simply
+The minimal usage example of ``tiki.launch`` is simply
 
 .. code:: shell
 
-    mlx.launch --hosts ip1,ip2 my_script.py
+    tiki.launch --hosts ip1,ip2 my_script.py
 
 or for testing on localhost
 
 .. code:: shell
 
-    mlx.launch -n 2 my_script.py
+    tiki.launch -n 2 my_script.py
 
-The ``mlx.launch`` command connects to the provided host and launches the input
+The ``tiki.launch`` command connects to the provided host and launches the input
 script on each host. It monitors each of the launched processes and terminates
-the rest if one of them fails unexpectedly or if ``mlx.launch`` is terminated.
+the rest if one of them fails unexpectedly or if ``tiki.launch`` is terminated.
 It also takes care of forwarding the output of each remote process to stdout
 and stderr respectively.
 
@@ -145,7 +145,7 @@ a hostname to ssh to and a list of IPs to utilize for the communication.
         {"ssh": "hostname2", "ips": ["123.123.1.2", "123.123.2.2"]}
     ]
 
-You can use ``mlx.distributed_config --over ethernet`` to create a hostfile
+You can use ``tiki.distributed_config --over ethernet`` to create a hostfile
 with IPs corresponding to the ``en0`` interface.
 
 Setting up Remote Hosts
@@ -157,7 +157,7 @@ host and on the same path. A good checklist to debug errors is the following:
 
 * ``ssh hostname`` works without asking for password or host confirmation
 * the python binary is available on all hosts at the same path. You can use
-  ``mlx.launch --print-python`` to see what that path is.
+  ``tiki.launch --print-python`` to see what that path is.
 * the script you want to run is available on all hosts at the same path
 
 .. _ring_specifics:
@@ -202,7 +202,7 @@ multi-gpu jobs. For instance
 
 .. code-block::
 
-   mlx.launch --backend nccl --hosts linux-1,linux-2 -n 8 -- ./my-job.sh
+   tiki.launch --backend nccl --hosts linux-1,linux-2 -n 8 -- ./my-job.sh
 
 will attempt to launch 16 processes, 8 on each node that will all run
 ``my-job.sh``.
@@ -212,8 +212,8 @@ will attempt to launch 16 processes, 8 on each node that will all run
 MPI Specifics
 ^^^^^^^^^^^^^
 
-One can use MPI by passing ``--backend mpi`` to ``mlx.launch``. In that case,
-``mlx.launch`` is a thin wrapper over ``mpirun``. Moreover,
+One can use MPI by passing ``--backend mpi`` to ``tiki.launch``. In that case,
+``tiki.launch`` is a thin wrapper over ``mpirun``. Moreover,
 
 * The IPs in the hostfile are ignored
 * The ssh connectivity requirement is stronger as every node needs to be able
@@ -222,8 +222,8 @@ One can use MPI by passing ``--backend mpi`` to ``mlx.launch``. In that case,
 
 Finally, one can pass arguments to ``mpirun`` using ``--mpi-arg``. For instance
 to choose a specific interface for the byte-transfer-layer of MPI we can call
-``mlx.launch`` as follows:
+``tiki.launch`` as follows:
 
 .. code:: shell
 
-    mlx.launch --backend mpi --mpi-arg '--mca btl_tcp_if_include en0' --hostfile hosts.json my_script.py
+    tiki.launch --backend mpi --mpi-arg '--mca btl_tcp_if_include en0' --hostfile hosts.json my_script.py

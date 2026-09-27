@@ -9,8 +9,8 @@ and the final loss is the same at any number of ranks, up to the order the
 floating point additions happen in:
 
     python examples/python/distributed_data_parallel.py
-    mlx.launch -n 2 python examples/python/distributed_data_parallel.py
-    mlx.launch -n 4 python examples/python/distributed_data_parallel.py
+    tiki.launch -n 2 python examples/python/distributed_data_parallel.py
+    tiki.launch -n 4 python examples/python/distributed_data_parallel.py
 
 The model is replicated and the batch is split, which is what you reach for
 when the model fits on one machine but the data is large.
@@ -18,9 +18,9 @@ when the model fits on one machine but the data is large.
 
 import time
 
-import mlx.core as mx
-import mlx.nn as nn
-import mlx.optimizers as optim
+import tiki as tk
+import tiki.nn as nn
+import tiki.optimizers as optim
 
 num_features = 100
 num_examples = 1_000
@@ -28,7 +28,7 @@ hidden = 64
 num_iters = 200
 lr = 0.05
 
-world = mx.distributed.init()
+world = tk.distributed.init()
 
 if num_examples % world.size() != 0:
     raise ValueError(
@@ -36,9 +36,9 @@ if num_examples % world.size() != 0:
     )
 
 # Fixed keys, so every rank draws the same dataset rather than one of its own.
-w_star = mx.random.normal((num_features,), key=mx.random.key(0))
-X = mx.random.normal((num_examples, num_features), key=mx.random.key(1))
-y = X @ w_star + 1e-2 * mx.random.normal((num_examples,), key=mx.random.key(2))
+w_star = tk.random.normal((num_features,), key=tk.random.key(0))
+X = tk.random.normal((num_examples, num_features), key=tk.random.key(1))
+y = X @ w_star + 1e-2 * tk.random.normal((num_examples,), key=tk.random.key(2))
 
 # Keep this rank's slice and drop the rest.
 examples_per_rank = num_examples // world.size()
@@ -58,15 +58,15 @@ class MLP(nn.Module):
 
 # Seeding the global rng starts every rank from the same weights, which the
 # averaged gradient then keeps in step.
-mx.random.seed(0)
+tk.random.seed(0)
 model = MLP(num_features, hidden)
-mx.eval(model.parameters())
+tk.eval(model.parameters())
 
 optimizer = optim.SGD(learning_rate=lr)
 
 
 def loss_fn(model, X, y):
-    return 0.5 * mx.mean(mx.square(model(X) - y))
+    return 0.5 * tk.mean(tk.square(model(X) - y))
 
 
 loss_and_grad_fn = nn.value_and_grad(model, loss_fn)
@@ -81,17 +81,17 @@ for _ in range(num_iters):
     grads = nn.average_gradients(grads, group=world)
 
     optimizer.update(model, grads)
-    mx.eval(model.parameters(), optimizer.state)
+    tk.eval(model.parameters(), optimizer.state)
 toc = time.perf_counter()
 
 # Every slice is the same size, so averaging the per rank losses gives the loss
 # over the whole dataset.
-loss = mx.distributed.all_sum(loss_fn(model, X, y), group=world) / world.size()
+loss = tk.distributed.all_sum(loss_fn(model, X, y), group=world) / world.size()
 
 # Only rank 0 prints the loss, but every rank has to evaluate it. Arrays are
 # lazy, so leaving this to the print below would mean the other ranks never
 # join the all_sum and everyone waits forever.
-mx.eval(loss)
+tk.eval(loss)
 
 throughput = num_iters / (toc - tic)
 

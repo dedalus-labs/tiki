@@ -2,7 +2,7 @@
 
 import unittest
 
-from mlx import core
+from tiki import core
 
 import tiki
 from associative_scan import ScanSchedule, associative_scan
@@ -11,7 +11,7 @@ from tiki_compiler.artifact import binary
 from tiki_compiler.lowered import Lowered
 
 
-@unittest.skipUnless(core.cuda.is_available(), "requires MLX CUDA")
+@unittest.skipUnless(core.cuda.is_available(), "requires Tiki CUDA")
 class ArtifactTests(unittest.TestCase):
     def setUp(self) -> None:
         arch = core.device_info(core.gpu)["architecture"]

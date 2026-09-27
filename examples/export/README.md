@@ -1,9 +1,9 @@
 ## Setup
 
-Install MLX:
+Install Tiki:
 
 ```bash
-pip install mlx>=0.22
+pip install tiki>=0.22
 ```
 
 Build the C++ examples:

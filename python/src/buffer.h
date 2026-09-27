@@ -4,8 +4,8 @@
 
 #include <nanobind/nanobind.h>
 
-#include "mlx/array.h"
-#include "mlx/utils.h"
+#include "tiki/array.h"
+#include "tiki/utils.h"
 
 // Only defined in >= Python 3.9
 // https://github.com/python/cpython/blob/f6cdc6b4a191b75027de342aa8b5d344fb31313e/Include/typeslots.h#L2-L3
@@ -14,39 +14,39 @@
 #define Py_bf_releasebuffer 2
 #endif
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 
-std::string buffer_format(const mx::array& a) {
+std::string buffer_format(const tk::array& a) {
   // https://docs.python.org/3.10/library/struct.html#format-characters
   switch (a.dtype()) {
-    case mx::bool_:
+    case tk::bool_:
       return "?";
-    case mx::uint8:
+    case tk::uint8:
       return "B";
-    case mx::uint16:
+    case tk::uint16:
       return "H";
-    case mx::uint32:
+    case tk::uint32:
       return "I";
-    case mx::uint64:
+    case tk::uint64:
       return "Q";
-    case mx::int8:
+    case tk::int8:
       return "b";
-    case mx::int16:
+    case tk::int16:
       return "h";
-    case mx::int32:
+    case tk::int32:
       return "i";
-    case mx::int64:
+    case tk::int64:
       return "q";
-    case mx::float16:
+    case tk::float16:
       return "e";
-    case mx::float32:
+    case tk::float32:
       return "f";
-    case mx::bfloat16:
+    case tk::bfloat16:
       return "bfloat16";
-    case mx::float64:
+    case tk::float64:
       return "d";
-    case mx::complex64:
+    case tk::complex64:
       return "Zf\0";
     default: {
       std::ostringstream os;
@@ -86,7 +86,7 @@ struct buffer_info {
 
 extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   std::memset(view, 0, sizeof(Py_buffer));
-  auto a = nb::cast<mx::array>(nb::handle(obj));
+  auto a = nb::cast<tk::array>(nb::handle(obj));
 
   {
     nb::gil_scoped_release nogil;

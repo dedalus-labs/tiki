@@ -10,29 +10,29 @@ from inside a vjp rule under grad, under vmap, and under vmap of grad."""
 
 import unittest
 
-import mlx.core as mx
+import tiki as tk
 
 
 class TestArrayIsTracer(unittest.TestCase):
     def test_placeholders_are_the_only_tracers(self) -> None:
         seen: list[bool] = []
 
-        @mx.custom_function
-        def double(x: mx.array) -> mx.array:
+        @tk.custom_function
+        def double(x: tk.array) -> tk.array:
             return x * 2
 
         @double.vjp
-        def _(primals: mx.array, cotangent: mx.array, output: mx.array) -> mx.array:
+        def _(primals: tk.array, cotangent: tk.array, output: tk.array) -> tk.array:
             seen.append(primals.is_tracer)
             return cotangent * 2
 
-        x = mx.ones((2, 3))
+        x = tk.ones((2, 3))
         self.assertFalse(x.is_tracer)
-        mx.grad(lambda x: double(x).sum())(x)
+        tk.grad(lambda x: double(x).sum())(x)
         self.assertEqual(seen, [False])
-        mx.vmap(lambda a: seen.append(a.is_tracer) or a)(x)
+        tk.vmap(lambda a: seen.append(a.is_tracer) or a)(x)
         self.assertEqual(seen, [False, True])
-        mx.vmap(lambda a: mx.grad(lambda b: double(b).sum())(a))(x)
+        tk.vmap(lambda a: tk.grad(lambda b: double(b).sum())(a))(x)
         self.assertEqual(seen, [False, True, True])
 
 

@@ -22,14 +22,14 @@ from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from typing import cast, overload
 
-from mlx import core
-from mlx.utils import tree_flatten, tree_unflatten
+from tiki import core
+from tiki.utils import tree_flatten, tree_unflatten
 
 from tiki_compiler.artifact import CudaIo
 from tiki_compiler.scan_runtime import ScanContractError, ScanOp
 from tiki_compiler.scan_schedule import ScanSchedule as ScanSchedule
 
-# MLX's tree paths normalize tuples to lists when rebuilding a tree.
+# Tiki's tree paths normalize tuples to lists when rebuilding a tree.
 type ArrayTree = core.array | Sequence[ArrayTree] | Mapping[str, ArrayTree]
 # The two operands' leaf structure is checked against the captured paths.
 type TreeCombine = Callable[..., ArrayTree]
@@ -40,7 +40,7 @@ def flatten(tree: ArrayTree) -> list[tuple[str, core.array]]:
     leaves: list[tuple[str, core.array]] = []
     tree_flatten(tree, destination=leaves)
     if any(not isinstance(leaf, core.array) for _, leaf in leaves):
-        raise ScanContractError("every pytree leaf must be an MLX array")
+        raise ScanContractError("every pytree leaf must be an Tiki array")
     return leaves
 
 

@@ -8,15 +8,15 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/allocator.h"
-#include "mlx/device.h"
-#include "mlx/memory.h"
-#include "mlx/ops.h"
-#include "mlx/scheduler.h"
-#include "mlx/stream.h"
-#include "mlx/transforms.h"
+#include "tiki/allocator.h"
+#include "tiki/device.h"
+#include "tiki/memory.h"
+#include "tiki/ops.h"
+#include "tiki/scheduler.h"
+#include "tiki/stream.h"
+#include "tiki/transforms.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 TEST_CASE("test simple allocations") {
   {

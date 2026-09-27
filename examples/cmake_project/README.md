@@ -1,9 +1,9 @@
 ## Build and Run 
 
-Install MLX with Python:
+Install Tiki with Python:
 
 ```bash
-pip install mlx>=0.22
+pip install tiki>=0.22
 ```
 
 Build the C++ example:

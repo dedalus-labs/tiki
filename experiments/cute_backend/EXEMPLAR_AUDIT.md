@@ -1,6 +1,6 @@
 # CuTe exemplar audit
 
-The supported MLX tensor programs compile to native CUDA device code. On the
+The supported Tiki tensor programs compile to native CUDA device code. On the
 GH200, eight of ten measured RMSNorm shape/schedule combinations were within
 3% of the same scalar algorithm built with NVCC, NVIDIA's CUDA C++ compiler. Two narrow-row
 schedules were 11% and 22% slower. Native compilation is established; optimal
@@ -53,7 +53,7 @@ Earlier calibration runs used the opposite order but different contraction
 flags and are excluded from this table.
 
 The same working buffers are reused, so these are warm working-set timings.
-They exclude compilation, allocation, transfers, MLX execution overhead, and
+They exclude compilation, allocation, transfers, Tiki execution overhead, and
 per-launch Python dispatch. They do not establish HBM speed-of-light efficiency
 or end-to-end model throughput. Both outputs were checked against a float64
 NumPy reference before timing.
@@ -91,7 +91,7 @@ The new subgroup test fails before implementation. GPU correctness tests cover
 Block sizes remain complete warps. Butterfly shuffle offsets stay below the
 row-group width, so they cannot exchange values across row groups.
 Filtered Compute Sanitizer synccheck reports zero errors for the generated
-kernel. The independent unfiltered MLX allocation-ordering finding from
+kernel. The independent unfiltered Tiki allocation-ordering finding from
 [COOPERATIVE_PROOF.md](COOPERATIVE_PROOF.md) remains unresolved.
 
 On the GH200 with the existing environment:
@@ -105,5 +105,5 @@ compute-sanitizer --tool synccheck --kernel-name kne=tiki_fused --error-exitcode
 ```
 
 Use a fresh output directory. The benchmark requires CUDA Python, CuTe DSL,
-NumPy, an importable MLX build, and `nvcc`. The CUDA C++ file is a benchmark
+NumPy, an importable Tiki build, and `nvcc`. The CUDA C++ file is a benchmark
 reference only; the Tiki compiler does not generate or compile CUDA C++.

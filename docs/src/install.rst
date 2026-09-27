@@ -6,12 +6,12 @@ Build and Install
 Python Installation
 -------------------
 
-MLX is available on PyPI. All you have to do to use MLX with your own Apple
+Tiki is available on PyPI. All you have to do to use Tiki with your own Apple
 silicon computer is
 
 .. code-block:: shell
 
-    pip install mlx
+    pip install tiki
 
 To install from PyPI your system must meet the following requirements:
 
@@ -20,16 +20,16 @@ To install from PyPI your system must meet the following requirements:
 - macOS >= 14.0
 
 .. note::
-    MLX is only available on devices running macOS >= 14.0 and higher.
+    Tiki is only available on devices running macOS >= 14.0 and higher.
 
 CUDA
 ^^^^
 
-MLX has a CUDA backend which you can install with:
+Tiki has a CUDA backend which you can install with:
 
 .. code-block:: shell
 
-    pip install mlx[cuda12]
+    pip install tiki[cuda12]
 
 
 To install the CUDA package from PyPi your system must meet the following
@@ -41,17 +41,17 @@ requirements:
 - Linux distribution with glibc >= 2.35
 - Python >= 3.10
 
-For CUDA 13 use ``pip install mlx[cuda13]``. The CUDA 13 package requires
+For CUDA 13 use ``pip install tiki[cuda13]``. The CUDA 13 package requires
 an Nvidia driver >= 580 or an appropriate CUDA compatibility package.
 
 CPU-only (Linux)
 ^^^^^^^^^^^^^^^^
 
-For a CPU-only version of MLX that runs on Linux use:
+For a CPU-only version of Tiki that runs on Linux use:
 
 .. code-block:: shell
 
-    pip install mlx[cpu]
+    pip install tiki[cpu]
 
 To install the CPU-only package from PyPi your system must meet the following
 requirements:
@@ -102,18 +102,18 @@ Python API
    backend, including CPU and Metal. Its backend-independent indexing extension
    uses the same Rust validation on each device. Installing a prebuilt wheel
    does not require Cargo. C++ CPU and Metal builds with
-   ``MLX_BUILD_PYTHON_BINDINGS=OFF`` do not build this extension. The CUDA runtime
+   ``TIKI_BUILD_PYTHON_BINDINGS=OFF`` do not build this extension. The CUDA runtime
    has a separate Rust dependency. These are Tiki requirements, not requirements
    of the upstream MLX distributions described below.
 
-To build and install the MLX python library from source, first, clone MLX from
+To build and install the Tiki python library from source, first, clone Tiki from
 `its GitHub repo <https://github.com/ml-explore/mlx>`_:
 
 .. code-block:: shell
 
-   git clone git@github.com:ml-explore/mlx.git mlx && cd mlx
+   git clone git@github.com:ml-explore/mlx.git tiki && cd tiki
 
-Then simply build and install MLX using pip:
+Then simply build and install Tiki using pip:
 
 .. code-block:: shell
 
@@ -143,15 +143,15 @@ C++ API
 
 .. _cpp install:
 
-Currently, MLX must be built and installed from source.
+Currently, Tiki must be built and installed from source.
 
-Similarly to the python library, to build and install the MLX C++ library start
-by cloning MLX from `its GitHub repo
+Similarly to the python library, to build and install the Tiki C++ library start
+by cloning Tiki from `its GitHub repo
 <https://github.com/ml-explore/mlx>`_:
 
 .. code-block:: shell
 
-   git clone git@github.com:ml-explore/mlx.git mlx && cd mlx
+   git clone git@github.com:ml-explore/mlx.git tiki && cd tiki
 
 Create a build directory and run CMake and make:
 
@@ -172,8 +172,8 @@ Install with:
 
    make install
 
-Note that the built ``mlx.metallib`` file should be either at the same
-directory as the executable statically linked to ``libmlx.a`` or the
+Note that the built ``tiki.metallib`` file should be either at the same
+directory as the executable statically linked to ``libtiki.a`` or the
 preprocessor constant ``METAL_PATH`` should be defined at build time and it
 should point to the path to the built metal library.
 
@@ -183,25 +183,25 @@ should point to the path to the built metal library.
 
    * - Option
      - Default
-   * - MLX_BUILD_TESTS
+   * - TIKI_BUILD_TESTS
      - ON
-   * - MLX_BUILD_EXAMPLES
+   * - TIKI_BUILD_EXAMPLES
      - OFF
-   * - MLX_BUILD_BENCHMARKS
+   * - TIKI_BUILD_BENCHMARKS
      - OFF
-   * - MLX_BUILD_METAL
+   * - TIKI_BUILD_METAL
      - ON
-   * - MLX_BUILD_CPU
+   * - TIKI_BUILD_CPU
      - ON
-   * - MLX_BUILD_PYTHON_BINDINGS
+   * - TIKI_BUILD_PYTHON_BINDINGS
      - OFF
-   * - MLX_METAL_DEBUG
+   * - TIKI_METAL_DEBUG
      - OFF
-   * - MLX_BUILD_SAFETENSORS
+   * - TIKI_BUILD_SAFETENSORS
      - ON
-   * - MLX_BUILD_GGUF
+   * - TIKI_BUILD_GGUF
      - ON
-   * - MLX_METAL_JIT
+   * - TIKI_METAL_JIT
      - OFF
 
 .. note::
@@ -228,7 +228,7 @@ Binary Size Minimization
 To produce a smaller binary use the CMake flags ``CMAKE_BUILD_TYPE=MinSizeRel``
 and ``BUILD_SHARED_LIBS=ON``.
 
-The MLX CMake build has several additional options to make smaller binaries.
+The Tiki CMake build has several additional options to make smaller binaries.
 For example, if you don't need the CPU backend or support for safetensors and
 GGUF, you can do:
 
@@ -237,14 +237,14 @@ GGUF, you can do:
   cmake .. \
     -DCMAKE_BUILD_TYPE=MinSizeRel \
     -DBUILD_SHARED_LIBS=ON \
-    -DMLX_BUILD_CPU=OFF \
-    -DMLX_BUILD_SAFETENSORS=OFF \
-    -DMLX_BUILD_GGUF=OFF \
-    -DMLX_METAL_JIT=ON
+    -DTIKI_BUILD_CPU=OFF \
+    -DTIKI_BUILD_SAFETENSORS=OFF \
+    -DTIKI_BUILD_GGUF=OFF \
+    -DTIKI_METAL_JIT=ON
 
-THE ``MLX_METAL_JIT`` flag minimizes the size of the MLX Metal library which
+THE ``TIKI_METAL_JIT`` flag minimizes the size of the Tiki Metal library which
 contains pre-built GPU kernels. This substantially reduces the size of the
-Metal library by run-time compiling kernels the first time they are used in MLX
+Metal library by run-time compiling kernels the first time they are used in Tiki
 on a given machine. Note run-time compilation incurs a cold-start cost which can
 be anwywhere from a few hundred millisecond to a few seconds depending on the
 application. Once a kernel is compiled, it will be cached by the system. The
@@ -280,18 +280,18 @@ and the CUDA toolkit. For example on Ubuntu, run the following:
 
 
 When building either the Python or C++ APIs make sure to pass the cmake flag
-``MLX_BUILD_CUDA=ON``. For example, to build the Python API run:
+``TIKI_BUILD_CUDA=ON``. For example, to build the Python API run:
 
 .. code-block:: shell
 
-  CMAKE_ARGS="-DMLX_BUILD_CUDA=ON" pip install -e ".[dev]"
+  CMAKE_ARGS="-DTIKI_BUILD_CUDA=ON" pip install -e ".[dev]"
 
 To build the C++ package run:
 
 .. code-block:: shell
 
    mkdir -p build && cd build
-   cmake .. -DMLX_BUILD_CUDA=ON && make -j
+   cmake .. -DTIKI_BUILD_CUDA=ON && make -j
 
 
 Troubleshooting

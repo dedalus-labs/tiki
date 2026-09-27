@@ -1,43 +1,43 @@
-import mlx.core as mx
-import mlx_tests
+import tiki as tk
+import tiki_tests
 
 
-class TestPad(mlx_tests.MLXTestCase):
+class TestPad(tiki_tests.TIKITestCase):
     def test_source_vjp_preserves_batched_axes(self):
-        value = mx.arange(24, dtype=mx.float32).reshape(2, 3, 4)
+        value = tk.arange(24, dtype=tk.float32).reshape(2, 3, 4)
         for axis in (0, 1, 2):
-            padded = mx.vmap(
-                lambda x: mx.pad(x, ((1, 2), (2, 1)), constant_values=3),
+            padded = tk.vmap(
+                lambda x: tk.pad(x, ((1, 2), (2, 1)), constant_values=3),
                 in_axes=axis,
                 out_axes=axis,
             )
-            gradient = mx.grad(
-                lambda x, transform=padded: mx.sum(mx.square(transform(x)))
+            gradient = tk.grad(
+                lambda x, transform=padded: tk.sum(tk.square(transform(x)))
             )(value)
             self.assertEqualArray(gradient, 2 * value, rtol=0, atol=0)
 
     def test_source_jvp_excludes_constant_padding(self):
-        value = mx.arange(6, dtype=mx.float32).reshape(2, 3)
-        tangent = mx.ones_like(value)
+        value = tk.arange(6, dtype=tk.float32).reshape(2, 3)
+        tangent = tk.ones_like(value)
 
         def function(x):
-            return mx.pad(x, ((1, 2), (2, 1)), constant_values=3)
+            return tk.pad(x, ((1, 2), (2, 1)), constant_values=3)
 
-        _, derivatives = mx.jvp(function, [value], [tangent])
-        expected = function(tangent) - function(mx.zeros_like(tangent))
+        _, derivatives = tk.jvp(function, [value], [tangent])
+        expected = function(tangent) - function(tk.zeros_like(tangent))
         self.assertEqualArray(derivatives[0], expected, rtol=0, atol=0)
 
     def test_padding_value_derivatives_are_explicitly_unsupported(self):
-        value = mx.ones((2, 3))
+        value = tk.ones((2, 3))
 
         def function(fill):
-            return mx.pad(value, ((1, 2), (2, 1)), constant_values=fill)
+            return tk.pad(value, ((1, 2), (2, 1)), constant_values=fill)
 
         with self.assertRaisesRegex(ValueError, "padding value"):
-            mx.grad(lambda fill: mx.sum(function(fill)))(mx.array(3.0))
+            tk.grad(lambda fill: tk.sum(function(fill)))(tk.array(3.0))
         with self.assertRaisesRegex(ValueError, "padding value"):
-            mx.jvp(function, [mx.array(3.0)], [mx.array(1.0)])
+            tk.jvp(function, [tk.array(3.0)], [tk.array(1.0)])
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

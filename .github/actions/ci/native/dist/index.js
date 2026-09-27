@@ -21656,7 +21656,7 @@ async function sanitizer(exec2, mode) {
     "-B",
     build,
     "-DCMAKE_BUILD_TYPE=Debug",
-    "-DMLX_BUILD_METAL=OFF",
+    "-DTIKI_BUILD_METAL=OFF",
     "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON",
     `-DUSE_${mode}=ON`
   ]);
@@ -21702,7 +21702,7 @@ async function fedora(exec2, workspace) {
       ".",
       "-B",
       "build/ci-fedora",
-      "-DMLX_BUILD_METAL=OFF",
+      "-DTIKI_BUILD_METAL=OFF",
       "-DCMAKE_BUILD_TYPE=Debug"
     ]);
     await inside("cmake", [

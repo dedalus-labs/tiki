@@ -1,17 +1,17 @@
-"""Associative scan over MLX arrays, a port of ``jax.lax.associative_scan``.
+"""Associative scan over Tiki arrays, a port of ``jax.lax.associative_scan``.
 
 The algorithm is Blelloch's recursive odd/even scan [BLE1990]: combine adjacent
 pairs, scan the half-length sequence recursively, then fill the even positions
 from the odd results. Work is O(n) combines and depth is O(log n). Every step is
-an ordinary MLX array operation, so reverse-mode and forward-mode derivatives
-come from MLX's transforms; no backward is registered here. This is also how
+an ordinary Tiki array operation, so reverse-mode and forward-mode derivatives
+come from Tiki's transforms; no backward is registered here. This is also how
 JAX differentiates its native GPU ``cumsum``: it re-expresses the kernel as
 this tree and differentiates the tree.
 
 Pairs are formed with stride-2 slices exactly as in JAX. That relies on the
 Tiki fix to ``normalize_slice`` (a singleton strided slice records a
 consistent stop and stride), so ``Slice::vjp`` and ``Slice::jvp`` are correct.
-Derivative and vectorization tests skip on an MLX build without that fix.
+Derivative and vectorization tests skip on an Tiki build without that fix.
 
 [BLE1990] Blelloch, Guy E. 1990. "Prefix Sums and Their Applications."
 CMU-CS-90-190.
@@ -20,12 +20,12 @@ CMU-CS-90-190.
 from collections.abc import Callable, Hashable
 from typing import TypeAlias, TypeVar, cast
 
-import mlx.core as mx
-from mlx.utils import tree_map
+import tiki as tk
+from tiki.utils import tree_map
 
-Leaves = list[mx.array]
+Leaves = list[tk.array]
 ArrayTree: TypeAlias = (
-    mx.array | list["ArrayTree"] | tuple["ArrayTree", ...] | dict[Hashable, "ArrayTree"]
+    tk.array | list["ArrayTree"] | tuple["ArrayTree", ...] | dict[Hashable, "ArrayTree"]
 )
 Tree = TypeVar("Tree", bound=ArrayTree)
 
@@ -71,8 +71,8 @@ def associative_scan(
 
 def _flatten_like(template: ArrayTree, value: ArrayTree) -> Leaves:
     """Match containers and dictionary keys without encoding them as strings."""
-    if isinstance(template, mx.array):
-        if not isinstance(value, mx.array):
+    if isinstance(template, tk.array):
+        if not isinstance(value, tk.array):
             raise ValueError("associative_scan: combine replaced an array leaf")
         return [value]
     if isinstance(template, dict):
@@ -91,7 +91,7 @@ def _flatten_like(template: ArrayTree, value: ArrayTree) -> Leaves:
             for left, right in zip(template, value)
             for leaf in _flatten_like(left, right)
         ]
-    raise TypeError("associative_scan: leaves must be MLX arrays")
+    raise TypeError("associative_scan: leaves must be Tiki arrays")
 
 
 def _scan(
@@ -107,7 +107,7 @@ def _scan(
         odd_prefix = [_slice(scan, slice(None, -1), axis) for scan in odd]
     else:
         even_sources = [
-            mx.concatenate(
+            tk.concatenate(
                 [
                     _slice(leaf, slice(1, None), axis),
                     _slice(elem, slice(n - 1, None), axis),
@@ -119,7 +119,7 @@ def _scan(
         odd_prefix = odd
     even_rest = combine(odd_prefix, even_sources)
     even = [
-        mx.concatenate([_slice(elem, slice(None, 1), axis), rest], axis=axis)
+        tk.concatenate([_slice(elem, slice(None, 1), axis), rest], axis=axis)
         for elem, rest in zip(elems, even_rest)
     ]
     return [
@@ -139,19 +139,19 @@ def _pairs(elems: Leaves, axis: int) -> tuple[Leaves, Leaves]:
     )
 
 
-def _interleave(a: mx.array, b: mx.array, axis: int) -> mx.array:
+def _interleave(a: tk.array, b: tk.array, axis: int) -> tk.array:
     """Return ``a0 b0 a1 b1 ...``; ``a`` may hold one more element than ``b``."""
     axis %= a.ndim
     m = b.shape[axis]
     shape = list(a.shape)
     shape[axis] = 2 * m
-    body = mx.stack([_slice(a, slice(None, m), axis), b], axis=axis + 1).reshape(shape)
+    body = tk.stack([_slice(a, slice(None, m), axis), b], axis=axis + 1).reshape(shape)
     if a.shape[axis] == m:
         return body
-    return mx.concatenate([body, _slice(a, slice(m, None), axis)], axis=axis)
+    return tk.concatenate([body, _slice(a, slice(m, None), axis)], axis=axis)
 
 
-def _slice(leaf: mx.array, selection: slice, axis: int) -> mx.array:
+def _slice(leaf: tk.array, selection: slice, axis: int) -> tk.array:
     indices = [slice(None)] * leaf.ndim
     indices[axis] = selection
     return leaf[tuple(indices)]

@@ -2,17 +2,17 @@
 
 #include <nanobind/nanobind.h>
 
-#include "mlx/backend/cuda/cuda.h"
+#include "tiki/backend/cuda/cuda.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 
 void init_cuda(nb::module_& m) {
-  nb::module_ cuda = m.def_submodule("cuda", "mlx.cuda");
+  nb::module_ cuda = m.def_submodule("cuda", "tiki.cuda");
 
   cuda.def(
       "is_available",
-      &mx::cu::is_available,
+      &tk::cu::is_available,
       R"pbdoc(
       Check if the CUDA back-end is available.
       )pbdoc");

@@ -118,7 +118,7 @@ export const release = workflow(
             uses: "actions/upload-artifact@v7",
             with: {
               name: "frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}",
-              path: "wheelhouse/mlx-*.whl",
+              path: "wheelhouse/tiki-*.whl",
               "if-no-files-found": "error",
             },
           },
@@ -247,7 +247,7 @@ export const release = workflow(
             uses: "actions/upload-artifact@v7",
             with: {
               name: "frontend-${{ runner.os }}-${{ runner.arch }}-py${{ matrix.python-version }}",
-              path: "wheelhouse/mlx-*.whl",
+              path: "wheelhouse/tiki-*.whl",
               "if-no-files-found": "error",
             },
           },
@@ -257,7 +257,7 @@ export const release = workflow(
             uses: "actions/upload-artifact@v7",
             with: {
               name: "backend-metal-${{ runner.os }}-${{ runner.arch }}",
-              path: "wheelhouse/mlx_metal-*.whl",
+              path: "wheelhouse/tiki_metal-*.whl",
               "if-no-files-found": "error",
             },
           },
@@ -323,7 +323,7 @@ export const release = workflow(
         ],
       },
       "pypi-publish-frontend": {
-        name: "Publish mlx to PyPI",
+        name: "Publish tiki to PyPI",
         "runs-on": "ubuntu-latest",
         needs: ["test_wheel"],
         permissions: {
@@ -331,7 +331,7 @@ export const release = workflow(
         },
         environment: {
           name: "${{ (inputs.publish || github.event_name == 'push') && 'pypi' || 'dry-run' }}",
-          url: "https://pypi.org/p/mlx",
+          url: "https://pypi.org/p/tiki",
         },
         steps: [
           {
@@ -357,7 +357,7 @@ export const release = workflow(
         ],
       },
       "pypi-publish-cuda": {
-        name: "Publish mlx-cuda to PyPI",
+        name: "Publish tiki-cuda to PyPI",
         "runs-on": "ubuntu-latest",
         needs: ["test_wheel"],
         permissions: {
@@ -365,7 +365,7 @@ export const release = workflow(
         },
         environment: {
           name: "${{ (inputs.publish || github.event_name == 'push') && 'pypi' || 'dry-run' }}",
-          url: "https://pypi.org/p/mlx-cuda",
+          url: "https://pypi.org/p/tiki-cuda",
         },
         steps: [
           {
@@ -391,7 +391,7 @@ export const release = workflow(
         ],
       },
       "pypi-publish-cpu": {
-        name: "Publish mlx-cpu to PyPI",
+        name: "Publish tiki-cpu to PyPI",
         "runs-on": "ubuntu-latest",
         needs: ["test_wheel"],
         permissions: {
@@ -399,7 +399,7 @@ export const release = workflow(
         },
         environment: {
           name: "${{ (inputs.publish || github.event_name == 'push') && 'pypi' || 'dry-run' }}",
-          url: "https://pypi.org/p/mlx-cpu",
+          url: "https://pypi.org/p/tiki-cpu",
         },
         steps: [
           {
@@ -425,7 +425,7 @@ export const release = workflow(
         ],
       },
       "pypi-publish-metal": {
-        name: "Publish mlx-metal to PyPI",
+        name: "Publish tiki-metal to PyPI",
         "runs-on": "ubuntu-latest",
         needs: ["test_wheel"],
         permissions: {
@@ -433,7 +433,7 @@ export const release = workflow(
         },
         environment: {
           name: "${{ (inputs.publish || github.event_name == 'push') && 'pypi' || 'dry-run' }}",
-          url: "https://pypi.org/p/mlx-metal",
+          url: "https://pypi.org/p/tiki-metal",
         },
         steps: [
           {

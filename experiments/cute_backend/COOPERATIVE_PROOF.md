@@ -1,8 +1,8 @@
 # Cooperative scheduling proof
 
 Validated September 4, 2026 on NVIDIA GH200 144 GB HBM3e, CUDA 13.3,
-CuTe DSL 4.7.1, and the existing MLX CUDA build from upstream commit
-`b6368984b8e02a3fb3ee7986846c0fb85e1fccf7`. No MLX C++ changes were made.
+CuTe DSL 4.7.1, and the existing Tiki CUDA build from upstream commit
+`b6368984b8e02a3fb3ee7986846c0fb85e1fccf7`. No Tiki C++ changes were made.
 
 ## Results
 
@@ -31,12 +31,12 @@ compiler-overhead comparisons have not been measured in this experiment.
 
 ## Issues exposed
 
-**Primitive parameters matter.** MLX exports sums as `Reduce` with a reduction
+**Primitive parameters matter.** Tiki exports sums as `Reduce` with a reduction
 kind and axes, and reciprocal square root as `Sqrt` with a flag. The graph
 reader now checks these parameters and records the supported semantics as
 `ReduceSum` and `Rsqrt`. Other axes/kinds are rejected.
 
-**A one-element row loses its reduction node.** MLX simplifies that sum away.
+**A one-element row loses its reduction node.** Tiki simplifies that sum away.
 The initial implementation rejected width-one RMSNorm. A focused test reproduced
 the failure; the row schedule now accepts that simplified graph and emits its
 arithmetic without shuffles or shared scratch.
@@ -60,18 +60,18 @@ compute-sanitizer --tool racecheck --kernel-name kne=tiki_fused --error-exitcode
 Memcheck reports zero errors. Racecheck reports zero errors and zero warnings.
 
 The **unfiltered** run fails with a potential use-before-allocation report in
-MLX kernels. The failure also reproduces with this independent program, which
+Tiki kernels. The failure also reproduces with this independent program, which
 does not import Tiki:
 
 ```python
-import mlx.core as mx
-mx.eval(mx.random.normal((5, 1)))
+import tiki as tk
+tk.eval(tk.random.normal((5, 1)))
 ```
 
 Under unfiltered memcheck, the minimal program reports a read that may precede
 a stream-ordered allocation, then a CUDA launch failure. This remains an
-unresolved MLX/runtime/tooling issue. The filtered passes do not establish that
-the whole MLX CUDA runtime is sanitizer-clean; no checks were disabled in the
+unresolved Tiki/runtime/tooling issue. The filtered passes do not establish that
+the whole Tiki CUDA runtime is sanitizer-clean; no checks were disabled in the
 unfiltered repro.
 
 ## Layout inspection

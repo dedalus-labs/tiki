@@ -1,9 +1,9 @@
 # Copyright © 2024 Apple Inc.
 
 import matplotlib
-import mlx.core as mx
 import numpy as np
 import sympy
+import tiki as tk
 import torch
 from time_utils import measure_runtime
 
@@ -18,13 +18,13 @@ def bandwidth_gb(runtime_ms, system_size):
     return system_size * bytes_per_fft / runtime_ms * ms_per_s / bytes_per_gb
 
 
-def run_bench(system_size, fft_sizes, backend="mlx", dim=1):
-    def fft_mlx(x):
+def run_bench(system_size, fft_sizes, backend="tiki", dim=1):
+    def fft_tiki(x):
         if dim == 1:
-            out = mx.fft.fft(x)
+            out = tk.fft.fft(x)
         elif dim == 2:
-            out = mx.fft.fft2(x)
-        mx.eval(out)
+            out = tk.fft.fft2(x)
+        tk.eval(out)
         return out
 
     def fft_mps(x):
@@ -39,11 +39,11 @@ def run_bench(system_size, fft_sizes, backend="mlx", dim=1):
     for n in fft_sizes:
         batch_size = system_size // n**dim
         shape = [batch_size] + [n for _ in range(dim)]
-        if backend == "mlx":
+        if backend == "tiki":
             x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
-            x = mx.array(x_np)
-            mx.eval(x)
-            fft = fft_mlx
+            x = tk.array(x_np)
+            tk.eval(x)
+            fft = fft_tiki
         elif backend == "mps":
             x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
             x = torch.tensor(x_np, device="mps")
@@ -63,8 +63,8 @@ def time_fft():
     x = np.array(range(2, 512))
     system_size = int(2**26)
 
-    print("MLX GPU")
-    with mx.stream(mx.gpu):
+    print("Tiki GPU")
+    with tk.stream(tk.gpu):
         gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
     print("MPS GPU")
@@ -72,7 +72,7 @@ def time_fft():
 
     print("CPU")
     system_size = int(2**20)
-    with mx.stream(mx.cpu):
+    with tk.stream(tk.cpu):
         cpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
     x = np.array(x)
@@ -95,7 +95,7 @@ def time_fft():
         plt.scatter(x[indices], gpu_bandwidths[indices], color="green", label="GPU")
         plt.scatter(x[indices], mps_bandwidths[indices], color="blue", label="MPS")
         plt.scatter(x[indices], cpu_bandwidths[indices], color="red", label="CPU")
-        plt.title(f"MLX FFT Benchmark -- {name}")
+        plt.title(f"Tiki FFT Benchmark -- {name}")
         plt.xlabel("N")
         plt.ylabel("Bandwidth (GB/s)")
         plt.legend()
@@ -111,7 +111,7 @@ def time_fft():
     print("CPU:", av_cpu_bandwidth)
 
     portion_faster = len(np.where(gpu_bandwidths > mps_bandwidths)[0]) / len(x)
-    print("Percent MLX faster than MPS: ", portion_faster * 100)
+    print("Percent Tiki faster than MPS: ", portion_faster * 100)
 
 
 if __name__ == "__main__":

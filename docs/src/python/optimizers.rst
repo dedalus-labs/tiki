@@ -1,21 +1,21 @@
 .. _optimizers:
 
-.. currentmodule:: mlx.optimizers
+.. currentmodule:: tiki.optimizers
 
 Optimizers
 ==========
 
-The optimizers in MLX can be used both with :mod:`mlx.nn` but also with pure
-:mod:`mlx.core` functions. A typical example involves calling
+The optimizers in Tiki can be used both with :mod:`tiki.nn` but also with pure
+:mod:`tiki` functions. A typical example involves calling
 :meth:`Optimizer.update` to update a model's parameters based on the loss
-gradients and subsequently calling :func:`mlx.core.eval` to evaluate both the
+gradients and subsequently calling :func:`tiki.eval` to evaluate both the
 model's parameters and the **optimizer state**.
 
 .. code-block:: python
 
     # Create a model
     model = MLP(num_layers, train_images.shape[-1], hidden_dim, num_classes)
-    mx.eval(model.parameters())
+    tk.eval(model.parameters())
 
     # Create the gradient function and the optimizer
     loss_and_grad_fn = nn.value_and_grad(model, loss_fn)
@@ -29,7 +29,7 @@ model's parameters and the **optimizer state**.
             optimizer.update(model, grads)
 
             # Compute the new parameters but also the optimizer state.
-            mx.eval(model.parameters(), optimizer.state)
+            tk.eval(model.parameters(), optimizer.state)
 
 Saving and Loading
 ------------------
@@ -39,26 +39,26 @@ the saved state. Here's a simple example:
 
 .. code-block:: python
 
-   import mlx.core as mx
-   from mlx.utils import tree_flatten, tree_unflatten
-   import mlx.optimizers as optim
+   import tiki as tk
+   from tiki.utils import tree_flatten, tree_unflatten
+   import tiki.optimizers as optim
 
    optimizer = optim.Adam(learning_rate=1e-2)
 
    # Perform some updates with the optimizer
-   model = {"w" : mx.zeros((5, 5))}
-   grads = {"w" : mx.ones((5, 5))}
+   model = {"w" : tk.zeros((5, 5))}
+   grads = {"w" : tk.ones((5, 5))}
    optimizer.update(model, grads)
 
    # Save the state
    state = tree_flatten(optimizer.state, destination={})
-   mx.save_safetensors("optimizer.safetensors", state)
+   tk.save_safetensors("optimizer.safetensors", state)
 
    # Later on, for example when loading from a checkpoint,
    # recreate the optimizer and load the state
    optimizer = optim.Adam(learning_rate=1e-2)
 
-   state = tree_unflatten(mx.load("optimizer.safetensors"))
+   state = tree_unflatten(tk.load("optimizer.safetensors"))
    optimizer.state = state
 
 Note, not every optimizer configuation parameter is saved in the state. For

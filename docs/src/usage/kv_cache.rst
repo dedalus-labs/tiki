@@ -11,24 +11,24 @@ Avoid appending naively with :func:`concatenate`:
 .. code-block:: python
 
   # Avoid this
-  cache = mx.zeros((1, 0, d))
+  cache = tk.zeros((1, 0, d))
   for x in steps:
-      cache = mx.concatenate([cache, x], axis=1)
-      mx.eval(cache)
+      cache = tk.concatenate([cache, x], axis=1)
+      tk.eval(cache)
 
 Instead, preallocate fixed-size chunks and update the cache in place:
 
 .. code-block:: python
 
   chunk = 256
-  cache = mx.zeros((1, chunk, d))
+  cache = tk.zeros((1, chunk, d))
   offset = 0
   for x in steps:
       if offset == cache.shape[1]:
-          cache = mx.concatenate([cache, mx.zeros((1, chunk, d))], axis=1)
-      cache = mx.slice_update(cache, x, mx.array(offset), (1,))
+          cache = tk.concatenate([cache, tk.zeros((1, chunk, d))], axis=1)
+      cache = tk.slice_update(cache, x, tk.array(offset), (1,))
       offset += 1
-      mx.eval(cache)
+      tk.eval(cache)
 
   keys = cache[:, :offset]
 
@@ -67,7 +67,7 @@ Concatenation has two costs: copying data and preventing buffer reuse.
 step. Appending ``n`` positions therefore copies on the order of ``n^2``
 elements.
 
-Growing the cache also prevents buffer reuse. MLX pools freed device buffers,
+Growing the cache also prevents buffer reuse. Tiki pools freed device buffers,
 but reuses a buffer only for a similarly sized request. It does not split a
 larger buffer for a smaller request or combine smaller buffers for a larger
 one. Because a growing cache has a new size at every step, each allocation

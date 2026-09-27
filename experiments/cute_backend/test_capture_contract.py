@@ -2,7 +2,7 @@
 
 import unittest
 
-from mlx import core
+from tiki import core
 
 from tiki_compiler.capture import from_events, parse_primitive, trace
 from tiki_compiler.events import PrimitiveEvent

@@ -1,10 +1,10 @@
-"""Native stages retain MLX operation identity, stream, and communicator ownership."""
+"""Native stages retain Tiki operation identity, stream, and communicator ownership."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import NewType, assert_never
 
-from mlx import core
+from tiki import core
 
 from .graph import Symbol, Value
 

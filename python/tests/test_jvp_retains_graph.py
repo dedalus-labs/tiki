@@ -9,25 +9,25 @@ is 2, and was 0 when the eval detached the inner primal from the outer tracer.""
 
 import unittest
 
-import mlx.core as mx
+import tiki as tk
 
 
 class TestJvpRetainsGraph(unittest.TestCase):
     def test_nested_jvp_through_an_evaluating_rule(self) -> None:
-        @mx.custom_function
-        def square(x: mx.array) -> mx.array:
+        @tk.custom_function
+        def square(x: tk.array) -> tk.array:
             return x * x
 
         @square.jvp
-        def _(primals: mx.array, tangents: mx.array) -> mx.array:
-            mx.eval(primals)
+        def _(primals: tk.array, tangents: tk.array) -> tk.array:
+            tk.eval(primals)
             return 2 * primals * tangents
 
-        x = mx.array([1.0, 2.0, 3.0])
-        ones = mx.ones(3)
-        first = lambda x: mx.jvp(square, [x], [ones])[1][0]
-        self.assertEqual(mx.jvp(first, [x], [ones])[1][0].tolist(), [2.0, 2.0, 2.0])
-        self.assertEqual(mx.grad(lambda x: first(x).sum())(x).tolist(), [2.0, 2.0, 2.0])
+        x = tk.array([1.0, 2.0, 3.0])
+        ones = tk.ones(3)
+        first = lambda x: tk.jvp(square, [x], [ones])[1][0]
+        self.assertEqual(tk.jvp(first, [x], [ones])[1][0].tolist(), [2.0, 2.0, 2.0])
+        self.assertEqual(tk.grad(lambda x: first(x).sum())(x).tolist(), [2.0, 2.0, 2.0])
 
 
 if __name__ == "__main__":

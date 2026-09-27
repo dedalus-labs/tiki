@@ -1,10 +1,10 @@
-"""Launch CuTe artifacts and cache native MLX graph replay for mixed programs."""
+"""Launch CuTe artifacts and cache native Tiki graph replay for mixed programs."""
 
 from collections.abc import Callable
 from functools import lru_cache
 from math import prod
 
-from mlx import core
+from tiki import core
 
 from .artifact import CudaIo, binary
 from .graph import Arrays
@@ -14,7 +14,7 @@ from .schedule import RowSchedule, Schedule, TransposeSchedule
 
 
 class BackendUnavailableError(RuntimeError):
-    """Execution requires the selected MLX CUDA device."""
+    """Execution requires the selected Tiki CUDA device."""
 
 
 def packs_views(schedule: Schedule | RowSchedule | TransposeSchedule) -> bool:

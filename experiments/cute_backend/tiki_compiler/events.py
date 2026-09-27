@@ -6,7 +6,7 @@ The C++ callback owns these records; they are not a user-provided interchange fo
 
 from typing import Literal, NotRequired, TypedDict
 
-from mlx import core
+from tiki import core
 
 from .graph import Shape
 

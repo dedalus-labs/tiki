@@ -70,9 +70,9 @@ across every eligible route. Registration alone does not activate this policy.
 
 The active sanitizer and Fedora jobs now execute through Hollywood actions.
 The existing nine platform-specific composite actions remain dependencies of
-the inherited MLX build, documentation, and release workflows. Their shell
+the inherited Tiki build, documentation, and release workflows. Their shell
 programs have not been ported in this change. Upstream-only build guards and
-PyPI targets remain explicit. The interaction-bypass workflow runs only in MLX
+PyPI targets remain explicit. The interaction-bypass workflow runs only in Tiki
 upstream because its credential and API target belong to that repository.
 
 ARM builds retain their tested GitHub-hosted runners. The x86 Fedora build uses

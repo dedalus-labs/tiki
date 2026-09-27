@@ -3,7 +3,7 @@
 FFT
 ===
 
-.. currentmodule:: mlx.core.fft
+.. currentmodule:: tiki.fft
 
 .. autosummary:: 
   :toctree: _autosummary

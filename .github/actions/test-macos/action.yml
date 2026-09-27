@@ -39,7 +39,7 @@ runs:
           if ${{ inputs.toolkit == 'cpu' }} ; then
             mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib uv run python/tests/mpi_test_distributed.py
           fi
-          mlx.launch --verbose -n 8 uv run python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
+          tiki.launch --verbose -n 8 uv run python/tests/ring_test_distributed.py -v 2> >(tee -a stderr.log >&2)
           if $(grep "\[WARN\]" stderr.log); then
             echo "Distributed ring test failed"
             exit 1
@@ -68,7 +68,7 @@ runs:
             # Downloaded binaries all lose executable permission.
             find build -type f -exec chmod 755 {} \;
             # Path to metallib is hard-coded so move it besides executable.
-            mv build/mlx/backend/metal/kernels/mlx.metallib build/tests
+            mv build/tiki/backend/metal/kernels/tiki.metallib build/tests
             run_tests
           done
         else

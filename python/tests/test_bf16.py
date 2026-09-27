@@ -4,9 +4,9 @@ import math
 import unittest
 from itertools import permutations
 
-import mlx.core as mx
-import mlx_tests
 import numpy as np
+import tiki as tk
+import tiki_tests
 
 try:
     import torch
@@ -23,23 +23,23 @@ except ImportError:
     has_ml_dtypes = False
 
 
-class TestBF16(mlx_tests.MLXTestCase):
+class TestBF16(tiki_tests.TIKITestCase):
     def __test_ops(
         self,
         ref_op,  # Function that outputs array_like
-        mlx_op,  # Function that outputs array_like
+        tiki_op,  # Function that outputs array_like
         np_args,  # Numpy arguments
         ref_transform=lambda x: x,
-        mlx_transform=lambda x: mx.array(x),
+        tiki_transform=lambda x: tk.array(x),
         atol=1e-5,
     ):
         ref_args = map(ref_transform, np_args)
-        mlx_args = map(mlx_transform, np_args)
+        tiki_args = map(tiki_transform, np_args)
 
         r_ref = ref_op(*ref_args)
-        r_mlx = mlx_op(*mlx_args)
+        r_tiki = tiki_op(*tiki_args)
 
-        self.assertTrue(np.allclose(r_mlx, r_ref, atol=atol))
+        self.assertTrue(np.allclose(r_tiki, r_ref, atol=atol))
 
     def __default_test(
         self,
@@ -49,37 +49,37 @@ class TestBF16(mlx_tests.MLXTestCase):
         atol_np=1e-3,
         atol_torch=1e-5,
         np_kwargs=dict(),
-        mlx_kwargs=dict(),
+        tiki_kwargs=dict(),
         torch_kwargs=dict(),
         torch_op=None,
     ):
         with self.subTest(reference="numpy"):
 
             def np_transform(x):
-                x_mx_bf16 = mx.array(x).astype(mx.bfloat16)
-                x_mx_fp32 = x_mx_bf16.astype(mx.float32)
+                x_mx_bf16 = tk.array(x).astype(tk.bfloat16)
+                x_mx_fp32 = x_mx_bf16.astype(tk.float32)
                 return np.asarray(x_mx_fp32)
 
-            def mlx_fn(*args):
-                out_bf16 = getattr(mx, op)(*args, **mlx_kwargs)
-                return np.asarray(out_bf16.astype(mx.float32))
+            def tiki_fn(*args):
+                out_bf16 = getattr(tk, op)(*args, **tiki_kwargs)
+                return np.asarray(out_bf16.astype(tk.float32))
 
             def np_fn(*args):
                 out_fp32 = getattr(np, op)(*args, **np_kwargs)
                 return np_transform(out_fp32)
 
             ref_op = np_fn
-            mlx_op = mlx_fn
+            tiki_op = tiki_fn
 
             ref_transform = lambda x: simple_transform(np_transform(x))
-            mlx_transform = lambda x: simple_transform(mx.array(x).astype(mx.bfloat16))
+            tiki_transform = lambda x: simple_transform(tk.array(x).astype(tk.bfloat16))
 
             self.__test_ops(
                 ref_op,
-                mlx_op,
+                tiki_op,
                 np_args,
                 ref_transform=ref_transform,
-                mlx_transform=mlx_transform,
+                tiki_transform=tiki_transform,
                 atol=atol_np,
             )
 
@@ -97,10 +97,10 @@ class TestBF16(mlx_tests.MLXTestCase):
                 )
                 self.__test_ops(
                     ref_op,
-                    mlx_op,
+                    tiki_op,
                     np_args,
                     ref_transform=ref_transform,
-                    mlx_transform=mlx_transform,
+                    tiki_transform=tiki_transform,
                     atol=atol_torch,
                 )
 
@@ -136,7 +136,7 @@ class TestBF16(mlx_tests.MLXTestCase):
                             op,
                             np_args,
                             np_kwargs={"axis": axes},
-                            mlx_kwargs={"axis": axes},
+                            tiki_kwargs={"axis": axes},
                             torch_kwargs={"dim": axes},
                             torch_op="a" + op,
                         )
@@ -148,39 +148,39 @@ class TestBF16(mlx_tests.MLXTestCase):
         }
         for op, values in cases.items():
             with self.subTest(op=op):
-                x = mx.array(values, dtype=mx.bfloat16)
-                expected = mx.array(
+                x = tk.array(values, dtype=tk.bfloat16)
+                expected = tk.array(
                     getattr(np, op)(values, axis=0, dtype=np.float32),
-                    dtype=mx.bfloat16,
+                    dtype=tk.bfloat16,
                 )
-                actual = getattr(mx, op)(x, axis=0, stream=mx.cpu)
+                actual = getattr(tk, op)(x, axis=0, stream=tk.cpu)
                 self.assertEqual(actual.tolist(), expected.tolist())
 
     def test_arg_reduction_ops(self):
         data = np.random.rand(10, 12, 13).astype(np.float32)
-        x = mx.array(data).astype(mx.bfloat16)
-        data = np.asarray(x.astype(mx.float32))
+        x = tk.array(data).astype(tk.bfloat16)
+        data = np.asarray(x.astype(tk.float32))
 
         for op in ["argmin", "argmax"]:
             for axis in range(3):
                 for kd in [True, False]:
-                    a = getattr(mx, op)(x, axis, kd)
+                    a = getattr(tk, op)(x, axis, kd)
                     b = getattr(np, op)(data, axis, keepdims=kd)
-                    a = a.astype(mx.float32)
+                    a = a.astype(tk.float32)
                     self.assertEqual(a.tolist(), b.tolist())
 
         for op in ["argmin", "argmax"]:
-            a = getattr(mx, op)(x, keepdims=True)
+            a = getattr(tk, op)(x, keepdims=True)
             b = getattr(np, op)(data, keepdims=True)
-            a = a.astype(mx.float32)
+            a = a.astype(tk.float32)
             self.assertEqual(a.tolist(), b.tolist())
-            a = getattr(mx, op)(x)
+            a = getattr(tk, op)(x)
             b = getattr(np, op)(data)
-            a = a.astype(mx.float32)
+            a = a.astype(tk.float32)
             self.assertEqual(a.item(), b)
 
     def test_blas_ops(self):
-        if mx.default_device() != mx.gpu:
+        if tk.default_device() != tk.gpu:
             return
 
         def test_blas(shape_x, shape_y):
@@ -208,36 +208,36 @@ class TestBF16(mlx_tests.MLXTestCase):
     @unittest.skipIf(not has_torch, "requires PyTorch")
     def test_conversion(self):
         a_torch = torch.tensor([1.0, 2.0, 3.0], dtype=torch.bfloat16)
-        a_mx = mx.array(a_torch)
-        expected = mx.array([1.0, 2.0, 3.0], mx.bfloat16)
-        self.assertEqual(a_mx.dtype, mx.bfloat16)
-        self.assertTrue(mx.array_equal(a_mx, expected))
+        a_mx = tk.array(a_torch)
+        expected = tk.array([1.0, 2.0, 3.0], tk.bfloat16)
+        self.assertEqual(a_mx.dtype, tk.bfloat16)
+        self.assertTrue(tk.array_equal(a_mx, expected))
 
     @unittest.skipIf(not has_ml_dtypes, "requires ml_dtypes")
     def test_conversion_ml_dtypes(self):
         x_scalar = np.array(1.5, dtype=ml_dtypes.bfloat16)
-        a_scalar = mx.array(x_scalar)
-        self.assertEqual(a_scalar.dtype, mx.bfloat16)
+        a_scalar = tk.array(x_scalar)
+        self.assertEqual(a_scalar.dtype, tk.bfloat16)
         self.assertEqual(a_scalar.shape, ())
         self.assertEqual(a_scalar.item(), 1.5)
 
         data = [1.5, 2.5, 3.5]
         x_vector = np.array(data, dtype=ml_dtypes.bfloat16)
-        a_vector = mx.array(x_vector)
-        expected = mx.array(data, dtype=mx.bfloat16)
-        self.assertEqual(a_vector.dtype, mx.bfloat16)
+        a_vector = tk.array(x_vector)
+        expected = tk.array(data, dtype=tk.bfloat16)
+        self.assertEqual(a_vector.dtype, tk.bfloat16)
         self.assertEqual(a_vector.shape, (3,))
-        self.assertTrue(mx.array_equal(a_vector, expected))
+        self.assertTrue(tk.array_equal(a_vector, expected))
 
-        a_cast = mx.array(x_scalar, dtype=mx.float32)
-        self.assertEqual(a_cast.dtype, mx.float32)
+        a_cast = tk.array(x_scalar, dtype=tk.float32)
+        self.assertEqual(a_cast.dtype, tk.float32)
         self.assertEqual(a_cast.item(), 1.5)
 
-        a_asarray = mx.asarray(x_vector)
-        self.assertEqual(a_asarray.dtype, mx.bfloat16)
+        a_asarray = tk.asarray(x_vector)
+        self.assertEqual(a_asarray.dtype, tk.bfloat16)
         self.assertEqual(a_asarray.shape, (3,))
-        self.assertTrue(mx.array_equal(a_asarray, expected))
+        self.assertTrue(tk.array_equal(a_asarray, expected))
 
 
 if __name__ == "__main__":
-    mlx_tests.MLXTestRunner()
+    tiki_tests.TIKITestRunner()

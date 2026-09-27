@@ -3,9 +3,9 @@
 Indexing Arrays
 ===============
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
-For the most part, indexing an MLX :obj:`array` works the same as indexing a
+For the most part, indexing an Tiki :obj:`array` works the same as indexing a
 NumPy :obj:`numpy.ndarray`. See the `NumPy documentation
 <https://numpy.org/doc/stable/user/basics.indexing.html>`_ for more details on
 how that works.
@@ -14,7 +14,7 @@ For example, you can use regular integers and slices (:obj:`slice`) to index arr
 
 .. code-block:: shell
 
-  >>> arr = mx.arange(10)
+  >>> arr = tk.arange(10)
   >>> arr[3]
   array(3, dtype=int32)
   >>> arr[-2]  # negative indexing works
@@ -26,7 +26,7 @@ For multi-dimensional arrays, the ``...`` or :obj:`Ellipsis` syntax works as in 
 
 .. code-block:: shell
 
-  >>> arr = mx.arange(8).reshape(2, 2, 2)
+  >>> arr = tk.arange(8).reshape(2, 2, 2)
   >>> arr[:, :, 0]
   array([[0, 2],
          [4, 6]], dtype=int32)
@@ -38,7 +38,7 @@ You can index with ``None`` to create a new axis:
 
 .. code-block:: shell
 
-  >>> arr = mx.arange(8)
+  >>> arr = tk.arange(8)
   >>> arr.shape
   (8,)
   >>> arr[None].shape
@@ -49,8 +49,8 @@ You can also use an :obj:`array` to index another :obj:`array`:
 
 .. code-block:: shell
 
-  >>> arr = mx.arange(10)
-  >>> idx = mx.array([5, 7])
+  >>> arr = tk.arange(10)
+  >>> idx = tk.array([5, 7])
   >>> arr[idx]
   array([5, 7], dtype=int32)
 
@@ -65,7 +65,7 @@ Differences from NumPy
 
 .. Note::
 
-  MLX indexing is different from NumPy indexing in two important ways:
+  Tiki indexing is different from NumPy indexing in two important ways:
 
   * Indexing does not perform bounds checking. Indexing out of bounds is
     undefined behavior.
@@ -76,20 +76,20 @@ The reason for the lack of bounds checking is that exceptions cannot propagate
 from the GPU. Performing bounds checking for array indices before launching the
 kernel would be extremely inefficient.
 
-Indexing with boolean masks is something that MLX may support in the future. In
-general, MLX has limited support for operations for which output
+Indexing with boolean masks is something that Tiki may support in the future. In
+general, Tiki has limited support for operations for which output
 *shapes* are dependent on input *data*. Other examples of these types of
-operations which MLX does not yet support include :func:`numpy.nonzero` and the
+operations which Tiki does not yet support include :func:`numpy.nonzero` and the
 single input version of :func:`numpy.where`.
 
 In Place Updates
 ----------------
 
-In place updates to indexed arrays are possible in MLX. For example:
+In place updates to indexed arrays are possible in Tiki. For example:
 
 .. code-block:: shell
 
-  >>> a = mx.array([1, 2, 3])
+  >>> a = tk.array([1, 2, 3])
   >>> a[2] = 0
   >>> a
   array([1, 2, 0], dtype=int32)
@@ -99,7 +99,7 @@ same array:
 
 .. code-block:: shell
 
-  >>> a = mx.array([1, 2, 3])
+  >>> a = tk.array([1, 2, 3])
   >>> b = a
   >>> b[2] = 0
   >>> b
@@ -112,7 +112,7 @@ mutating it does not mutate the original array:
 
 .. code-block:: shell
 
-  >>> a = mx.array([1, 2, 3])
+  >>> a = tk.array([1, 2, 3])
   >>> b = a[:]
   >>> b[2] = 0
   >>> b
@@ -124,8 +124,8 @@ Also unlike NumPy, updates to the same location are nondeterministic:
 
 .. code-block:: shell
 
-  >>> a = mx.array([1, 2, 3])
-  >>> a[[0, 0]] = mx.array([4, 5])
+  >>> a = tk.array([1, 2, 3])
+  >>> a[[0, 0]] = tk.array([4, 5])
 
 The first element of ``a`` could be ``4`` or ``5``.
 
@@ -138,7 +138,7 @@ expected. For example:
        x[idx] = 2.0
        return x.sum()
 
-   dfdx = mx.grad(fun)(mx.array([1.0, 2.0, 3.0]), mx.array([1]))
+   dfdx = tk.grad(fun)(tk.array([1.0, 2.0, 3.0]), tk.array([1]))
    print(dfdx)  # Prints: array([1, 0, 1], dtype=float32)
 
 In the above ``dfdx`` will have the correct gradient, namely zeros at ``idx``
@@ -149,15 +149,15 @@ and ones elsewhere.
 Boolean Mask Assignment
 -----------------------
 
-MLX supports boolean indices using NumPy syntax. A mask must already be
-a :class:`bool_` MLX :class:`array` or a NumPy ``ndarray`` with ``dtype=bool``.
+Tiki supports boolean indices using NumPy syntax. A mask must already be
+a :class:`bool_` Tiki :class:`array` or a NumPy ``ndarray`` with ``dtype=bool``.
 Other index types are routed through the standard scatter code.
 
 .. code-block:: shell
 
-   >>> a = mx.array([1.0, 2.0, 3.0])
-   >>> mask = mx.array([True, False, True])
-   >>> updates = mx.array([5.0, 6.0])
+   >>> a = tk.array([1.0, 2.0, 3.0])
+   >>> mask = tk.array([True, False, True])
+   >>> updates = tk.array([5.0, 6.0])
    >>> a[mask] = updates
    >>> a
    array([5, 2, 6], dtype=float32)
@@ -168,8 +168,8 @@ assignments, ``updates`` must provide at least as many elements as there are
 
 .. code-block:: shell
 
-   >>> a = mx.zeros((2, 3))
-   >>> mask = mx.array([[True, False, True],
+   >>> a = tk.zeros((2, 3))
+   >>> mask = tk.array([[True, False, True],
                         [False, False, True]])
    >>> a[mask] = 1.0
    >>> a
@@ -184,8 +184,8 @@ Boolean masks follow NumPy semantics:
 
 .. code-block:: shell
 
-   >>> a = mx.arange(1000).reshape(10, 10, 10)
-   >>> a[mx.random.normal((10, 10)) > 0.0] = 0  # valid: mask covers axes 0 and 1
+   >>> a = tk.arange(1000).reshape(10, 10, 10)
+   >>> a[tk.random.normal((10, 10)) > 0.0] = 0  # valid: mask covers axes 0 and 1
 
 The mask of shape ``(10, 10)`` applies to the first two axes, so ``a[mask]``
 selects the 1-D slices ``a[i, j, :]`` where ``mask[i, j]`` is ``True``.

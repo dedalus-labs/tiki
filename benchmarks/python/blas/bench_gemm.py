@@ -6,8 +6,8 @@ import os
 import subprocess
 import time
 
-import mlx.core as mx
 import numpy as np
+import tiki as tk
 import torch
 
 device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
@@ -30,39 +30,39 @@ def bench(f, a, b):
     return (e - s) * 1e-9
 
 
-def gemm_nn_mlx(a, b):
+def gemm_nn_tiki(a, b):
     ys = []
     for i in range(N_iter_func):
         y = a @ b
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
-def gemm_nt_mlx(a, b):
+def gemm_nt_tiki(a, b):
     ys = []
     for i in range(N_iter_func):
         y = a @ b.transpose((0, 2, 1))
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
-def gemm_tn_mlx(a, b):
+def gemm_tn_tiki(a, b):
     ys = []
     for i in range(N_iter_func):
         y = a.transpose((0, 2, 1)) @ b
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
-def gemm_tt_mlx(a, b):
+def gemm_tt_tiki(a, b):
     ys = []
     for i in range(N_iter_func):
         y = a.transpose((0, 2, 1)) @ b.transpose((0, 2, 1))
         ys.append(y)
-    mx.eval(ys)
+    tk.eval(ys)
     return ys
 
 
@@ -113,8 +113,8 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
     a_np = np.random.normal(0.0, 1.0 / math.sqrt(M + K), shape_a).astype(np_dtype)
     b_np = np.random.normal(0.0, 1.0 / math.sqrt(N + K), shape_b).astype(np_dtype)
 
-    a_mx = mx.array(a_np)
-    b_mx = mx.array(b_np)
+    a_mx = tk.array(a_np)
+    b_mx = tk.array(b_np)
 
     a_pt = torch.from_numpy(a_np).to("mps")
     b_pt = torch.from_numpy(b_np).to("mps")
@@ -122,10 +122,10 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
     torch.mps.synchronize()
 
     f_mx = {
-        "nn": gemm_nn_mlx,
-        "nt": gemm_nt_mlx,
-        "tn": gemm_tn_mlx,
-        "tt": gemm_tt_mlx,
+        "nn": gemm_nn_tiki,
+        "nt": gemm_nt_tiki,
+        "tn": gemm_tn_tiki,
+        "tt": gemm_tt_tiki,
     }[transpose]
 
     f_pt = {
@@ -136,22 +136,22 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
     }[transpose]
 
     time_torch = bench(f_pt, a_pt, b_pt)
-    time_mlx = bench(f_mx, a_mx, b_mx)
+    time_tiki = bench(f_mx, a_mx, b_mx)
 
     t_a = (0, 1, 2) if transpose[0] == "n" else (0, 2, 1)
     t_b = (0, 1, 2) if transpose[1] == "n" else (0, 2, 1)
 
-    c_mlx = a_mx.transpose(t_a) @ b_mx.transpose(t_b)
+    c_tiki = a_mx.transpose(t_a) @ b_mx.transpose(t_b)
     c_npy = a_np.transpose(t_a).astype(np_dtype) @ b_np.transpose(t_b).astype(np_dtype)
 
     atol = 1e-5 if np_dtype == np.float32 else 1e-4
 
-    if not np.allclose(c_mlx, c_npy.astype(np_dtype), atol=atol):
+    if not np.allclose(c_tiki, c_npy.astype(np_dtype), atol=atol):
         print(
-            f"Failed at {(B, M, N, K)} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_mlx))}"
+            f"Failed at {(B, M, N, K)} [transpose = {transpose}] with max(|a - b|) = {np.max(np.abs(c_npy - c_tiki))}"
         )
 
-    return time_mlx, time_torch
+    return time_tiki, time_torch
 
 
 def get_gflop_count(B, M, N, K):
@@ -177,10 +177,10 @@ if __name__ == "__main__":
         for transpose in transposes:
             for B, M, N, K in shapes:
                 np_dtype = getattr(np, dtype)
-                time_mlx, time_torch = bench_shape(B, M, N, K, np_dtype, transpose)
+                time_tiki, time_torch = bench_shape(B, M, N, K, np_dtype, transpose)
 
                 gflop_count = get_gflop_count(B, M, N, K)
-                gflops_mx = gflop_count / (time_mlx)
+                gflops_mx = gflop_count / (time_tiki)
                 gflops_pt = gflop_count / (time_torch)
                 diff = gflops_mx / gflops_pt - 1.0
 

@@ -8,26 +8,26 @@
 #include <numeric>
 #include <string_view>
 
-#include "mlx/fft.h"
-#include "mlx/ops.h"
 #include "python/src/small_vector.h"
 #include "python/src/utils.h"
+#include "tiki/fft.h"
+#include "tiki/ops.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 namespace {
 
-mx::fft::FFTNorm parse_norm(std::string_view norm, std::string_view op) {
+tk::fft::FFTNorm parse_norm(std::string_view norm, std::string_view op) {
   if (norm == "backward") {
-    return mx::fft::FFTNorm::Backward;
+    return tk::fft::FFTNorm::Backward;
   }
   if (norm == "ortho") {
-    return mx::fft::FFTNorm::Ortho;
+    return tk::fft::FFTNorm::Ortho;
   }
   if (norm == "forward") {
-    return mx::fft::FFTNorm::Forward;
+    return tk::fft::FFTNorm::Forward;
   }
   throw std::invalid_argument(
       std::string("[") + std::string(op) +
@@ -37,20 +37,20 @@ mx::fft::FFTNorm parse_norm(std::string_view norm, std::string_view op) {
 } // namespace
 
 void init_fft(nb::module_& parent_module) {
-  auto m = parent_module.def_submodule(
-      "fft", "mlx.core.fft: Fast Fourier Transforms.");
+  auto m =
+      parent_module.def_submodule("fft", "tiki.fft: Fast Fourier Transforms.");
   m.def(
       "fft",
-      [](const mx::array& a,
+      [](const tk::array& a,
          const std::optional<int>& n,
          int axis,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "fft");
         if (n.has_value()) {
-          return mx::fft::fft(a, n.value(), axis, fft_norm, s);
+          return tk::fft::fft(a, n.value(), axis, fft_norm, s);
         } else {
-          return mx::fft::fft(a, axis, fft_norm, s);
+          return tk::fft::fft(a, axis, fft_norm, s);
         }
       },
       "a"_a,
@@ -76,16 +76,16 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifft",
-      [](const mx::array& a,
+      [](const tk::array& a,
          const std::optional<int>& n,
          int axis,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "ifft");
         if (n.has_value()) {
-          return mx::fft::ifft(a, n.value(), axis, fft_norm, s);
+          return tk::fft::ifft(a, n.value(), axis, fft_norm, s);
         } else {
-          return mx::fft::ifft(a, axis, fft_norm, s);
+          return tk::fft::ifft(a, axis, fft_norm, s);
         }
       },
       "a"_a,
@@ -111,21 +111,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "fft2",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "fft2");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::fftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::fftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::fftn(a, axes.value(), fft_norm, s);
+          return tk::fft::fftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[fft2] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::fftn(a, fft_norm, s);
+          return tk::fft::fftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -152,21 +152,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifft2",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "ifft2");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::ifftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::ifftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::ifftn(a, axes.value(), fft_norm, s);
+          return tk::fft::ifftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[ifft2] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::ifftn(a, fft_norm, s);
+          return tk::fft::ifftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -193,21 +193,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "fftn",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "fftn");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::fftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::fftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::fftn(a, axes.value(), fft_norm, s);
+          return tk::fft::fftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[fftn] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::fftn(a, fft_norm, s);
+          return tk::fft::fftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -235,21 +235,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifftn",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "ifftn");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::ifftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::ifftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::ifftn(a, axes.value(), fft_norm, s);
+          return tk::fft::ifftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[ifftn] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::ifftn(a, fft_norm, s);
+          return tk::fft::ifftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -277,16 +277,16 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "rfft",
-      [](const mx::array& a,
+      [](const tk::array& a,
          const std::optional<int>& n,
          int axis,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "rfft");
         if (n.has_value()) {
-          return mx::fft::rfft(a, n.value(), axis, fft_norm, s);
+          return tk::fft::rfft(a, n.value(), axis, fft_norm, s);
         } else {
-          return mx::fft::rfft(a, axis, fft_norm, s);
+          return tk::fft::rfft(a, axis, fft_norm, s);
         }
       },
       "a"_a,
@@ -317,16 +317,16 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "irfft",
-      [](const mx::array& a,
+      [](const tk::array& a,
          const std::optional<int>& n,
          int axis,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "irfft");
         if (n.has_value()) {
-          return mx::fft::irfft(a, n.value(), axis, fft_norm, s);
+          return tk::fft::irfft(a, n.value(), axis, fft_norm, s);
         } else {
-          return mx::fft::irfft(a, axis, fft_norm, s);
+          return tk::fft::irfft(a, axis, fft_norm, s);
         }
       },
       "a"_a,
@@ -356,21 +356,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "rfft2",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "rfft2");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::rfftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::rfftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::rfftn(a, axes.value(), fft_norm, s);
+          return tk::fft::rfftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[rfft2] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::rfftn(a, fft_norm, s);
+          return tk::fft::rfftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -403,21 +403,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "irfft2",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "irfft2");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::irfftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::irfftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::irfftn(a, axes.value(), fft_norm, s);
+          return tk::fft::irfftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[irfft2] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::irfftn(a, fft_norm, s);
+          return tk::fft::irfftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -450,21 +450,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "rfftn",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "rfftn");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::rfftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::rfftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::rfftn(a, axes.value(), fft_norm, s);
+          return tk::fft::rfftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[rfftn] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::rfftn(a, fft_norm, s);
+          return tk::fft::rfftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -498,21 +498,21 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "irfftn",
-      [](const mx::array& a,
-         const std::optional<mx::Shape>& n,
+      [](const tk::array& a,
+         const std::optional<tk::Shape>& n,
          const std::optional<std::vector<int>>& axes,
          const std::string& norm,
-         mx::StreamOrDevice s) {
+         tk::StreamOrDevice s) {
         auto fft_norm = parse_norm(norm, "irfftn");
         if (axes.has_value() && n.has_value()) {
-          return mx::fft::irfftn(a, n.value(), axes.value(), fft_norm, s);
+          return tk::fft::irfftn(a, n.value(), axes.value(), fft_norm, s);
         } else if (axes.has_value()) {
-          return mx::fft::irfftn(a, axes.value(), fft_norm, s);
+          return tk::fft::irfftn(a, axes.value(), fft_norm, s);
         } else if (n.has_value()) {
           throw std::invalid_argument(
               "[irfftn] `axes` should not be `None` if `s` is not `None`.");
         } else {
-          return mx::fft::irfftn(a, fft_norm, s);
+          return tk::fft::irfftn(a, fft_norm, s);
         }
       },
       "a"_a,
@@ -545,8 +545,8 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "fftfreq",
-      [](int n, double d, mx::StreamOrDevice s) {
-        return mx::fft::fftfreq(n, d, s);
+      [](int n, double d, tk::StreamOrDevice s) {
+        return tk::fft::fftfreq(n, d, s);
       },
       "n"_a,
       "d"_a = 1.0,
@@ -563,8 +563,8 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "rfftfreq",
-      [](int n, double d, mx::StreamOrDevice s) {
-        return mx::fft::rfftfreq(n, d, s);
+      [](int n, double d, tk::StreamOrDevice s) {
+        return tk::fft::rfftfreq(n, d, s);
       },
       "n"_a,
       "d"_a = 1.0,
@@ -585,13 +585,13 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "fftshift",
-      [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
+      [](const tk::array& a, const IntOrVec& axes, tk::StreamOrDevice s) {
         if (std::holds_alternative<std::monostate>(axes)) {
-          return mx::fft::fftshift(a, s);
+          return tk::fft::fftshift(a, s);
         } else if (auto pv = std::get_if<int>(&axes); pv) {
-          return mx::fft::fftshift(a, {*pv}, s);
+          return tk::fft::fftshift(a, {*pv}, s);
         } else {
-          return mx::fft::fftshift(a, std::get<std::vector<int>>(axes), s);
+          return tk::fft::fftshift(a, std::get<std::vector<int>>(axes), s);
         }
       },
       "a"_a,
@@ -610,13 +610,13 @@ void init_fft(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "ifftshift",
-      [](const mx::array& a, const IntOrVec& axes, mx::StreamOrDevice s) {
+      [](const tk::array& a, const IntOrVec& axes, tk::StreamOrDevice s) {
         if (std::holds_alternative<std::monostate>(axes)) {
-          return mx::fft::ifftshift(a, s);
+          return tk::fft::ifftshift(a, s);
         } else if (auto pv = std::get_if<int>(&axes); pv) {
-          return mx::fft::ifftshift(a, {*pv}, s);
+          return tk::fft::ifftshift(a, {*pv}, s);
         } else {
-          return mx::fft::ifftshift(a, std::get<std::vector<int>>(axes), s);
+          return tk::fft::ifftshift(a, std::get<std::vector<int>>(axes), s);
         }
       },
       "a"_a,

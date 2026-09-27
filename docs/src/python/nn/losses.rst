@@ -1,6 +1,6 @@
 .. _losses:
 
-.. currentmodule:: mlx.nn.losses
+.. currentmodule:: tiki.nn.losses
 
 Loss Functions
 --------------

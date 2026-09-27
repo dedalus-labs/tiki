@@ -1,24 +1,28 @@
 cmake_minimum_required(VERSION 3.25)
 
-if(NOT MLX_VERSION)
-  file(STRINGS "mlx/version.h" _mlx_h_version REGEX "^#define MLX_VERSION_.*$")
-  string(REGEX MATCH "#define MLX_VERSION_MAJOR ([0-9]+)" _ "${_mlx_h_version}")
+if(NOT TIKI_VERSION)
+  file(STRINGS "tiki/version.h" _tiki_h_version
+       REGEX "^#define TIKI_VERSION_.*$")
+  string(REGEX MATCH "#define TIKI_VERSION_MAJOR ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_major ${CMAKE_MATCH_1})
-  string(REGEX MATCH "#define MLX_VERSION_MINOR ([0-9]+)" _ "${_mlx_h_version}")
+  string(REGEX MATCH "#define TIKI_VERSION_MINOR ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_minor ${CMAKE_MATCH_1})
-  string(REGEX MATCH "#define MLX_VERSION_PATCH ([0-9]+)" _ "${_mlx_h_version}")
+  string(REGEX MATCH "#define TIKI_VERSION_PATCH ([0-9]+)" _
+               "${_tiki_h_version}")
   set(_patch ${CMAKE_MATCH_1})
-  set(MLX_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
-  set(MLX_VERSION ${MLX_PROJECT_VERSION})
+  set(TIKI_PROJECT_VERSION "${_major}.${_minor}.${_patch}")
+  set(TIKI_VERSION ${TIKI_PROJECT_VERSION})
 else()
-  string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" MLX_PROJECT_VERSION
-                       ${MLX_VERSION})
+  string(REGEX REPLACE "^([0-9]+\.[0-9]+\.[0-9]+).*" "\\1" TIKI_PROJECT_VERSION
+                       ${TIKI_VERSION})
 endif()
 
 project(
-  mlx
+  tiki
   LANGUAGES C CXX
-  VERSION ${MLX_PROJECT_VERSION})
+  VERSION ${TIKI_PROJECT_VERSION})
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -29,22 +33,22 @@ set(CMAKE_INSTALL_MESSAGE NEVER)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ----------------------------- Configuration -----------------------------
-option(MLX_BUILD_TESTS "Build tests for mlx" ON)
-option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
-option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
-option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
-option(MLX_BUILD_METAL "Build metal backend" ON)
-option(MLX_BUILD_CPU "Build cpu backend" ON)
-option(MLX_BUILD_CUDA "Build cuda backend" OFF)
-option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
-option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
-option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
-option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
-option(MLX_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
-option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
-option(MLX_USE_CCACHE "Use CCache for compilation cache when available" ON)
-option(MLX_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
-option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
+option(TIKI_BUILD_TESTS "Build tests for tiki" ON)
+option(TIKI_BUILD_EXAMPLES "Build examples for tiki" ON)
+option(TIKI_BUILD_BENCHMARKS "Build benchmarks for tiki" OFF)
+option(TIKI_BUILD_PYTHON_BINDINGS "Build python bindings for tiki" OFF)
+option(TIKI_BUILD_METAL "Build metal backend" ON)
+option(TIKI_BUILD_CPU "Build cpu backend" ON)
+option(TIKI_BUILD_CUDA "Build cuda backend" OFF)
+option(TIKI_METAL_DEBUG "Enhance metal debug workflow" OFF)
+option(TIKI_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
+option(TIKI_BUILD_GGUF "Include support for GGUF format" ON)
+option(TIKI_BUILD_SAFETENSORS "Include support for safetensors format" ON)
+option(TIKI_BUILD_PYTHON_STUBS "Build stub files for python bindings" ON)
+option(TIKI_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
+option(TIKI_USE_CCACHE "Use CCache for compilation cache when available" ON)
+option(TIKI_EXPORT_ALL_SYMBOLS "Export all symbols in the library" OFF)
+option(BUILD_SHARED_LIBS "Build tiki as a shared library" OFF)
 option(USE_SYSTEM_FMT "Use system's provided fmt library" OFF)
 option(USE_ASAN "Enable AddressSanitizer (ASan)" OFF)
 option(USE_UBSAN "Enable UndefinedBehaviorSanitizer (UBSan)" OFF)
@@ -53,31 +57,31 @@ option(USE_TSAN "Enable ThreadSanitizer (TSan)" OFF)
 # --------------------- Processor tests -------------------------
 message(
   STATUS
-    "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
+    "Building Tiki for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}"
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
-    if(NOT MLX_ENABLE_X64_MAC)
+    if(NOT TIKI_ENABLE_X64_MAC)
       message(
         FATAL_ERROR
           "Building for x86_64 on macOS is not supported."
           " If you are on an Apple silicon system, check the build"
           " documentation for possible fixes: "
-          "https://ml-explore.github.io/mlx/build/html/install.html#build-from-source"
+          "https://ml-explore.github.io/tiki/build/html/install.html#build-from-source"
       )
     else()
-      set(MLX_BUILD_METAL OFF)
+      set(TIKI_BUILD_METAL OFF)
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
   endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   # Enable the Metal backend by default on iOS; the caller selects the SDK.
 else()
-  set(MLX_BUILD_METAL OFF)
+  set(TIKI_BUILD_METAL OFF)
 endif()
 
-if(MLX_USE_CCACHE)
+if(TIKI_USE_CCACHE)
   find_program(CCACHE_PROGRAM ccache)
   if(CCACHE_PROGRAM)
     message(STATUS "Found CCache: ${CCACHE_PROGRAM}")
@@ -150,13 +154,13 @@ include(FetchContent)
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
 cmake_policy(SET CMP0135 NEW)
 
-add_library(mlx)
+add_library(tiki)
 
-target_compile_features(mlx INTERFACE cxx_std_20)
-target_compile_options(mlx PUBLIC ${SANITIZER_COMPILE_FLAGS})
-target_link_options(mlx PUBLIC ${SANITIZER_LINK_FLAGS})
+target_compile_features(tiki INTERFACE cxx_std_20)
+target_compile_options(tiki PUBLIC ${SANITIZER_COMPILE_FLAGS})
+target_link_options(tiki PUBLIC ${SANITIZER_LINK_FLAGS})
 
-if(MLX_BUILD_CUDA)
+if(TIKI_BUILD_CUDA)
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   find_package(CUDNN REQUIRED)
@@ -166,7 +170,7 @@ if(MLX_BUILD_CUDA)
   endif()
 endif()
 
-if(MLX_BUILD_METAL)
+if(TIKI_BUILD_METAL)
   find_library(METAL_LIB Metal)
   find_library(FOUNDATION_LIB Foundation)
   find_library(QUARTZ_LIB QuartzCore)
@@ -175,11 +179,11 @@ if(MLX_BUILD_METAL)
   else()
     message(
       FATAL_ERROR
-        "Metal not found. Set MLX_BUILD_METAL=OFF to build without GPU")
+        "Metal not found. Set TIKI_BUILD_METAL=OFF to build without GPU")
   endif()
 
-  if(MLX_METAL_DEBUG)
-    add_compile_definitions(MLX_METAL_DEBUG)
+  if(TIKI_METAL_DEBUG)
+    add_compile_definitions(TIKI_METAL_DEBUG)
   endif()
 
   # Probe the macOS SDK only on Darwin. On iOS the caller selects the SDK, so
@@ -200,7 +204,8 @@ if(MLX_BUILD_METAL)
     if(MACOS_SDK_VERSION VERSION_LESS 14.0)
       message(
         FATAL_ERROR
-          "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON")
+          "Tiki requires macOS SDK >= 14.0 to be built with TIKI_BUILD_METAL=ON"
+      )
     endif()
     message(STATUS "Building with macOS ${MACOS_SDK_VERSION} SDK")
 
@@ -209,7 +214,7 @@ if(MLX_BUILD_METAL)
       set(CMAKE_OSX_DEPLOYMENT_TARGET "${MACOS_VERSION}")
     endif()
     if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 14.0)
-      message(FATAL_ERROR "MLX requires macOS >= 14.0")
+      message(FATAL_ERROR "Tiki requires macOS >= 14.0")
     endif()
     message(STATUS "Building for macOS ${CMAKE_OSX_DEPLOYMENT_TARGET}")
 
@@ -219,11 +224,11 @@ if(MLX_BUILD_METAL)
       COMMAND
         zsh "-c"
         "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal ${XCRUN_FLAGS} -E -x metal -P - | tail -1"
-      OUTPUT_VARIABLE MLX_METAL_VERSION
+      OUTPUT_VARIABLE TIKI_METAL_VERSION
       OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ERROR_IS_FATAL ANY)
-    message(STATUS "Metal version: ${MLX_METAL_VERSION}")
+    message(STATUS "Metal version: ${TIKI_METAL_VERSION}")
   else()
-    set(MLX_METAL_VERSION 0)
+    set(TIKI_METAL_VERSION 0)
   endif()
 
   set(METAL_CPP_URL
@@ -231,24 +236,25 @@ if(MLX_BUILD_METAL)
   FetchContent_Declare(metal_cpp URL ${METAL_CPP_URL})
   FetchContent_MakeAvailable(metal_cpp)
   target_include_directories(
-    mlx PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
-               $<INSTALL_INTERFACE:include/metal_cpp>)
-  target_link_libraries(mlx PUBLIC ${METAL_LIB} ${FOUNDATION_LIB} ${QUARTZ_LIB})
+    tiki PUBLIC $<BUILD_INTERFACE:${metal_cpp_SOURCE_DIR}>
+                $<INSTALL_INTERFACE:include/metal_cpp>)
+  target_link_libraries(tiki PUBLIC ${METAL_LIB} ${FOUNDATION_LIB}
+                                    ${QUARTZ_LIB})
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   # With newer clang/gcc versions following libs are implicitly linked, but when
   # building on old distributions they need to be explicitly listed.
-  target_link_libraries(mlx PRIVATE dl pthread)
+  target_link_libraries(tiki PRIVATE dl pthread)
 endif()
 
 if(WIN32)
   if(MSVC)
     # GGUF does not build with MSVC.
-    set(MLX_BUILD_GGUF OFF)
+    set(TIKI_BUILD_GGUF OFF)
   endif()
   # Generate DLL and EXE in the same dir, otherwise EXE will not be able to run.
-  # This is only done when MLX is built as the top project.
+  # This is only done when Tiki is built as the top project.
   if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   endif()
@@ -262,24 +268,24 @@ if(WIN32)
   set(BUILD_SHARED_LIBS OFF)
   FetchContent_MakeAvailable(dlfcn-win32)
   endblock()
-  target_include_directories(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
-  target_sources(mlx PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
-  target_link_libraries(mlx PRIVATE Psapi.lib)
+  target_include_directories(tiki PRIVATE "${dlfcn-win32_SOURCE_DIR}/src")
+  target_sources(tiki PRIVATE "${dlfcn-win32_SOURCE_DIR}/src/dlfcn.c")
+  target_link_libraries(tiki PRIVATE Psapi.lib)
 endif()
 
-if(MLX_BUILD_CPU)
+if(TIKI_BUILD_CPU)
   find_library(ACCELERATE_LIBRARY Accelerate)
   if(ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
-    set(MLX_BUILD_ACCELERATE ON)
+    set(TIKI_BUILD_ACCELERATE ON)
   else()
     message(STATUS "Accelerate not found, using default backend.")
-    set(MLX_BUILD_ACCELERATE OFF)
+    set(TIKI_BUILD_ACCELERATE OFF)
   endif()
 
-  if(MLX_BUILD_ACCELERATE)
-    target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
-    add_compile_definitions(MLX_USE_ACCELERATE)
+  if(TIKI_BUILD_ACCELERATE)
+    target_link_libraries(tiki PUBLIC ${ACCELERATE_LIBRARY})
+    add_compile_definitions(TIKI_USE_ACCELERATE)
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
   elseif(WIN32)
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ARM64")
@@ -299,19 +305,19 @@ if(MLX_BUILD_CPU)
       URL "https://github.com/OpenMathLib/OpenBLAS/releases/download/v0.3.33/${OPENBLAS_ZIP}"
     )
     FetchContent_MakeAvailable(openblas)
-    target_include_directories(mlx
+    target_include_directories(tiki
                                PRIVATE "${openblas_SOURCE_DIR}/${OPENBLAS_INC}")
     # Make openblas importable by dependencies when built as static library.
     set(OPENBLAS_IMPORT_LIBRARY
         "${openblas_SOURCE_DIR}/lib/${OPENBLAS_LIB}.lib")
-    add_library(MLX::OpenBLAS UNKNOWN IMPORTED GLOBAL)
-    set_target_properties(MLX::OpenBLAS PROPERTIES IMPORTED_LOCATION
-                                                   "${OPENBLAS_IMPORT_LIBRARY}")
-    target_link_libraries(mlx PRIVATE MLX::OpenBLAS)
+    add_library(TIKI::OpenBLAS UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(
+      TIKI::OpenBLAS PROPERTIES IMPORTED_LOCATION "${OPENBLAS_IMPORT_LIBRARY}")
+    target_link_libraries(tiki PRIVATE TIKI::OpenBLAS)
     # Make sure the DLL file is placed in the same dir with executables.
     set(OPENBLAS_DLL_FILE "${openblas_SOURCE_DIR}/bin/${OPENBLAS_LIB}.dll")
     add_custom_command(
-      TARGET mlx
+      TARGET tiki
       POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENBLAS_DLL_FILE}
               ${CMAKE_BINARY_DIR})
@@ -332,8 +338,8 @@ if(MLX_BUILD_CPU)
               /usr/local/opt/openblas/include)
     message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
     message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
-    target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
-    target_link_libraries(mlx PRIVATE ${LAPACK_LIBRARIES})
+    target_include_directories(tiki PRIVATE ${LAPACK_INCLUDE_DIRS})
+    target_link_libraries(tiki PRIVATE ${LAPACK_LIBRARIES})
     # List blas after lapack otherwise we may accidentally incldue an old
     # version of lapack.h from the include dirs of blas.
     find_package(BLAS REQUIRED)
@@ -345,11 +351,11 @@ if(MLX_BUILD_CPU)
               $ENV{BLAS_HOME}/include)
     message(STATUS "Blas lib " ${BLAS_LIBRARIES})
     message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
-    target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
-    target_link_libraries(mlx PRIVATE ${BLAS_LIBRARIES})
+    target_include_directories(tiki PRIVATE ${BLAS_INCLUDE_DIRS})
+    target_link_libraries(tiki PRIVATE ${BLAS_LIBRARIES})
   endif()
 else()
-  set(MLX_BUILD_ACCELERATE OFF)
+  set(TIKI_BUILD_ACCELERATE OFF)
 endif()
 
 message(STATUS "Downloading json")
@@ -358,22 +364,22 @@ FetchContent_Declare(
   URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
 target_include_directories(
-  mlx PRIVATE $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>)
+  tiki PRIVATE $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>)
 
 # Add standalone JACCL library (RDMA over Thunderbolt distributed backend)
-if(MLX_BUILD_CPU
+if(TIKI_BUILD_CPU
    AND ${CMAKE_SYSTEM_NAME} MATCHES "Darwin"
    AND DEFINED MACOS_SDK_VERSION
    AND MACOS_SDK_VERSION VERSION_GREATER_EQUAL 26.2)
-  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx/distributed/jaccl/lib
+  add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tiki/distributed/jaccl/lib
                    ${CMAKE_BINARY_DIR}/jaccl)
 endif()
 
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tiki)
 
 target_include_directories(
-  mlx PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
-             $<INSTALL_INTERFACE:include>)
+  tiki PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
+              $<INSTALL_INTERFACE:include>)
 
 if(USE_SYSTEM_FMT)
   find_package(fmt REQUIRED)
@@ -385,9 +391,9 @@ else()
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(fmt)
 endif()
-target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
+target_link_libraries(tiki PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 
-if(MLX_BUILD_PYTHON_BINDINGS)
+if(TIKI_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
   find_package(
     Python 3.10
@@ -403,16 +409,16 @@ if(MLX_BUILD_PYTHON_BINDINGS)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
 
-if(MLX_BUILD_TESTS)
+if(TIKI_BUILD_TESTS)
   include(CTest)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/tests)
 endif()
 
-if(MLX_BUILD_EXAMPLES)
+if(TIKI_BUILD_EXAMPLES)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/examples/cpp)
 endif()
 
-if(MLX_BUILD_BENCHMARKS)
+if(TIKI_BUILD_BENCHMARKS)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/benchmarks/cpp)
 endif()
 
@@ -422,7 +428,7 @@ include(GNUInstallDirs)
 if(WIN32)
   # Install DLLs to the same dir with extension file (core.pyd) on Windows.
   set(CMAKE_INSTALL_BINDIR ".")
-  if(MLX_BUILD_CPU)
+  if(TIKI_BUILD_CPU)
     # Install OpenBLAS.
     install(FILES ${OPENBLAS_DLL_FILE} TYPE BIN)
     install(FILES ${OPENBLAS_IMPORT_LIBRARY}
@@ -432,8 +438,8 @@ endif()
 
 # Install library
 install(
-  TARGETS mlx
-  EXPORT MLXTargets
+  TARGETS tiki
+  EXPORT TIKITargets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -442,7 +448,7 @@ install(
 
 # Install headers
 install(
-  DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/mlx
+  DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/tiki
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   COMPONENT headers
   FILES_MATCHING
@@ -450,7 +456,7 @@ install(
   PATTERN "backend/metal/kernels.h" EXCLUDE)
 
 # Install metal dependencies
-if(MLX_BUILD_METAL)
+if(TIKI_BUILD_METAL)
 
   # Install metal cpp
   install(
@@ -461,31 +467,31 @@ if(MLX_BUILD_METAL)
 endif()
 
 # Install cmake config
-set(MLX_CMAKE_BUILD_CONFIG ${CMAKE_BINARY_DIR}/MLXConfig.cmake)
-set(MLX_CMAKE_BUILD_VERSION_CONFIG ${CMAKE_BINARY_DIR}/MLXConfigVersion.cmake)
-set(MLX_CMAKE_INSTALL_MODULE_DIR share/cmake/MLX)
+set(TIKI_CMAKE_BUILD_CONFIG ${CMAKE_BINARY_DIR}/TIKIConfig.cmake)
+set(TIKI_CMAKE_BUILD_VERSION_CONFIG ${CMAKE_BINARY_DIR}/TIKIConfigVersion.cmake)
+set(TIKI_CMAKE_INSTALL_MODULE_DIR share/cmake/Tiki)
 
 install(
-  EXPORT MLXTargets
-  FILE MLXTargets.cmake
-  DESTINATION ${MLX_CMAKE_INSTALL_MODULE_DIR})
+  EXPORT TIKITargets
+  FILE TIKITargets.cmake
+  DESTINATION ${TIKI_CMAKE_INSTALL_MODULE_DIR})
 
 include(CMakePackageConfigHelpers)
 
 write_basic_package_version_file(
-  ${MLX_CMAKE_BUILD_VERSION_CONFIG}
+  ${TIKI_CMAKE_BUILD_VERSION_CONFIG}
   COMPATIBILITY SameMajorVersion
-  VERSION ${MLX_VERSION})
+  VERSION ${TIKI_VERSION})
 
 configure_package_config_file(
-  ${CMAKE_CURRENT_LIST_DIR}/mlx.pc.in ${MLX_CMAKE_BUILD_CONFIG}
-  INSTALL_DESTINATION ${MLX_CMAKE_INSTALL_MODULE_DIR}
+  ${CMAKE_CURRENT_LIST_DIR}/tiki.pc.in ${TIKI_CMAKE_BUILD_CONFIG}
+  INSTALL_DESTINATION ${TIKI_CMAKE_INSTALL_MODULE_DIR}
   NO_CHECK_REQUIRED_COMPONENTS_MACRO
   PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR
-            MLX_CMAKE_INSTALL_MODULE_DIR)
+            TIKI_CMAKE_INSTALL_MODULE_DIR)
 
-install(FILES ${MLX_CMAKE_BUILD_CONFIG} ${MLX_CMAKE_BUILD_VERSION_CONFIG}
-        DESTINATION ${MLX_CMAKE_INSTALL_MODULE_DIR})
+install(FILES ${TIKI_CMAKE_BUILD_CONFIG} ${TIKI_CMAKE_BUILD_VERSION_CONFIG}
+        DESTINATION ${TIKI_CMAKE_INSTALL_MODULE_DIR})
 
 install(DIRECTORY ${CMAKE_MODULE_PATH}/
-        DESTINATION ${MLX_CMAKE_INSTALL_MODULE_DIR})
+        DESTINATION ${TIKI_CMAKE_INSTALL_MODULE_DIR})

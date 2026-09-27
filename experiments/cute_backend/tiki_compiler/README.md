@@ -1,15 +1,15 @@
 # Compiler contracts
 
 The public entry points are `tiki.compile` and `associative_scan`. They accept
-float32 MLX arrays. Compiler internals live in this package; import each contract
+float32 Tiki arrays. Compiler internals live in this package; import each contract
 from the module that owns it.
 
 ```text
-MLX export callback -> Captured -> specialize
+Tiki export callback -> Captured -> specialize
                                   |-> Graph -> emitter -> Lowered
                                   |-> partition -> Program[Matmul | Collective | Kernel]
-Lowered -> CudaIo -> cubin -> MLX CUDA kernel
-Program -> cached MLX graph replay
+Lowered -> CudaIo -> cubin -> Tiki CUDA kernel
+Program -> cached Tiki graph replay
 ```
 
 | Modules | Responsibility |
@@ -63,7 +63,7 @@ control-flow nesting at three blocks, and signatures at five arguments.
 Tests and demos also pass Ruff and ty. Negative type fixtures prove invalid
 operation identities and missing communicator indices are rejected.
 
-Build this checkout's native MLX extension first so its export API and generated
+Build this checkout's native Tiki extension first so its export API and generated
 stubs agree. Then, from the repository root:
 
 ```bash
@@ -81,5 +81,5 @@ TIKI_TEST_ARCH=sm_89 PYTHONPATH=experiments/cute_backend \
 
 Use `sm_90` for Hopper. Distributed execution additionally needs two ranks; see
 [PROGRAMS.md](../PROGRAMS.md). Affine derivative oracles use sequential float64
-recurrences independent of the GPU scan tree and MLX autodiff. Results and
+recurrences independent of the GPU scan tree and Tiki autodiff. Results and
 emission hashes are in [LOWERING_VALIDATION.md](../LOWERING_VALIDATION.md).

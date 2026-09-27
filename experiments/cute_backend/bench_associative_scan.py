@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-import mlx.core as mx
+import tiki as tk
 
 from associative_scan import ScanSchedule, associative_scan
 
@@ -23,10 +23,10 @@ def affine(left, right):
 
 def microseconds(function, repeats=20):
     for _ in range(3):
-        mx.eval(function())
+        tk.eval(function())
     start = time.perf_counter()
     for _ in range(repeats):
-        mx.eval(function())
+        tk.eval(function())
     return (time.perf_counter() - start) / repeats * 1e6
 
 
@@ -36,9 +36,9 @@ def main() -> None:
     )
     print("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
     for shape in SHAPES:
-        a = mx.random.uniform(0.5, 1.0, shape)
-        b = mx.random.normal(shape)
-        mx.eval(a, b)
+        a = tk.random.uniform(0.5, 1.0, shape)
+        b = tk.random.normal(shape)
+        tk.eval(a, b)
         forwards = {
             "tree": lambda: tree_scan(affine, (a, b), axis=1)[1],
             "kernel": lambda: affine_scan(a, b)[1],
@@ -59,7 +59,7 @@ def main() -> None:
             for name in ("tree", "kernel", "codegen")
         ]
         row += [
-            f"{microseconds(lambda name=name: mx.grad(losses[name], argnums=(0, 1))(a, b)):.0f}"
+            f"{microseconds(lambda name=name: tk.grad(losses[name], argnums=(0, 1))(a, b)):.0f}"
             for name in ("tree", "kernel", "codegen")
         ]
         print("| " + " | ".join(row) + " |")

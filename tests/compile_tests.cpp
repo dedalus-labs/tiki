@@ -8,10 +8,10 @@
 #include <cmath>
 #include <limits>
 
-#include "mlx/mlx.h"
-#include "mlx/primitives.h"
+#include "tiki/primitives.h"
+#include "tiki/tiki.h"
 
-using namespace mlx::core;
+using namespace tiki::core;
 
 std::vector<array> simple_fun(const std::vector<array>& inputs) {
   return std::vector<array>{inputs[0] + inputs[1]};

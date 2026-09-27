@@ -1,10 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
 #include <iostream>
-#include "mlx/mlx.h"
+#include "tiki/tiki.h"
 #include "time_utils.h"
 
-namespace mx = mlx::core;
+namespace mx = tiki::core;
 
 void time_add_op() {
   std::vector<int> sizes(1, 1);

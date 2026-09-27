@@ -3,13 +3,13 @@
 The four leaves represent real/imaginary parts of coefficients and increments.
 At position t, product[t] = coefficient[t] * product[t-1] and
 state[t] = coefficient[t] * state[t-1] + increment[t]. Position zero is the input.
-These loops share neither the GPU scan tree nor MLX's differentiation primitives.
+These loops share neither the GPU scan tree nor Tiki's differentiation primitives.
 """
 
 from collections.abc import Sequence
 
 import numpy as np
-from mlx import core
+from tiki import core
 from numpy.typing import NDArray
 
 type ComplexGrid = NDArray[np.complex128]

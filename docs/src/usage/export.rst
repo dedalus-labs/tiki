@@ -3,13 +3,13 @@
 Exporting Functions
 ===================
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
-MLX has an API to export and import functions to and from a file. This lets you
-run computations written in one MLX front-end (e.g. Python) in another MLX
+Tiki has an API to export and import functions to and from a file. This lets you
+run computations written in one Tiki front-end (e.g. Python) in another Tiki
 front-end (e.g. C++).
 
-This guide walks through the basics of the MLX export API with some examples.
+This guide walks through the basics of the Tiki export API with some examples.
 To see the full list of functions check-out the :ref:`API documentation
 <export>`.
 
@@ -23,9 +23,9 @@ Let's start with a simple example:
   def fun(x, y):
     return x + y
 
-  x = mx.array(1.0)
-  y = mx.array(1.0)
-  mx.export_function("add.mlxfn", fun, x, y)
+  x = tk.array(1.0)
+  y = tk.array(1.0)
+  tk.export_function("add.tkfn", fun, x, y)
 
 To export a function, provide sample input arrays that the function
 can be called with. The data doesn't matter, but the shapes and types of the
@@ -34,21 +34,21 @@ scalar arrays. We can then import the function and run it:
 
 .. code-block:: python
 
-  add_fun = mx.import_function("add.mlxfn")
+  add_fun = tk.import_function("add.tkfn")
 
-  out, = add_fun(mx.array(1.0), mx.array(2.0))
+  out, = add_fun(tk.array(1.0), tk.array(2.0))
   # Prints: array(3, dtype=float32)
   print(out)
 
-  out, = add_fun(mx.array(1.0), mx.array(3.0))
+  out, = add_fun(tk.array(1.0), tk.array(3.0))
   # Prints: array(4, dtype=float32)
   print(out)
 
   # Raises an exception
-  add_fun(mx.array(1), mx.array(3.0))
+  add_fun(tk.array(1), tk.array(3.0))
 
   # Raises an exception
-  add_fun(mx.array([1.0, 2.0]), mx.array(3.0))
+  add_fun(tk.array([1.0, 2.0]), tk.array(3.0))
 
 Notice the third and fourth calls to ``add_fun`` raise exceptions because the
 shapes and types of the inputs are different than the shapes and types of the
@@ -65,16 +65,16 @@ specified as variable positional arguments or as a tuple of arrays:
   def fun(x, y):
     return x + y
 
-  x = mx.array(1.0)
-  y = mx.array(1.0)
+  x = tk.array(1.0)
+  y = tk.array(1.0)
 
   # Both arguments to fun are positional
-  mx.export_function("add.mlxfn", fun, x, y)
+  tk.export_function("add.tkfn", fun, x, y)
 
   # Same as above
-  mx.export_function("add.mlxfn", fun, (x, y))
+  tk.export_function("add.tkfn", fun, (x, y))
 
-  imported_fun = mx.import_function("add.mlxfn")
+  imported_fun = tk.import_function("add.tkfn")
 
   # Ok
   out, = imported_fun(x, y)
@@ -92,9 +92,9 @@ keyword arguments when calling the imported function.
     return x + y
 
   # One argument to fun is positional, the other is a kwarg
-  mx.export_function("add.mlxfn", fun, x, y=y)
+  tk.export_function("add.tkfn", fun, x, y=y)
 
-  imported_fun = mx.import_function("add.mlxfn")
+  imported_fun = tk.import_function("add.tkfn")
 
   # Ok
   out, = imported_fun(x, y=y)
@@ -123,16 +123,16 @@ JSON:
   def fun(x, y):
     return x + y
 
-  x = mx.array(1.0)
-  y = mx.array(1.0)
+  x = tk.array(1.0)
+  y = tk.array(1.0)
   config = {"description": "adds two arrays", "version": 1}
-  mx.export_function("add.mlxfn", fun, x, y, metadata=json.dumps(config))
+  tk.export_function("add.tkfn", fun, x, y, metadata=json.dumps(config))
 
 Pass ``return_metadata=True`` to read the metadata back when importing:
 
 .. code-block:: python
 
-  imported_fun, metadata = mx.import_function("add.mlxfn", return_metadata=True)
+  imported_fun, metadata = tk.import_function("add.tkfn", return_metadata=True)
 
   # Prints: adds two arrays
   print(json.loads(metadata)["description"])
@@ -141,21 +141,21 @@ Pass ``return_metadata=True`` to read the metadata back when importing:
 Exporting Modules
 -----------------
 
-An :obj:`mlx.nn.Module` can be exported with or without the parameters included
+An :obj:`tiki.nn.Module` can be exported with or without the parameters included
 in the exported function. Here's an example:
 
 .. code-block:: python
 
    model = nn.Linear(4, 4)
-   mx.eval(model.parameters())
+   tk.eval(model.parameters())
 
    def call(x):
       return model(x)
 
-   mx.export_function("model.mlxfn", call, mx.zeros(4))
+   tk.export_function("model.tkfn", call, tk.zeros(4))
 
-In the above example, the :obj:`mlx.nn.Linear` module is exported. Its
-parameters are also saved to the ``model.mlxfn`` file.
+In the above example, the :obj:`tiki.nn.Linear` module is exported. Its
+parameters are also saved to the ``model.tkfn`` file.
 
 .. note::
 
@@ -163,9 +163,9 @@ parameters are also saved to the ``model.mlxfn`` file.
    they are evaluated. The computation graph that gets exported will include
    the computation that produces enclosed inputs.
 
-   If the above example was missing ``mx.eval(model.parameters()``, the
+   If the above example was missing ``tk.eval(model.parameters()``, the
    exported function would include the random initialization of the
-   :obj:`mlx.nn.Module` parameters.
+   :obj:`tiki.nn.Module` parameters.
 
 If you only want to export the ``Module.__call__`` function without the
 parameters, pass them as inputs to the ``call`` wrapper:
@@ -173,7 +173,7 @@ parameters, pass them as inputs to the ``call`` wrapper:
 .. code-block:: python
 
    model = nn.Linear(4, 4)
-   mx.eval(model.parameters())
+   tk.eval(model.parameters())
 
    def call(x, **params):
      # Set the model's parameters to the input parameters
@@ -181,7 +181,7 @@ parameters, pass them as inputs to the ``call`` wrapper:
      return model(x)
 
    params = tree_flatten(model.parameters(), destination={})
-   mx.export_function("model.mlxfn", call, (mx.zeros(4),), params)
+   tk.export_function("model.tkfn", call, (tk.zeros(4),), params)
 
 
 Exporting with a Callback
@@ -193,12 +193,12 @@ to :func:`export_function`.
 .. code-block:: python
 
   def fun(x):
-    return x.astype(mx.int32)
+    return x.astype(tk.int32)
 
   def callback(args):
     print(args)
 
-  mx.export_function(callback, fun, mx.array([1.0, 2.0]))
+  tk.export_function(callback, fun, tk.array([1.0, 2.0]))
 
 The argument to the callback (``args``) is a dictionary which includes a
 ``type`` field. The possible types are:
@@ -221,14 +221,14 @@ to export a function which can be used for inputs with variable shapes:
 
 .. code-block:: python
 
-  mx.export_function("fun.mlxfn", mx.abs, mx.array([0.0]), shapeless=True)
-  imported_abs = mx.import_function("fun.mlxfn")
+  tk.export_function("fun.tkfn", tk.abs, tk.array([0.0]), shapeless=True)
+  imported_abs = tk.import_function("fun.tkfn")
 
   # Ok
-  out, = imported_abs(mx.array([-1.0]))
+  out, = imported_abs(tk.array([-1.0]))
 
   # Also ok
-  out, = imported_abs(mx.array([-1.0, -2.0]))
+  out, = imported_abs(tk.array([-1.0, -2.0]))
 
 With ``shapeless=False`` (which is the default), the second call to
 ``imported_abs`` would raise an exception with a shape mismatch.
@@ -244,31 +244,31 @@ In some cases, functions build different computation graphs for different
 input arguments. A simple way to manage this is to export to a new file with
 each set of inputs. This is a fine option in many cases. But it can be
 suboptimal if the exported functions have a large amount of duplicate constant
-data (for example the parameters of a :obj:`mlx.nn.Module`).
+data (for example the parameters of a :obj:`tiki.nn.Module`).
 
-The export API in MLX lets you export multiple traces of the same function to
+The export API in Tiki lets you export multiple traces of the same function to
 a single file by creating an exporting context manager with :func:`exporter`:
 
 .. code-block:: python
 
   def fun(x, y=None):
-      constant = mx.array(3.0)
+      constant = tk.array(3.0)
       if y is not None:
         x += y
       return x + constant
 
-  with mx.exporter("fun.mlxfn", fun) as exporter:
-      exporter(mx.array(1.0))
-      exporter(mx.array(1.0), y=mx.array(0.0))
+  with tk.exporter("fun.tkfn", fun) as exporter:
+      exporter(tk.array(1.0))
+      exporter(tk.array(1.0), y=tk.array(0.0))
 
-  imported_function = mx.import_function("fun.mlxfn")
+  imported_function = tk.import_function("fun.tkfn")
 
   # Call the function with y=None
-  out, = imported_function(mx.array(1.0))
+  out, = imported_function(tk.array(1.0))
   print(out)
 
   # Call the function with y specified
-  out, = imported_function(mx.array(1.0), y=mx.array(1.0))
+  out, = imported_function(tk.array(1.0), y=tk.array(1.0))
   print(out)
 
 In the above example the function constant data, (i.e. ``constant``), is only
@@ -283,20 +283,20 @@ on imported functions just like regular Python functions:
 .. code-block:: python
 
   def fun(x):
-      return mx.sin(x)
+      return tk.sin(x)
 
-  x = mx.array(0.0)
-  mx.export_function("sine.mlxfn", fun, x)
+  x = tk.array(0.0)
+  tk.export_function("sine.tkfn", fun, x)
 
-  imported_fun = mx.import_function("sine.mlxfn")
+  imported_fun = tk.import_function("sine.tkfn")
 
   # Take the derivative of the imported function
-  dfdx = mx.grad(lambda x: imported_fun(x)[0])
+  dfdx = tk.grad(lambda x: imported_fun(x)[0])
   # Prints: array(1, dtype=float32)
   print(dfdx(x))
 
   # Compile the imported function
-  mx.compile(imported_fun)
+  tk.compile(imported_fun)
   # Prints: array(0, dtype=float32)
   print(compiled_fun(x)[0])
 
@@ -305,36 +305,36 @@ Importing Functions in C++
 --------------------------
 
 Importing and running functions in C++ is basically the same as importing and
-running them in Python. First, follow the :ref:`instructions <mlx_in_cpp>` to
-setup a simple C++ project that uses MLX as a library.
+running them in Python. First, follow the :ref:`instructions <tiki_in_cpp>` to
+setup a simple C++ project that uses Tiki as a library.
 
 Next, export a simple function from Python:
 
 .. code-block:: python
 
   def fun(x, y):
-      return mx.exp(x + y)
+      return tk.exp(x + y)
 
-  x = mx.array(1.0)
-  y = mx.array(1.0)
-  mx.export_function("fun.mlxfn", fun, x, y)
+  x = tk.array(1.0)
+  y = tk.array(1.0)
+  tk.export_function("fun.tkfn", fun, x, y)
 
 
 Import and run the function in C++ with only a few lines of code:
 
 .. code-block:: c++
 
-  auto fun = mx::import_function("fun.mlxfn");
+  auto fun = tk::import_function("fun.tkfn");
 
-  auto inputs = {mx::array(1.0), mx::array(1.0)};
+  auto inputs = {tk::array(1.0), tk::array(1.0)};
   auto outputs = fun(inputs);
 
   // Prints: array(2, dtype=float32)
   std::cout << outputs[0] << std::endl;
 
 Imported functions can be transformed in C++ just like in Python. Use
-``std::vector<mx::array>`` for positional arguments and ``std::map<std::string,
-mx::array>`` for keyword arguments when calling imported functions in C++.
+``std::vector<tk::array>`` for positional arguments and ``std::map<std::string,
+tk::array>`` for keyword arguments when calling imported functions in C++.
 
 More Examples
 -------------

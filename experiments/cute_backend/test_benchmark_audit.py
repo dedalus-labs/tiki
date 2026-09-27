@@ -11,12 +11,12 @@ import numpy as np
 
 
 def load_benchmark():
-    mlx = Mock()
+    tiki = Mock()
     cuda = Mock()
     cutlass = Mock()
     modules = {
-        "mlx": mlx,
-        "mlx.core": mlx.core,
+        "tiki": tiki,
+        "tiki": tiki,
         "cuda": cuda,
         "cuda.bindings": cuda.bindings,
         "cutlass": cutlass,
@@ -88,10 +88,10 @@ class AllocationTests(unittest.TestCase):
                 ]
                 cuda.cuMemFree.return_value = (success,)
                 lowered = (
-                    benchmark.tk.compile.return_value.return_value.lower.return_value
+                    benchmark.compiler.compile.return_value.return_value.lower.return_value
                 )
                 lowered.mlir = "mlir"
-                benchmark.tk.binary.return_value.ptx = "ptx"
+                benchmark.compiler.binary.return_value.ptx = "ptx"
                 benchmark.compile_reference = Mock(return_value=b"cubin")
                 schedule = Mock(threads_per_row=32, rows_per_block=4)
                 with self.assertRaisesRegex(RuntimeError, "CUDA_ERROR_OUT_OF_MEMORY"):

@@ -2,23 +2,23 @@
 
 import argparse
 
-import mlx.core as mx
+import tiki as tk
 import torch
 from time_utils import measure_runtime
 
 
-def benchmark_slice_update_mlx(dst_shape, slice_shape, slice_range, dtype, iters=10):
+def benchmark_slice_update_tiki(dst_shape, slice_shape, slice_range, dtype, iters=10):
     def slice_update(arguments):
         for i in range(iters):
             arguments["dst"] = (
                 arguments["dst"].at[slice_range].add(arguments["updates"])
             )
-        mx.eval(arguments)
+        tk.eval(arguments)
 
-    dtype = getattr(mx, dtype)
+    dtype = getattr(tk, dtype)
     arguments = {
-        "dst": mx.random.normal(dst_shape).astype(dtype),
-        "updates": mx.random.normal(slice_shape).astype(dtype),
+        "dst": tk.random.normal(dst_shape).astype(dtype),
+        "updates": tk.random.normal(slice_shape).astype(dtype),
     }
 
     runtime = measure_runtime(slice_update, arguments=arguments)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.cpu:
-        mx.set_default_device(mx.cpu)
+        tk.set_default_device(tk.cpu)
         device = torch.device("cpu")
     elif torch.mps.is_available():
         device = torch.device("mps")
@@ -91,13 +91,13 @@ if __name__ == "__main__":
 
     print(
         f"{'Dtype':<12} {'Dst Shape':<25} {'Update Shape':<20} "
-        f"{'MLX (ms)':<12} {'MLX GB/s':<12} {'Torch (ms)':<12} {'Torch GB/s':<12}"
+        f"{'Tiki (ms)':<12} {'Tiki GB/s':<12} {'Torch (ms)':<12} {'Torch GB/s':<12}"
     )
     print("-" * 110)
 
     for dtype in dtypes:
         for dst_shape, slice_range, update_shape in test_cases:
-            mlx_time, mlx_bw = benchmark_slice_update_mlx(
+            tiki_time, tiki_bw = benchmark_slice_update_tiki(
                 dst_shape, update_shape, slice_range, dtype
             )
             torch_time, torch_bw = benchmark_slice_update_torch(
@@ -105,5 +105,5 @@ if __name__ == "__main__":
             )
             print(
                 f"{dtype:<12} {str(dst_shape):<25} {str(update_shape):<20} "
-                f"{mlx_time:<12.3f} {mlx_bw:<12.2f} {torch_time:<12.3f} {torch_bw:<12.2f}"
+                f"{tiki_time:<12.3f} {tiki_bw:<12.2f} {torch_time:<12.3f} {torch_bw:<12.2f}"
             )

@@ -8,24 +8,24 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "mlx/linalg.h"
 #include "python/src/small_vector.h"
+#include "tiki/linalg.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 namespace nb = nanobind;
 using namespace nb::literals;
 
 void init_linalg(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
-      "linalg", "mlx.core.linalg: linear algebra routines.");
+      "linalg", "tiki.linalg: linear algebra routines.");
 
   m.def(
       "norm",
-      [](const mx::array& a,
+      [](const tk::array& a,
          const std::variant<std::monostate, int, double, std::string>& ord_,
          const std::variant<std::monostate, int, std::vector<int>>& axis_,
          const bool keepdims,
-         const mx::StreamOrDevice stream) {
+         const tk::StreamOrDevice stream) {
         std::optional<std::vector<int>> axis = std::nullopt;
         if (auto pv = std::get_if<int>(&axis_); pv) {
           axis = std::vector<int>{*pv};
@@ -34,10 +34,10 @@ void init_linalg(nb::module_& parent_module) {
         }
 
         if (std::holds_alternative<std::monostate>(ord_)) {
-          return mx::linalg::norm(a, axis, keepdims, stream);
+          return tk::linalg::norm(a, axis, keepdims, stream);
         } else {
           if (auto pv = std::get_if<std::string>(&ord_); pv) {
-            return mx::linalg::norm(a, *pv, axis, keepdims, stream);
+            return tk::linalg::norm(a, *pv, axis, keepdims, stream);
           }
           double ord;
           if (auto pv = std::get_if<int>(&ord_); pv) {
@@ -45,7 +45,7 @@ void init_linalg(nb::module_& parent_module) {
           } else {
             ord = std::get<double>(ord_);
           }
-          return mx::linalg::norm(a, ord, axis, keepdims, stream);
+          return tk::linalg::norm(a, ord, axis, keepdims, stream);
         }
       },
       nb::arg(),
@@ -118,9 +118,9 @@ void init_linalg(nb::module_& parent_module) {
                  Baltimore, MD, Johns Hopkins University Press, 1985, pg. 15
 
         Examples:
-          >>> import mlx.core as mx
-          >>> from mlx.core import linalg as la
-          >>> a = mx.arange(9) - 4
+          >>> import tiki as tk
+          >>> from tiki import linalg as la
+          >>> a = tk.arange(9) - 4
           >>> a
           array([-4, -3, -2, ..., 2, 3, 4], dtype=int32)
           >>> b = a.reshape((3,3))
@@ -156,7 +156,7 @@ void init_linalg(nb::module_& parent_module) {
           array(5.84804, dtype=float32)
           >>> la.norm(a, -3)
           array(0, dtype=float32)
-          >>> c = mx.array([[ 1, 2, 3],
+          >>> c = tk.array([[ 1, 2, 3],
           ...               [-1, 1, 4]])
           >>> la.norm(c, axis=0)
           array([1.41421, 2.23607, 5], dtype=float32)
@@ -164,7 +164,7 @@ void init_linalg(nb::module_& parent_module) {
           array([3.74166, 4.24264], dtype=float32)
           >>> la.norm(c, ord=1, axis=1)
           array([6, 6], dtype=float32)
-          >>> m = mx.arange(8).reshape(2,2,2)
+          >>> m = tk.arange(8).reshape(2,2,2)
           >>> la.norm(m, axis=(1,2))
           array([3.74166, 11.225], dtype=float32)
           >>> la.norm(m[0, :, :]), LA.norm(m[1, :, :])
@@ -172,7 +172,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "qr",
-      &mx::linalg::qr,
+      &tk::linalg::qr,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -194,8 +194,8 @@ void init_linalg(nb::module_& parent_module) {
             tuple(array, array): ``Q`` and ``R`` matrices such that ``Q @ R = a``.
 
         Example:
-            >>> A = mx.array([[2., 3.], [1., 2.]])
-            >>> Q, R = mx.linalg.qr(A, stream=mx.cpu)
+            >>> A = tk.array([[2., 3.], [1., 2.]])
+            >>> Q, R = tk.linalg.qr(A, stream=tk.cpu)
             >>> Q
             array([[-0.894427, -0.447214],
                    [-0.447214, 0.894427]], dtype=float32)
@@ -205,10 +205,10 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "svd",
-      [](const mx::array& a,
+      [](const tk::array& a,
          bool compute_uv /* = true */,
-         mx::StreamOrDevice s /* = {} */) -> nb::object {
-        const auto result = mx::linalg::svd(a, compute_uv, s);
+         tk::StreamOrDevice s /* = {} */) -> nb::object {
+        const auto result = tk::linalg::svd(a, compute_uv, s);
         if (result.size() == 1) {
           return nb::cast(result.at(0));
         } else {
@@ -242,7 +242,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "inv",
-      &mx::linalg::inv,
+      &tk::linalg::inv,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -264,7 +264,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "tri_inv",
-      &mx::linalg::tri_inv,
+      &tk::linalg::tri_inv,
       "a"_a,
       "upper"_a = false,
       nb::kw_only(),
@@ -289,7 +289,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "cholesky",
-      &mx::linalg::cholesky,
+      &tk::linalg::cholesky,
       "a"_a,
       "upper"_a = false,
       nb::kw_only(),
@@ -319,7 +319,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "cholesky_inv",
-      &mx::linalg::cholesky_inv,
+      &tk::linalg::cholesky_inv,
       "a"_a,
       "upper"_a = false,
       nb::kw_only(),
@@ -358,7 +358,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "pinv",
-      &mx::linalg::pinv,
+      &tk::linalg::pinv,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -381,7 +381,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "cross",
-      &mx::linalg::cross,
+      &tk::linalg::cross,
       "a"_a,
       "b"_a,
       "axis"_a = -1,
@@ -409,7 +409,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "eigvals",
-      &mx::linalg::eigvals,
+      &tk::linalg::eigvals,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -432,15 +432,15 @@ void init_linalg(nb::module_& parent_module) {
             array: The eigenvalues (not necessarily in order).
 
         Example:
-            >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> eigenvalues = mx.linalg.eigvals(A, stream=mx.cpu)
+            >>> A = tk.array([[1., -2.], [-2., 1.]])
+            >>> eigenvalues = tk.linalg.eigvals(A, stream=tk.cpu)
             >>> eigenvalues
             array([3+0j, -1+0j], dtype=complex64)
       )pbdoc");
   m.def(
       "eig",
-      [](const mx::array& a, mx::StreamOrDevice s) {
-        auto result = mx::linalg::eig(a, s);
+      [](const tk::array& a, tk::StreamOrDevice s) {
+        auto result = tk::linalg::eig(a, s);
         return nb::make_tuple(result.first, result.second);
       },
       "a"_a,
@@ -470,8 +470,8 @@ void init_linalg(nb::module_& parent_module) {
               corresponding to the i-th eigenvalue.
 
         Example:
-            >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> w, v = mx.linalg.eig(A, stream=mx.cpu)
+            >>> A = tk.array([[1., -2.], [-2., 1.]])
+            >>> w, v = tk.linalg.eig(A, stream=tk.cpu)
             >>> w
             array([3+0j, -1+0j], dtype=complex64)
             >>> v
@@ -481,7 +481,7 @@ void init_linalg(nb::module_& parent_module) {
 
   m.def(
       "eigvalsh",
-      &mx::linalg::eigvalsh,
+      &tk::linalg::eigvalsh,
       "a"_a,
       "UPLO"_a = "L",
       nb::kw_only(),
@@ -509,15 +509,15 @@ void init_linalg(nb::module_& parent_module) {
             the selected triangle is used. No checks for symmetry are performed.
 
         Example:
-            >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> eigenvalues = mx.linalg.eigvalsh(A, stream=mx.cpu)
+            >>> A = tk.array([[1., -2.], [-2., 1.]])
+            >>> eigenvalues = tk.linalg.eigvalsh(A, stream=tk.cpu)
             >>> eigenvalues
             array([-1., 3.], dtype=float32)
       )pbdoc");
   m.def(
       "eigh",
-      [](const mx::array& a, const std::string& UPLO, mx::StreamOrDevice s) {
-        auto result = mx::linalg::eigh(a, UPLO, s);
+      [](const tk::array& a, const std::string& UPLO, tk::StreamOrDevice s) {
+        auto result = tk::linalg::eigh(a, UPLO, s);
         return nb::make_tuple(result.first, result.second);
       },
       "a"_a,
@@ -553,8 +553,8 @@ void init_linalg(nb::module_& parent_module) {
             the selected triangle is used. No checks for symmetry are performed.
 
         Example:
-            >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> w, v = mx.linalg.eigh(A, stream=mx.cpu)
+            >>> A = tk.array([[1., -2.], [-2., 1.]])
+            >>> w, v = tk.linalg.eigh(A, stream=tk.cpu)
             >>> w
             array([-1., 3.], dtype=float32)
             >>> v
@@ -563,8 +563,8 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "lu",
-      [](const mx::array& a, mx::StreamOrDevice s /* = {} */) {
-        auto result = mx::linalg::lu(a, s);
+      [](const tk::array& a, tk::StreamOrDevice s /* = {} */) {
+        auto result = tk::linalg::lu(a, s);
         return nb::make_tuple(result.at(0), result.at(1), result.at(2));
       },
       "a"_a,
@@ -577,14 +577,14 @@ void init_linalg(nb::module_& parent_module) {
 
         Note, unlike the default behavior of ``scipy.linalg.lu``, the pivots
         are indices. To reconstruct the input use ``L[P, :] @ U`` for 2
-        dimensions or ``mx.take_along_axis(L, P[..., None], axis=-2) @ U``
+        dimensions or ``tk.take_along_axis(L, P[..., None], axis=-2) @ U``
         for more than 2 dimensions.
 
         To construct the full permuation matrix do:
 
         .. code-block::
 
-          P = mx.put_along_axis(mx.zeros_like(L), p[..., None], mx.array(1.0), axis=-1)
+          P = tk.put_along_axis(tk.zeros_like(L), p[..., None], tk.array(1.0), axis=-1)
 
         Args:
             a (array): Input array.
@@ -597,7 +597,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "lu_factor",
-      &mx::linalg::lu_factor,
+      &tk::linalg::lu_factor,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -616,7 +616,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "solve",
-      &mx::linalg::solve,
+      &tk::linalg::solve,
       "a"_a,
       "b"_a,
       nb::kw_only(),
@@ -637,7 +637,7 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "solve_triangular",
-      &mx::linalg::solve_triangular,
+      &tk::linalg::solve_triangular,
       "a"_a,
       "b"_a,
       nb::kw_only(),
@@ -662,7 +662,7 @@ void init_linalg(nb::module_& parent_module) {
 
   m.def(
       "det",
-      &mx::linalg::det,
+      &tk::linalg::det,
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -683,15 +683,15 @@ void init_linalg(nb::module_& parent_module) {
             array: The determinant(s) of the input matrix (matrices).
 
         Example:
-            >>> A = mx.array([[1., 2.], [3., 4.]])
-            >>> mx.linalg.det(A, stream=mx.cpu)
+            >>> A = tk.array([[1., 2.], [3., 4.]])
+            >>> tk.linalg.det(A, stream=tk.cpu)
             array(-2, dtype=float32)
       )pbdoc");
 
   m.def(
       "slogdet",
-      [](const mx::array& a, mx::StreamOrDevice s) {
-        auto result = mx::linalg::slogdet(a, s);
+      [](const tk::array& a, tk::StreamOrDevice s) {
+        auto result = tk::linalg::slogdet(a, s);
         return nb::make_tuple(result.first, result.second);
       },
       "a"_a,
@@ -724,8 +724,8 @@ void init_linalg(nb::module_& parent_module) {
               natural log of the absolute value of the determinant.
 
         Example:
-            >>> A = mx.array([[1., 2.], [3., 4.]])
-            >>> sign, logabsdet = mx.linalg.slogdet(A, stream=mx.cpu)
+            >>> A = tk.array([[1., 2.], [3., 4.]])
+            >>> sign, logabsdet = tk.linalg.slogdet(A, stream=tk.cpu)
             >>> sign
             array(-1, dtype=float32)
             >>> logabsdet

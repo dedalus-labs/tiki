@@ -9,7 +9,7 @@ namespace nb = nanobind;
 using namespace nb::literals;
 
 NB_MODULE(_ext, m) {
-  m.doc() = "Sample extension for MLX";
+  m.doc() = "Sample extension for Tiki";
 
   m.def(
       "axpby",

@@ -3,8 +3,8 @@
 This is Tiki's second tier, the analogue of JAX's native GPU ``cumsum``: an
 authored kernel for one combine, the affine pair
 ``(a_l, b_l) * (a_r, b_r) = (a_r * a_l, a_r * b_l + b_r)``, registered on
-``mx.custom_function`` with an explicit VJP. Its correctness oracle is the
-first tier, ``associative_scan(affine, ...)``, and MLX's own differentiation
+``tk.custom_function`` with an explicit VJP. Its correctness oracle is the
+first tier, ``associative_scan(affine, ...)``, and Tiki's own differentiation
 of that tree, exactly how JAX derives the gradient of its kernel from the
 generic tree.
 
@@ -17,9 +17,9 @@ is no fallback to the tree.
 from collections.abc import Callable
 from pathlib import Path
 
-import mlx.core as mx
+import tiki as tk
 
-Pair = tuple[mx.array, mx.array]
+Pair = tuple[tk.array, tk.array]
 
 MAX_TIME = 2048
 THREADS = 128
@@ -68,8 +68,8 @@ class ScanContractError(ValueError):
 
 def _kernel(
     name: str, inputs: list[str], outputs: list[str], source: str
-) -> Callable[..., list[mx.array]]:
-    return mx.fast.cuda_kernel(
+) -> Callable[..., list[tk.array]]:
+    return tk.fast.cuda_kernel(
         name=name,
         input_names=inputs,
         output_names=outputs,
@@ -84,16 +84,16 @@ backward_kernel = _kernel(
 )
 
 
-def _check_contract(inputs: tuple[mx.array, ...]) -> tuple[int, int]:
-    if not inputs or any(not isinstance(array, mx.array) for array in inputs):
-        raise ScanContractError("affine_scan inputs must be MLX arrays")
+def _check_contract(inputs: tuple[tk.array, ...]) -> tuple[int, int]:
+    if not inputs or any(not isinstance(array, tk.array) for array in inputs):
+        raise ScanContractError("affine_scan inputs must be Tiki arrays")
     shape = inputs[0].shape
     if len(shape) != 2:
         raise ScanContractError(
             f"affine_scan needs [batch, time] arrays, got shape {shape}"
         )
     for array in inputs:
-        if array.shape != shape or array.dtype != mx.float32:
+        if array.shape != shape or array.dtype != tk.float32:
             raise ScanContractError(
                 f"affine_scan needs matching float32 arrays, got {array.shape} {array.dtype}"
             )
@@ -109,22 +109,22 @@ def _check_contract(inputs: tuple[mx.array, ...]) -> tuple[int, int]:
     return batch, time
 
 
-def _launch(kernel: Callable[..., list[mx.array]], *inputs: mx.array) -> Pair:
+def _launch(kernel: Callable[..., list[tk.array]], *inputs: tk.array) -> Pair:
     batch, time = _check_contract(inputs)
     padded = 1 << (time - 1).bit_length()
     outputs = kernel(
         inputs=list(inputs),
         output_shapes=[inputs[0].shape, inputs[0].shape],
-        output_dtypes=[mx.float32, mx.float32],
+        output_dtypes=[tk.float32, tk.float32],
         template=[("T", time), ("N", padded)],
         grid=(batch * THREADS, 1, 1),
         threadgroup=(THREADS, 1, 1),
-        stream=mx.gpu,
+        stream=tk.gpu,
     )
     return outputs[0], outputs[1]
 
 
-def forward(a: mx.array, b: mx.array) -> Pair:
+def forward(a: tk.array, b: tk.array) -> Pair:
     """Prefix affine composition along time: returns (coefficient, offset) per step."""
     return _launch(forward_kernel, a, b)
 
@@ -134,5 +134,5 @@ def backward(primals: Pair, cotangents: Pair, outputs: Pair) -> Pair:
     return _launch(backward_kernel, a, *outputs, *cotangents)
 
 
-affine_scan = mx.custom_function(forward)
+affine_scan = tk.custom_function(forward)
 affine_scan.vjp(backward)

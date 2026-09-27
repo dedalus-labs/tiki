@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "mlx/ops.h"
-#include "mlx/primitives.h"
+#include "tiki/ops.h"
+#include "tiki/primitives.h"
 
-namespace mx = mlx::core;
+namespace tk = tiki::core;
 
 namespace my_ext {
 
@@ -20,22 +20,22 @@ namespace my_ext {
  *  Follow numpy style broadcasting between x and y
  *  Inputs are upcasted to floats if needed
  **/
-mx::array axpby(
-    const mx::array& x, // Input array x
-    const mx::array& y, // Input array y
+tk::array axpby(
+    const tk::array& x, // Input array x
+    const tk::array& y, // Input array y
     const float alpha, // Scaling factor for x
     const float beta, // Scaling factor for y
-    mx::StreamOrDevice s = {} // Stream on which to schedule the operation
+    tk::StreamOrDevice s = {} // Stream on which to schedule the operation
 );
 
 ///////////////////////////////////////////////////////////////////////////////
 // Primitive
 ///////////////////////////////////////////////////////////////////////////////
 
-class Axpby : public mx::Primitive {
+class Axpby : public tk::Primitive {
  public:
-  explicit Axpby(mx::Stream stream, float alpha, float beta)
-      : mx::Primitive(stream), alpha_(alpha), beta_(beta) {};
+  explicit Axpby(tk::Stream stream, float alpha, float beta)
+      : tk::Primitive(stream), alpha_(alpha), beta_(beta) {};
 
   /**
    * A primitive must know how to evaluate itself on the CPU/GPU
@@ -45,24 +45,24 @@ class Axpby : public mx::Primitive {
    * is responsible for allocating space for the array.
    */
   void eval_cpu(
-      const std::vector<mx::array>& inputs,
-      std::vector<mx::array>& outputs) override;
+      const std::vector<tk::array>& inputs,
+      std::vector<tk::array>& outputs) override;
   void eval_gpu(
-      const std::vector<mx::array>& inputs,
-      std::vector<mx::array>& outputs) override;
+      const std::vector<tk::array>& inputs,
+      std::vector<tk::array>& outputs) override;
 
   /** The Jacobian-vector product. */
-  std::vector<mx::array> jvp(
-      const std::vector<mx::array>& primals,
-      const std::vector<mx::array>& tangents,
+  std::vector<tk::array> jvp(
+      const std::vector<tk::array>& primals,
+      const std::vector<tk::array>& tangents,
       const std::vector<int>& argnums) override;
 
   /** The vector-Jacobian product. */
-  std::vector<mx::array> vjp(
-      const std::vector<mx::array>& primals,
-      const std::vector<mx::array>& cotangents,
+  std::vector<tk::array> vjp(
+      const std::vector<tk::array>& primals,
+      const std::vector<tk::array>& cotangents,
       const std::vector<int>& argnums,
-      const std::vector<mx::array>& outputs) override;
+      const std::vector<tk::array>& outputs) override;
 
   /**
    * The primitive must know how to vectorize itself across
@@ -70,8 +70,8 @@ class Axpby : public mx::Primitive {
    * representing the vectorized computation and the axis which
    * corresponds to the output vectorized dimension.
    */
-  std::pair<std::vector<mx::array>, std::vector<int>> vmap(
-      const std::vector<mx::array>& inputs,
+  std::pair<std::vector<tk::array>, std::vector<int>> vmap(
+      const std::vector<tk::array>& inputs,
       const std::vector<int>& axes) override;
 
   /** The name of primitive. */
@@ -80,7 +80,7 @@ class Axpby : public mx::Primitive {
   }
 
   /** Equivalence check **/
-  bool is_equivalent(const mx::Primitive& other) const override;
+  bool is_equivalent(const tk::Primitive& other) const override;
 
  private:
   float alpha_;

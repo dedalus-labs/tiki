@@ -3,7 +3,7 @@
 Operations
 ==========
 
-.. currentmodule:: mlx.core
+.. currentmodule:: tiki
 
 .. autosummary::
   :toctree: _autosummary
