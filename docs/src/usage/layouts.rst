@@ -173,20 +173,10 @@ not make a scalar Python loop into a GPU kernel.
 Compiler policy
 ---------------
 
-The experimental CuTe transpose schedule uses this same Rust-backed Swizzle
-type. Its 32-by-32 tile imposes an additional ``bits + base <= 5`` and
-``shift == 5`` contract. That restriction belongs to the schedule, not to the
-general indexing transform.
-
 Explicit user layouts remain inspectable and are not rewritten by this API.
 A compiler can select a different layout for private temporary storage without
-changing a user-visible array. The current transpose schedule makes that choice
-explicit. Automatic hardware-dependent selection is not implemented.
-
-General composed ``tiki.layout`` tensor layouts are not yet accepted by the
-elementwise ``tl.compile`` path, which consumes Tiki shape/stride profiles.
-The transpose path lowers Swizzle parameters for its private shared-memory
-tile. These are different integration claims.
+changing a user-visible array. :ref:`tiki-kernels` shows the kernels that make
+that choice, such as a transpose through a swizzled shared tile.
 
 Continue with :ref:`tiki-layout-recipes` for tensor access, tiling, broadcasting,
 negative strides, nested composition, and error examples. The

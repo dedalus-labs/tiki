@@ -22,18 +22,18 @@ CuTe-native layouts and index transforms on every array: a Tiki array is an
 Engine paired with a first-class `Layout`.
 :::
 
-:::{grid-item-card} Compile
-:link: tiki/compile/README
+:::{grid-item-card} Design
+:link: dev/design
 :link-type: doc
-`tk.compile` lowers Tiki graphs to CuTe MLIR with explicit thread schedules,
-consuming strided views in place.
+The nouns the framework is built from: arrays, ops and their functors,
+kernels, tensors, layouts and targets.
 :::
 
-:::{grid-item-card} Associative scan
-:link: tiki/scan/README
+:::{grid-item-card} Kernels
+:link: dev/kernels
 :link-type: doc
-`associative_scan` with the interface of JAX, forward and reverse derivatives,
-and kernels for any length.
+Kernels written in `tk` from seven primitives, from elementwise maps to
+attention, and lowered through LLVM's NVPTX backend.
 :::
 
 :::{grid-item-card} Rust runtime
