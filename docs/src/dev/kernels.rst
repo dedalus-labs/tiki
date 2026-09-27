@@ -385,16 +385,54 @@ Proofs
 The compiler proves each kernel from the same structure it is built from:
 bounds from each tensor's layout and its allocation, disjoint writes from
 each partition, and completion order from each barrier and pipeline stage.
-It also proves that every thread of a block reaches each block-wide barrier.
-An index read from tensor data, as in a gather or a block table, has no static
-proof, so the compiler checks it before the access.
+It also proves that every thread of a block reaches each block-wide barrier:
+a barrier under a branch that only some threads take hangs the block or
+corrupts shared memory. A kernel that fails a proof does not compile.
+
+An index read from tensor data, as in a gather, a scatter, a paged-attention
+block table, or expert routing, has no static proof. The compiler checks each
+such index before the access. A failed check skips the access and sets the
+launch's error word, which the runtime returns as a typed error, so the
+process and its CUDA context stay usable.
+
+Lowering keeps the proofs
+-------------------------
+
+The proofs hold for the kernel IR. Lowering keeps them true in LLVM IR:
+
+- **Index width.** The proofs compute offsets as exact integers. Lowering uses
+  32-bit arithmetic only where a proof bounds every offset below 2\ :sup:`31`,
+  and 64-bit arithmetic elsewhere.
+- **Flags from facts.** LLVM's ``nsw``, ``nuw``, ``inbounds``, ``noalias``,
+  and alignment let it delete code that a false assumption makes dead, bounds
+  checks included. Lowering emits each one only from a proven fact, or for
+  ``noalias`` from the launcher's ``&`` and ``&mut`` borrows.
+- **Floor division.** The layout algebra divides with floor division. LLVM's
+  ``sdiv`` and ``srem`` round toward zero, so lowering emits floor division
+  for any operand that can be negative.
+- **Launch facts.** A kernel runs only on arguments that satisfy the facts its
+  proofs assumed, including a kernel that shapeless compilation reuses across
+  shapes. The generated launcher checks each fact.
+
+An unproven ``nsw`` shows why the flags matter. An offset
+``row * 65536 + col`` lowered as 32-bit arithmetic with ``nsw`` and guarded by
+``0 <= offset < len`` loses its ``offset >= 0`` check under ``opt -O2``, in
+LLVM 21 and 23. At ``row = 32768`` the product wraps to -2\ :sup:`31`, passes
+``offset < len``, and becomes +2\ :sup:`31` after ``zext nneg``: the store
+lands 8 GiB past a 16-element buffer. The same IR without ``nsw`` keeps both
+checks. The reproduction is in ``experiments/rust_backend/repros/unproven_nsw``.
+
+Property tests compare the lowered index arithmetic with ``tiki-cute`` at
+negative coordinates and at offsets near 2\ :sup:`31` and 2\ :sup:`32`, and
+``libNVVM`` compiles the same LLVM IR as a differential check.
 
 From tk to PTX
 --------------
 
 Compiling a kernel is ordinary Rust and never calls the driver. Running it
-goes through the driver, and only the launcher does that. This section
-follows the elementwise ``axpy`` above through each stage.
+goes through the driver, and only the launcher does that; :ref:`tiki-runtime`
+covers running. This section follows the elementwise ``axpy`` above through
+each stage.
 
 **Layouts and proofs.** Tracing turns each tensor into a ``tiki-cute`` layout.
 The launch fact ``512 | N`` is a parameter fact, and the proofs use it:

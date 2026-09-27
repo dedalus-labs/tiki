@@ -6,6 +6,7 @@
 
 Framework design <../dev/design>
 Kernels <../dev/kernels>
+Runtime <../dev/runtime>
 Building and testing layouts <../dev/tiki_layouts>
 ```
 

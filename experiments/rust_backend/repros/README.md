@@ -1,7 +1,8 @@
 # Backend evaluation reproductions
 
-This directory contains version-pinned procedures for the findings in
-[ADR-0001](../DECISION-2026-09-05.md). The procedures specify both
+This directory contains version-pinned procedures for findings F-01 through
+F-03 in [ADR-0001](../DECISION-2026-09-05.md), and for the lowering rule on
+LLVM flags in the [kernels guide](../../../docs/src/dev/kernels.rst). The procedures specify both
 successful controls and expected failures, allowing an implementation's
 behavior to be checked against the September 5, 2026 evaluation.
 

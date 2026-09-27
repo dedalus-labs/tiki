@@ -4,5 +4,4 @@ src/python/optimizers/_autosummary*/
 build/
 src/tiki/compile/
 src/tiki/scan/
-src/tiki/runtime/
 src/tiki/vision.md

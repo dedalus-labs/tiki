@@ -36,11 +36,11 @@ Kernels written in `tk` from seven primitives, from elementwise maps to
 attention, and lowered through LLVM's NVPTX backend.
 :::
 
-:::{grid-item-card} Rust runtime
-:link: tiki/runtime/README
+:::{grid-item-card} Runtime
+:link: dev/runtime
 :link-type: doc
-CUDA storage and completion owned by a checked Rust runtime behind a C++
-boundary.
+Owned driver values, memory leased to in-flight work, and streams ordered
+from the graph.
 :::
 
 :::{grid-item-card} Guide
