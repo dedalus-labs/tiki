@@ -1,0 +1,9 @@
+[package]
+name = "tiki-cuda-sys"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "Tiki's only call site into the CUDA driver: generated declarations and a checked adapter"
+license = "Apache-2.0"
+links = "cuda"
