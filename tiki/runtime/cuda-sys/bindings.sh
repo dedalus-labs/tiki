@@ -9,9 +9,9 @@ functions='cuInit|cuGetErrorName|cuGetErrorString|cuDeviceGetCount|cuDeviceGet|c
 functions="$functions|cuDevicePrimaryCtxRetain|cuCtxPushCurrent|cuCtxPopCurrent"
 functions="$functions|cuDeviceGetDefaultMemPool|cuMemPoolGetAttribute|cuMemGetInfo"
 functions="$functions|cuStreamCreate|cuStreamDestroy|cuStreamSynchronize|cuStreamWaitEvent"
-functions="$functions|cuMemAlloc|cuMemAllocAsync|cuMemAllocManaged|cuMemAllocHost"
-functions="$functions|cuMemFree|cuMemFreeAsync|cuMemFreeHost|cuMemcpyAsync|cuMemAdvise"
-functions="$functions|cuEventCreate|cuEventRecord|cuEventQuery|cuEventSynchronize"
+functions="$functions|cuMemAlloc|cuMemAllocAsync|cuMemFree|cuMemFreeAsync|cuMemsetD8Async"
+functions="$functions|cuMemcpyHtoDAsync|cuMemcpyDtoHAsync|cuMemcpyDtoDAsync"
+functions="$functions|cuEventCreate|cuEventDestroy|cuEventRecord|cuEventQuery|cuEventSynchronize"
 functions="$functions|cuLaunchHostFunc"
 
 {
@@ -19,7 +19,7 @@ functions="$functions|cuLaunchHostFunc"
         "$(sed -n 's/^#define CUDA_VERSION \([0-9]*\).*/\1/p' "$include/cuda.h")"
     bindgen "$include/cuda.h" \
         --allowlist-function "($functions)(_v[0-9]+)?" \
-        --allowlist-type 'CUstream_flags|CUevent_flags|CUmemAttach_flags|CUmemLocationType' \
+        --allowlist-type 'CUstream_flags|CUevent_flags' \
         --allowlist-var 'CUDA_VERSION' \
         --blocklist-function 'cuLaunchHostFunc_v2' \
         --default-enum-style newtype \

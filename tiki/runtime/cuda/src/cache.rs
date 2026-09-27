@@ -4,7 +4,7 @@
 //!
 //! Reuse takes the smallest class that fits when it is below
 //! `min(2 * size, size + 2 * page)`; eviction releases the least recently
-//! recycled entry across all classes. These are Tiki's BufferCache rules.
+//! recycled entry across all classes. These are the rules of Tiki's C++ `BufferCache`.
 
 use std::collections::{BTreeMap, VecDeque};
 
@@ -41,36 +41,33 @@ impl<A> SizeClassCache<A> {
         self.bytes += size;
     }
 
-    /// Release at least `min_bytes`, or everything when that is most of the cache.
-    pub fn release(&mut self, min_bytes: usize, free: &mut dyn FnMut(A)) -> usize {
-        if min_bytes as f64 >= 0.9 * self.bytes as f64 {
-            return self.clear(free);
+    /// Remove at least `min_bytes`, or everything when that is most of the
+    /// cache, and return the removed entries oldest first.
+    pub fn release(&mut self, min_bytes: usize) -> Vec<A> {
+        if 10 * min_bytes >= 9 * self.bytes {
+            return self.clear();
         }
         let mut released = 0;
-        let mut count = 0;
+        let mut removed = Vec::new();
         while released < min_bytes {
             let Some(class) = self.oldest_class() else {
                 break;
             };
             let (_, a) = self.pop_front(class);
             released += class;
-            count += 1;
-            free(a);
+            removed.push(a);
         }
         self.bytes -= released;
-        count
+        removed
     }
 
-    pub fn clear(&mut self, free: &mut dyn FnMut(A)) -> usize {
-        let mut count = 0;
-        for (_, queue) in std::mem::take(&mut self.classes) {
-            for (_, a) in queue {
-                count += 1;
-                free(a);
-            }
-        }
+    /// Remove every entry and return them.
+    pub fn clear(&mut self) -> Vec<A> {
         self.bytes = 0;
-        count
+        std::mem::take(&mut self.classes)
+            .into_values()
+            .flat_map(|queue| queue.into_iter().map(|(_, a)| a))
+            .collect()
     }
 
     /// Class whose oldest entry is the oldest overall. Eviction only runs under
@@ -133,9 +130,7 @@ mod tests {
         cache.recycle(64, "old");
         cache.recycle(128, "mid");
         cache.recycle(64, "new");
-        let mut freed = Vec::new();
-        assert_eq!(cache.release(64, &mut |a| freed.push(a)), 1);
-        assert_eq!(freed, ["old"]);
+        assert_eq!(cache.release(64), ["old"]);
         assert_eq!(cache.bytes(), 192);
         assert_eq!(cache.reuse(64), Some((64, "new")));
     }
@@ -147,8 +142,7 @@ mod tests {
         let mut cache = SizeClassCache::new(PAGE);
         cache.recycle(100, 1);
         cache.recycle(100, 2);
-        let mut freed = Vec::new();
-        assert_eq!(cache.release(180, &mut |a| freed.push(a)), 2);
+        assert_eq!(cache.release(180).len(), 2);
         assert_eq!(cache.bytes(), 0);
         assert!(cache.reuse(100).is_none());
     }

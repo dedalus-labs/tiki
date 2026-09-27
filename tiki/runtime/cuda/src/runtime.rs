@@ -1,7 +1,7 @@
 // Copyright © 2026 Dedalus Labs, Inc.
 
 //! Composition root: constructs the allocator and the completion runtime once
-//! and starts the reaper thread.
+//! and starts the completion worker thread.
 
 use std::sync::OnceLock;
 
@@ -31,7 +31,7 @@ pub fn completion() -> &'static Completion {
     COMPLETION.get().expect("tiki-cuda-runtime: init() was not called")
 }
 
-/// Completion callbacks wake this process-lifetime worker; it releases batches
+/// Completion callbacks wake this process-lifetime worker; it runs batches
 /// outside the CUDA callback thread.
 fn start_reaper() {
     let spawned = std::thread::Builder::new()

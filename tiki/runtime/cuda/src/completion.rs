@@ -1,42 +1,39 @@
 // Copyright © 2026 Dedalus Labs, Inc.
 
-//! Completion runtime: one event per committed batch, retired by a worker
-//! once the device signals it, plus device-side ordering for the allocator.
+//! Completion runtime: each committed batch runs on a worker thread once the
+//! device has finished the work enqueued before its commit.
 //!
 //! Protocol:
 //!
-//!  1. `commit(device, stream, batch)` records an event on `stream` and keeps
-//!     it as the stream's latest. When the batch retains anything, the
-//!     stream's own signal stream waits on that event and launches a host
-//!     function carrying the batch id. The compute stream never stalls on the
+//!  1. `commit(stream, batch)` records an event on `stream`. The stream's own
+//!     signal stream waits on that event and launches a host function
+//!     carrying the batch id. The compute stream never stalls on the
 //!     callback, and compute streams never wait on each other's callbacks,
 //!     because cuLaunchHostFunc runs in stream order on the signal stream.
 //!  2. The host function runs on a CUDA driver thread. It only marks the id
-//!     done and wakes the reaper; the driver must not be called from it.
+//!     done and wakes the worker; the driver must not be called from it.
 //!  3. The worker pops done ids in order, runs the batch's handlers, and
-//!     drops the batch, which releases the storage it retained.
+//!     drops the batch, which releases the values it retained.
 //!  4. `wait_stream_idle(stream)` blocks until every batch committed on
-//!     `stream` has run. `order_after_latest(source, waiter)` makes `waiter`
-//!     wait on `source`'s latest event, once per commit.
+//!     `stream` has run.
 //!
-//! Retention lives in the pending map, never in a future: a stalled reaper
+//! Retention lives in the pending map, never in a future: a stalled worker
 //! leaks, it never frees early. A batch whose callback could not be scheduled
 //! is quarantined for the process lifetime and the commit reports the error,
-//! without releasing in-flight resources. Callers check CUDA stream errors
-//! before waiting for retirement; callbacks are not promised after a CUDA
-//! context failure.
+//! without releasing values the device may still use. Callbacks are not
+//! promised after a CUDA context failure.
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ffi::c_void;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use crate::batch::Batch;
-use crate::driver::{self, CudaError, Stream};
-use crate::event::Event;
+use crate::driver::{CudaError, Device, Event, Stream, StreamId};
 
 pub struct Completion {
     state: Mutex<State>,
-    /// Wakes the reaper task; the only thing the driver callback touches.
+    /// Wakes the worker; the only thing the driver callback touches.
     wake: Condvar,
     /// Wakes `wait_stream_idle` callers after a batch has run.
     idle: Condvar,
@@ -45,37 +42,26 @@ pub struct Completion {
 struct State {
     /// Next batch id; ids increase in commit order across all streams.
     next_id: u64,
-    /// Batches whose event has not run yet, by id.
+    /// Batches whose callback has not run yet, by id.
     pending: BTreeMap<u64, Pending>,
-    /// Ids the device has signaled, in signal order, awaiting the reaper.
+    /// Ids the device has signaled, in signal order, awaiting the worker.
     done: VecDeque<u64>,
-    /// Batch the reaper is running right now, with its stream.
-    running: Option<(u64, Stream)>,
+    /// Batch the worker is running right now, with its stream.
+    running: Option<(u64, StreamId)>,
     /// Batches that have run.
     completed: u64,
     /// Batches whose callback could not be scheduled; never run, never freed.
     quarantined: Vec<Pending>,
-    /// Nonblocking stream per compute stream that carries only its host
-    /// functions, created on first use and kept for the process.
-    signals: HashMap<Stream, Stream>,
-    /// Most recent commit per compute stream.
-    latest: HashMap<Stream, Latest>,
-    /// Latest id each (waiter, source) stream pair has already waited on.
-    ordered: HashMap<(Stream, Stream), u64>,
+    /// Stream per compute stream that carries only its host functions,
+    /// created on first use and kept for the process.
+    signals: HashMap<(Device, StreamId), Arc<Stream>>,
 }
 
 struct Pending {
-    device: i32,
     /// Compute stream the batch was committed on.
-    stream: Stream,
-    /// Retained values and handlers, run on the reaper.
+    stream: StreamId,
+    /// Retained values and handlers, run on the worker.
     batch: Batch,
-}
-
-struct Latest {
-    id: u64,
-    /// Shared with waiters so the event is not pooled while they hold it.
-    event: Arc<Event>,
 }
 
 impl Completion {
@@ -89,8 +75,6 @@ impl Completion {
                 completed: 0,
                 quarantined: Vec::new(),
                 signals: HashMap::new(),
-                latest: HashMap::new(),
-                ordered: HashMap::new(),
             }),
             wake: Condvar::new(),
             idle: Condvar::new(),
@@ -101,61 +85,46 @@ impl Completion {
         self.state.lock().expect("completion state is poisoned")
     }
 
-    /// Record this commit on `stream` and hand `batch` to the reaper. Returns
-    /// the batch id. An empty batch only records the stream's latest event.
+    /// Hand `batch` to the worker once the device finishes the work enqueued
+    /// on `stream` so far. Returns the batch id. An empty batch has nothing
+    /// to run and enqueues nothing.
     ///
     /// The batch enters the pending map before any driver call, so a failure
     /// anywhere in the enqueue quarantines it instead of dropping it while the
     /// device may still use what it retains.
     #[must_use = "the id identifies the batch in diagnostics"]
-    pub fn commit(&self, device: i32, stream: Stream, batch: Batch) -> Result<u64, CudaError> {
-        let has_batch = !batch.is_empty();
+    pub fn commit(&self, stream: &Stream, batch: Batch) -> Result<u64, CudaError> {
         let mut state = self.state();
         let id = state.next_id;
         state.next_id += 1;
-        if has_batch {
-            state.pending.insert(id, Pending { device, stream, batch });
+        if batch.is_empty() {
+            return Ok(id);
         }
+        state.pending.insert(id, Pending { stream: stream.id(), batch });
         drop(state);
-        let mut callback_enqueued = false;
-        let scheduled = self.record_latest(device, stream, id).and_then(|event| {
-            if !has_batch {
-                return Ok(());
-            }
-            let signal = self.signal_for(device, stream)?;
-            driver::with_device(device, || {
-                event.wait_on(signal)?;
-                driver::launch_host_func(signal, signaled, id as usize)?;
-                callback_enqueued = true;
-                Ok(())
-            })
-        });
-        if let Err(e) = scheduled {
-            // A successful callback enqueue can retire the batch before the context is restored.
-            if has_batch && !callback_enqueued {
-                self.quarantine(id);
-            }
-            return Err(e);
+        let scheduled = (|| {
+            let committed = Event::new(stream.device())?;
+            committed.record(stream)?;
+            let signal = self.signal_for(stream)?;
+            signal.wait(&committed)?;
+            let payload = usize::try_from(id).expect("batch ids fit in usize");
+            signal.launch_host_func(signaled, payload)
+        })();
+        if let Err(error) = scheduled {
+            self.quarantine(id);
+            return Err(error);
         }
         Ok(id)
     }
 
-    /// Record an event on `stream` and make it the stream's latest.
-    fn record_latest(&self, device: i32, stream: Stream, id: u64) -> Result<Arc<Event>, CudaError> {
-        let event = Event::take(device)?;
-        event.record(stream)?;
-        let event = Arc::new(event);
-        self.state().latest.insert(stream, Latest { id, event: event.clone() });
-        Ok(event)
-    }
-
-    fn signal_for(&self, device: i32, stream: Stream) -> Result<Stream, CudaError> {
+    fn signal_for(&self, stream: &Stream) -> Result<Arc<Stream>, CudaError> {
         let mut state = self.state();
-        if let Some(&signal) = state.signals.get(&stream) {
-            return Ok(signal);
+        let key = (stream.device(), stream.id());
+        if let Some(signal) = state.signals.get(&key) {
+            return Ok(signal.clone());
         }
-        let signal = driver::with_device(device, driver::create_stream)?;
-        state.signals.insert(stream, signal);
+        let signal = Arc::new(Stream::new(stream.device())?);
+        state.signals.insert(key, signal.clone());
         Ok(signal)
     }
 
@@ -169,40 +138,20 @@ impl Completion {
         self.idle.notify_all();
     }
 
-    /// Make `waiter` wait for everything committed on `source` so far. Each
-    /// commit is waited on at most once per (waiter, source) pair.
-    pub fn order_after_latest(&self, source: Stream, waiter: Stream) -> Result<(), CudaError> {
-        if source == waiter {
-            return Ok(());
-        }
-        let mut state = self.state();
-        let Some(latest) = state.latest.get(&source) else {
-            return Ok(());
-        };
-        let key = (waiter, source);
-        if state.ordered.get(&key) == Some(&latest.id) {
-            return Ok(());
-        }
-        let (id, event) = (latest.id, latest.event.clone());
-        event.wait_on(waiter)?;
-        state.ordered.insert(key, id);
-        Ok(())
-    }
-
     /// Block until no batch committed on `stream` is pending or running.
-    pub fn wait_stream_idle(&self, stream: Stream) {
+    pub fn wait_stream_idle(&self, stream: &Stream) {
         let mut state = self.state();
-        while state.has_work_on(stream) {
+        while state.has_work_on(stream.id()) {
             state = self.idle.wait(state).expect("completion state is poisoned");
         }
     }
 
-    /// Number of batches the reaper has run.
+    /// Number of batches the worker has run.
     pub fn completed_batches(&self) -> u64 {
         self.state().completed
     }
 
-    /// The reaper: runs on its own runtime thread for the process lifetime.
+    /// The worker: runs on its own runtime thread for the process lifetime.
     pub(crate) fn reap(&self) -> ! {
         loop {
             let pending = self.take_done();
@@ -221,16 +170,12 @@ impl Completion {
         pending
     }
 
-    /// Run outside the lock: handlers release storage, which takes the
-    /// allocator lock and may call back into `order_after_latest`.
+    /// Run outside the lock: handlers release memory, which takes the
+    /// allocator lock.
     fn run(&self, pending: Pending) {
-        let Pending { device, batch, .. } = pending;
-        if let Err(error) = driver::with_device(device, || {
-            batch.run();
-            Ok(())
-        }) {
+        if catch_unwind(AssertUnwindSafe(|| pending.batch.run())).is_err() {
             // A dead worker would leave every retirement waiter blocked.
-            eprintln!("completion worker: {error}");
+            eprintln!("completion worker: a batch handler panicked");
             std::process::abort();
         }
         let mut state = self.state();
@@ -242,13 +187,13 @@ impl Completion {
 }
 
 impl State {
-    fn has_work_on(&self, stream: Stream) -> bool {
-        self.running.is_some_and(|(_, s)| s == stream)
-            || self.pending.values().any(|p| p.stream == stream)
+    fn has_work_on(&self, stream: StreamId) -> bool {
+        self.running.is_some_and(|(_, running)| running == stream)
+            || self.pending.values().any(|pending| pending.stream == stream)
     }
 }
 
-/// Driver-thread callback: mark the batch done and wake the reaper. Nothing
+/// Driver-thread callback: mark the batch done and wake the worker. Nothing
 /// else is allowed here because the driver forbids CUDA calls from host functions.
 extern "C" fn signaled(data: *mut c_void) {
     let id = data as usize as u64;

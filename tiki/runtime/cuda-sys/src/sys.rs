@@ -31,15 +31,6 @@ pub struct CUmemPoolHandle_st {
     _unused: [u8; 0],
 }
 pub type CUmemoryPool = *mut CUmemPoolHandle_st;
-impl CUmemAttach_flags_enum {
-    pub const CU_MEM_ATTACH_GLOBAL: CUmemAttach_flags_enum = CUmemAttach_flags_enum(1);
-    pub const CU_MEM_ATTACH_HOST: CUmemAttach_flags_enum = CUmemAttach_flags_enum(2);
-    pub const CU_MEM_ATTACH_SINGLE: CUmemAttach_flags_enum = CUmemAttach_flags_enum(4);
-}
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemAttach_flags_enum(pub ::core::ffi::c_uint);
-pub use self::CUmemAttach_flags_enum as CUmemAttach_flags;
 impl CUstream_flags_enum {
     pub const CU_STREAM_DEFAULT: CUstream_flags_enum = CUstream_flags_enum(0);
     pub const CU_STREAM_NON_BLOCKING: CUstream_flags_enum = CUstream_flags_enum(1);
@@ -378,18 +369,6 @@ impl CUdevice_attribute_enum {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct CUdevice_attribute_enum(pub ::core::ffi::c_uint);
 pub use self::CUdevice_attribute_enum as CUdevice_attribute;
-impl CUmem_advise_enum {
-    pub const CU_MEM_ADVISE_SET_READ_MOSTLY: CUmem_advise_enum = CUmem_advise_enum(1);
-    pub const CU_MEM_ADVISE_UNSET_READ_MOSTLY: CUmem_advise_enum = CUmem_advise_enum(2);
-    pub const CU_MEM_ADVISE_SET_PREFERRED_LOCATION: CUmem_advise_enum = CUmem_advise_enum(3);
-    pub const CU_MEM_ADVISE_UNSET_PREFERRED_LOCATION: CUmem_advise_enum = CUmem_advise_enum(4);
-    pub const CU_MEM_ADVISE_SET_ACCESSED_BY: CUmem_advise_enum = CUmem_advise_enum(5);
-    pub const CU_MEM_ADVISE_UNSET_ACCESSED_BY: CUmem_advise_enum = CUmem_advise_enum(6);
-}
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmem_advise_enum(pub ::core::ffi::c_uint);
-pub use self::CUmem_advise_enum as CUmem_advise;
 pub type CUhostFn =
     ::core::option::Option<unsafe extern "C" fn(userData: *mut ::core::ffi::c_void)>;
 impl cudaError_enum {
@@ -501,34 +480,6 @@ impl cudaError_enum {
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub struct cudaError_enum(pub ::core::ffi::c_uint);
 pub use self::cudaError_enum as CUresult;
-impl CUmemLocationType_enum {
-    pub const CU_MEM_LOCATION_TYPE_INVALID: CUmemLocationType_enum = CUmemLocationType_enum(0);
-    pub const CU_MEM_LOCATION_TYPE_NONE: CUmemLocationType_enum = CUmemLocationType_enum(0);
-    pub const CU_MEM_LOCATION_TYPE_DEVICE: CUmemLocationType_enum = CUmemLocationType_enum(1);
-    pub const CU_MEM_LOCATION_TYPE_HOST: CUmemLocationType_enum = CUmemLocationType_enum(2);
-    pub const CU_MEM_LOCATION_TYPE_HOST_NUMA: CUmemLocationType_enum = CUmemLocationType_enum(3);
-    pub const CU_MEM_LOCATION_TYPE_HOST_NUMA_CURRENT: CUmemLocationType_enum =
-        CUmemLocationType_enum(4);
-    pub const CU_MEM_LOCATION_TYPE_INVISIBLE: CUmemLocationType_enum = CUmemLocationType_enum(5);
-    pub const CU_MEM_LOCATION_TYPE_MAX: CUmemLocationType_enum = CUmemLocationType_enum(2147483647);
-}
-#[repr(transparent)]
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub struct CUmemLocationType_enum(pub ::core::ffi::c_uint);
-pub use self::CUmemLocationType_enum as CUmemLocationType;
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct CUmemLocation_st {
-    pub type_: CUmemLocationType,
-    pub __bindgen_anon_1: CUmemLocation_st__bindgen_ty_1,
-}
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub union CUmemLocation_st__bindgen_ty_1 {
-    pub id: ::core::ffi::c_int,
-}
-pub type CUmemLocation_v1 = CUmemLocation_st;
-pub type CUmemLocation = CUmemLocation_v1;
 impl CUmemPool_attribute_enum {
     pub const CU_MEMPOOL_ATTR_REUSE_FOLLOW_EVENT_DEPENDENCIES: CUmemPool_attribute_enum =
         CUmemPool_attribute_enum(1);
@@ -605,23 +556,34 @@ unsafe extern "C" {
     pub fn cuMemFree_v2(dptr: CUdeviceptr) -> CUresult;
 }
 unsafe extern "C" {
-    pub fn cuMemAllocHost_v2(pp: *mut *mut ::core::ffi::c_void, bytesize: usize) -> CUresult;
-}
-unsafe extern "C" {
-    pub fn cuMemFreeHost(p: *mut ::core::ffi::c_void) -> CUresult;
-}
-unsafe extern "C" {
-    pub fn cuMemAllocManaged(
-        dptr: *mut CUdeviceptr,
-        bytesize: usize,
-        flags: ::core::ffi::c_uint,
+    pub fn cuMemcpyHtoDAsync_v2(
+        dstDevice: CUdeviceptr,
+        srcHost: *const ::core::ffi::c_void,
+        ByteCount: usize,
+        hStream: CUstream,
     ) -> CUresult;
 }
 unsafe extern "C" {
-    pub fn cuMemcpyAsync(
-        dst: CUdeviceptr,
-        src: CUdeviceptr,
+    pub fn cuMemcpyDtoHAsync_v2(
+        dstHost: *mut ::core::ffi::c_void,
+        srcDevice: CUdeviceptr,
         ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+unsafe extern "C" {
+    pub fn cuMemcpyDtoDAsync_v2(
+        dstDevice: CUdeviceptr,
+        srcDevice: CUdeviceptr,
+        ByteCount: usize,
+        hStream: CUstream,
+    ) -> CUresult;
+}
+unsafe extern "C" {
+    pub fn cuMemsetD8Async(
+        dstDevice: CUdeviceptr,
+        uc: ::core::ffi::c_uchar,
+        N: usize,
         hStream: CUstream,
     ) -> CUresult;
 }
@@ -636,14 +598,6 @@ unsafe extern "C" {
         pool: CUmemoryPool,
         attr: CUmemPool_attribute,
         value: *mut ::core::ffi::c_void,
-    ) -> CUresult;
-}
-unsafe extern "C" {
-    pub fn cuMemAdvise_v2(
-        devPtr: CUdeviceptr,
-        count: usize,
-        advice: CUmem_advise,
-        location: CUmemLocation,
     ) -> CUresult;
 }
 unsafe extern "C" {
@@ -673,6 +627,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn cuEventSynchronize(hEvent: CUevent) -> CUresult;
+}
+unsafe extern "C" {
+    pub fn cuEventDestroy_v2(hEvent: CUevent) -> CUresult;
 }
 unsafe extern "C" {
     pub fn cuLaunchHostFunc(

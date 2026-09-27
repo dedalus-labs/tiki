@@ -24,8 +24,8 @@ eviction.
 
 The replacement is tracked in [#65](https://github.com/dedalus-labs/tiki/issues/65).
 [`tiki/runtime/cuda`](../../tiki/runtime/cuda) is the Rust CUDA runtime:
-allocation, size classes, the small pool, the cache, memory limits, migration
-of device storage to unified memory, and batch completion. It forbids
-`unsafe`; [`tiki/runtime/cuda-sys`](../../tiki/runtime/cuda-sys) is its only
-call site into `libcuda`. The C++ backend keeps its own allocator until the
+size classes, the cache of released memory, memory limits, and batch
+completion. It forbids `unsafe`;
+[`tiki/runtime/cuda-sys`](../../tiki/runtime/cuda-sys) is its only call site
+into `libcuda` and hands out owned streams, events, and device memory. The C++ backend keeps its own allocator until the
 cutover.

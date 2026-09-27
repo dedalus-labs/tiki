@@ -1,97 +1,40 @@
 // Copyright © 2026 Dedalus Labs, Inc.
 
-//! The allocation handle a buffer holds for its lifetime.
+//! The allocation a buffer holds for its lifetime.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use crate::driver::{Device, DeviceMemory};
 
-use crate::driver::{Address, CudaError, Stream};
-use crate::runtime::allocator;
-
-pub(crate) const EMPTY: Cached = Cached { kind: Kind::Empty, address: 0 };
-
-/// Where an allocation's bytes live. Unified memory is managed or pinned host
-/// memory that both the host and every device can address.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Kind {
-    Empty,
-    Block {
-        index: u32,
-    },
-    Unified,
-    /// Device storage assigned for use on `stream`; commits on that stream
-    /// are what the allocator orders frees and copies after.
-    Device {
-        device: i32,
-        stream: Stream,
-    },
-}
-
-/// Storage held by the cache between release and reuse.
-#[derive(Clone, Copy)]
-pub(crate) struct Cached {
-    pub(crate) kind: Kind,
-    pub(crate) address: Address,
-}
-
-impl Cached {
-    /// Device storage reused on the same device now belongs to `stream`.
-    pub(crate) fn adopted_by(self, device: i32, stream: Stream) -> Self {
-        match self.kind {
-            Kind::Device { device: held, .. } if held == device => {
-                Self { kind: Kind::Device { device, stream }, address: self.address }
-            }
-            _ => self,
-        }
-    }
-}
-
-/// One owned allocation. A buffer holds it for its lifetime and returns it
-/// through `Allocator::release`. The address is
-/// read for every kernel argument, so it lives in an atomic; the kind changes
-/// only under the lock, together with the address, during migration.
+/// Device memory rounded up to its size class. A buffer holds it for its
+/// lifetime and returns it through [`Allocator::release`](crate::Allocator::release),
+/// which caches it for reuse or frees it.
+#[derive(Debug)]
 pub struct Allocation {
-    pub(crate) size: usize,
-    pub(crate) address: AtomicUsize,
-    pub(crate) kind: Mutex<Kind>,
+    memory: DeviceMemory,
 }
 
 impl Allocation {
-    pub(crate) fn new(size: usize, cached: Cached) -> Self {
-        Self { size, address: AtomicUsize::new(cached.address), kind: Mutex::new(cached.kind) }
-    }
-
-    pub(crate) fn kind(&self) -> MutexGuard<'_, Kind> {
-        self.kind.lock().unwrap_or_else(|e| e.into_inner())
+    pub(crate) fn new(memory: DeviceMemory) -> Self {
+        Self { memory }
     }
 
     /// Rounded size in bytes.
     pub fn size(&self) -> usize {
-        self.size
+        self.memory.len()
     }
 
-    /// CUDA device holding the bytes, or -1 for unified memory.
-    pub fn device(&self) -> i32 {
-        match *self.kind() {
-            Kind::Device { device, .. } => device,
-            _ => -1,
-        }
+    pub fn device(&self) -> Device {
+        self.memory.device()
     }
 
-    /// Address usable by kernels.
-    pub fn data_ptr(&self) -> usize {
-        self.address.load(Ordering::Acquire)
+    pub fn memory(&self) -> &DeviceMemory {
+        &self.memory
     }
 
-    /// Address usable by the host. Device storage moves to unified memory first
-    /// and the call returns after that copy completes.
-    pub fn host_ptr(&self) -> Result<usize, CudaError> {
-        allocator().migrate(self, None)?;
-        Ok(self.data_ptr())
+    pub fn memory_mut(&mut self) -> &mut DeviceMemory {
+        &mut self.memory
     }
 
-    /// Move device storage to unified memory on `stream` without waiting.
-    pub fn migrate_on(&self, stream: usize) -> Result<(), CudaError> {
-        allocator().migrate(self, Some(stream))
+    pub(crate) fn into_memory(self) -> DeviceMemory {
+        self.memory
     }
 }

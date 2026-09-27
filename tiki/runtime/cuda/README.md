@@ -1,9 +1,9 @@
 # CUDA runtime
 
-`tiki-cuda-runtime` owns CUDA storage and the lifetime of committed work for
-Tiki's Rust stack. It contains no `unsafe`: every driver call goes through
-[`tiki-cuda-sys`](../cuda-sys), which holds the generated `libcuda`
-declarations and a checked adapter that hands out only integers and results.
+`tiki-cuda-runtime` owns cached device memory and the lifetime of committed
+work for Tiki's Rust stack. It contains no `unsafe`: every driver call goes
+through [`tiki-cuda-sys`](../cuda-sys), which hands out owned streams,
+events, and device memory, and never an address or a driver handle.
 
 The C++ CUDA backend does not use this crate. The Rust stack is built beside
 it, compared against it with differential tests, and replaces it in one
@@ -13,18 +13,31 @@ cutover.
 
 | Resource | Owner |
 | --- | --- |
-| Device and unified storage, allocation cache, small pool | Allocator. |
-| A committed batch and its retirement | Completion worker. |
-| Values a batch retains and the handlers it runs | The `Batch`, dropped or run on the worker. |
-| Completion events and per-compute-stream signal streams | Completion runtime. |
+| Device memory in use | The `Allocation` a buffer holds. |
+| Released device memory | The allocator's cache, per device and size class. |
+| Values a batch retains and the handlers it runs | The `Batch`, dropped or run on the completion worker. |
+| Signal streams, one per compute stream | Completion runtime, for the process. |
+
+## Memory ordering
+
+Device memory records the event of its last write and the events of its
+reads since. A fill or copy into memory waits on all of them, and a read
+waits on the last write. Streams therefore share memory without any
+ordering from the caller, and memory the cache hands to another stream waits
+for its earlier uses before it is written.
+
+Dropping memory frees it after every recorded use, in stream order. Copies to
+and from host memory finish before they return, so the driver never uses a
+host slice after its borrow ends. If that wait fails, the process stops
+rather than return while a copy may still run.
 
 ## Submission and retirement
 
-A nonempty batch enters the pending map before the first fallible driver call.
-The runtime records an event on the compute stream, waits on that event from
-the compute stream's own signal stream, and schedules a host callback. That
-callback marks one batch ready and wakes the worker. It never calls the driver
-or runs a handler.
+A nonempty batch enters the pending map before the first fallible driver
+call. The runtime records an event on the compute stream, waits on that event
+from the compute stream's own signal stream, and schedules a host callback.
+That callback marks one batch ready and wakes the worker. It never calls the
+driver or runs a handler.
 
 Each compute stream has an independent signal stream. A completed batch does
 not imply that lower-numbered batches from other streams have completed. The
@@ -32,27 +45,11 @@ worker runs handlers and drops retained values before marking the batch
 retired.
 
 An enqueue failure returns its driver error and quarantines the affected batch
-for the process lifetime. If the callback was enqueued but popping the context
-fails, the callback still owns retirement and the pop error is returned.
-Callers waiting on retirement are notified when a failed batch leaves the
-pending map.
-
-The worker makes each batch's device current while running its handlers, then
-restores its own context. A driver failure on the worker aborts the process
+for the process lifetime. Callers waiting on retirement are notified when a
+failed batch leaves the pending map. A handler that panics stops the process
 instead of stranding retirement waiters. The worker is one dedicated thread
 with a condition variable; no future owns a batch. Handlers must not wait for
 other batches on the same worker.
-
-## Allocation ordering
-
-An allocation records the stream its device storage was assigned for. Reusing
-cached storage on the same device updates that assignment. Migration and
-device release wait for that stream's latest commit. A blocking host export
-also waits for its migration copy.
-
-This is not per-kernel use tracking. Callers supply resource retention and
-cross-stream dependencies. Events, signal streams, allocator state, and
-quarantined batches live for the process.
 
 ## Build and test
 
@@ -61,13 +58,13 @@ stub; the installed driver provides it at run time.
 
 ```sh
 export CUDA_TOOLKIT_PATH=/usr/local/cuda-13.3
-cargo test --release --manifest-path tiki/runtime/cuda/Cargo.toml -- --include-ignored --test-threads=1
+cargo test --release --manifest-path tiki/runtime/cuda/Cargo.toml -- --test-threads=1
 ```
 
-The ignored tests need a CUDA device. The host harness runs the production
-modules against a simulated driver, without CUDA:
+The GPU tests need CUDA device 0 and fail by name without one. The host
+harness runs the production modules against a simulated driver, without CUDA:
 
 ```sh
 rustc --edition=2024 --test tiki/runtime/cuda/tests/host.rs -o /tmp/cuda-host
-/tmp/cuda-host --include-ignored
+/tmp/cuda-host
 ```

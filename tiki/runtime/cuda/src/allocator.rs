@@ -1,78 +1,65 @@
 // Copyright © 2026 Dedalus Labs, Inc.
 
-//! The allocator: size classes, small pool, cache, limits, and migration of
-//! device storage to unified memory.
+//! The allocator: size classes, a cache of released memory per device, and
+//! the memory and cache limits.
+//!
+//! Released memory keeps the events of its last uses, so reusing it on any
+//! stream waits for them, and freeing it follows them in stream order.
+//! Evicted memory is dropped after the allocator lock is released, since a
+//! drop enqueues a free on the driver.
 
-use std::fmt;
-use std::sync::atomic::Ordering;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use crate::allocation::{Allocation, Cached, EMPTY, Kind};
+use crate::allocation::Allocation;
 use crate::cache::SizeClassCache;
-use crate::driver::{self, Address, CudaError, MemPool, Stream};
-use crate::pool::FreeList;
-use crate::runtime::completion;
+use crate::driver::{self, CudaError, Device, DeviceMemory, Stream};
 
 pub const PAGE_SIZE: usize = 16384;
-const SMALL_BLOCK_SIZE: usize = 8;
-const SMALL_POOL_SIZE: usize = 4 * PAGE_SIZE;
-const SMALL_POOL_BLOCKS: u32 = (SMALL_POOL_SIZE / SMALL_BLOCK_SIZE) as u32;
-
-#[derive(Debug)]
-pub enum AllocError {
-    Cuda(CudaError),
-    InvalidDevice(i32),
-    OutOfMemory { bytes: usize },
-}
-
-impl fmt::Display for AllocError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Cuda(e) => e.fmt(f),
-            Self::InvalidDevice(d) => write!(f, "[malloc] Invalid CUDA device {d}."),
-            Self::OutOfMemory { bytes } => {
-                write!(f, "[malloc] Unable to allocate {bytes} bytes.")
-            }
-        }
-    }
-}
-
-impl std::error::Error for AllocError {}
-
-impl From<CudaError> for AllocError {
-    fn from(e: CudaError) -> Self {
-        Self::Cuda(e)
-    }
-}
-
-struct DeviceInfo {
-    pool: Option<MemPool>,
-    concurrent_managed_access: bool,
-    /// Runtime-owned stream carrying every migration copy and device free.
-    stream: Stream,
-}
+const SMALLEST_SIZE: usize = 8;
+/// The allocator leaves one part in this many of device 0's memory free
+/// before it frees cached memory: a 95% memory limit.
+const FREE_PARTS: usize = 20;
 
 struct State {
     memory_limit: usize,
     free_limit: usize,
-    max_pool_size: usize,
+    cache_limit: usize,
     active: usize,
     peak: usize,
-    cache: SizeClassCache<Cached>,
-    small: FreeList,
+    /// Released memory per device ordinal.
+    caches: Vec<SizeClassCache<DeviceMemory>>,
+}
+
+impl State {
+    fn cached_bytes(&self) -> usize {
+        self.caches.iter().map(SizeClassCache::bytes).sum()
+    }
+
+    /// Remove at least `bytes` of cached memory, oldest first within each device.
+    fn evict(&mut self, bytes: usize) -> Vec<DeviceMemory> {
+        let mut evicted = Vec::new();
+        let mut remaining = bytes;
+        for cache in &mut self.caches {
+            if remaining == 0 {
+                break;
+            }
+            let before = cache.bytes();
+            evicted.extend(cache.release(remaining));
+            remaining = remaining.saturating_sub(before - cache.bytes());
+        }
+        evicted
+    }
 }
 
 pub struct Allocator {
-    devices: Vec<DeviceInfo>,
-    managed: bool,
+    devices: Vec<Device>,
     total_memory: usize,
-    small_base: Address,
     state: Mutex<State>,
 }
 
 fn round_size(size: usize) -> usize {
-    if size <= SMALL_BLOCK_SIZE {
-        SMALL_BLOCK_SIZE
+    if size <= SMALLEST_SIZE {
+        SMALLEST_SIZE
     } else if size < PAGE_SIZE {
         size.next_power_of_two()
     } else {
@@ -80,240 +67,97 @@ fn round_size(size: usize) -> usize {
     }
 }
 
+/// Position of a device in per-device tables.
+fn slot(device: Device) -> usize {
+    usize::try_from(device.ordinal()).expect("an opened ordinal is not negative")
+}
+
 impl Allocator {
     pub fn new() -> Result<Self, CudaError> {
-        let total_memory = driver::with_device(0, driver::total_memory)?;
-        let devices = open_devices()?;
-        let managed = devices.iter().all(|d| d.concurrent_managed_access);
-        let small_base = match open_small_pool(managed, &devices) {
-            Ok(base) => base,
-            Err(error) => {
-                close_devices(devices)?;
-                return Err(error);
-            }
-        };
-        let memory_limit = (total_memory as f64 * 0.95) as usize;
+        let devices =
+            (0..driver::device_count()?).map(Device::open).collect::<Result<Vec<_>, _>>()?;
+        let total_memory = Device::open(0)?.total_memory()?;
+        let memory_limit = total_memory - total_memory / FREE_PARTS;
+        let caches = devices.iter().map(|_| SizeClassCache::new(PAGE_SIZE)).collect();
         Ok(Self {
             devices,
-            managed,
             total_memory,
-            small_base,
             state: Mutex::new(State {
                 memory_limit,
                 free_limit: total_memory - memory_limit,
-                max_pool_size: memory_limit,
+                cache_limit: memory_limit,
                 active: 0,
                 peak: 0,
-                cache: SizeClassCache::new(PAGE_SIZE),
-                small: FreeList::new(SMALL_POOL_BLOCKS),
+                caches,
             }),
         })
     }
 
-    fn block_address(&self, index: u32) -> Address {
-        self.small_base + index as usize * SMALL_BLOCK_SIZE
-    }
-
     fn state(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(|e| e.into_inner())
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn device_info(&self, device: i32) -> Result<&DeviceInfo, AllocError> {
-        usize::try_from(device)
-            .ok()
-            .and_then(|i| self.devices.get(i))
-            .ok_or(AllocError::InvalidDevice(device))
-    }
-
-    /// Allocate `size` bytes on `device` for use on `stream`. A null stream or a
-    /// small request selects unified memory.
-    pub fn allocate(
-        &self,
-        size: usize,
-        device: i32,
-        stream: Stream,
-    ) -> Result<Allocation, AllocError> {
+    /// Allocate at least `size` bytes on the device of `stream`, reusing
+    /// released memory of a fitting size class when the cache holds one.
+    pub fn allocate(&self, size: usize, stream: &Arc<Stream>) -> Result<Allocation, CudaError> {
         if size == 0 {
-            return Ok(Allocation::new(0, EMPTY));
+            return Ok(Allocation::new(DeviceMemory::allocate(stream, 0)?));
         }
         let size = round_size(size);
-        let device = if size <= SMALL_BLOCK_SIZE || stream == 0 { -1 } else { device };
         let mut state = self.state();
-        let (size, cached) = match state.cache.reuse(size) {
-            Some((capacity, cached)) => (capacity, cached.adopted_by(device, stream)),
-            None => {
-                let (guard, cached) = self.allocate_uncached(state, size, device, stream)?;
-                state = guard;
-                (size, cached)
-            }
+        let reused = state.caches[slot(stream.device())].reuse(size);
+        let (memory, mut evicted) = if let Some((_, memory)) = reused {
+            (memory, Vec::new())
+        } else {
+            let pressure =
+                (state.active + state.cached_bytes() + size).saturating_sub(state.memory_limit);
+            let evicted = state.evict(pressure);
+            drop(state);
+            drop(evicted);
+            let memory = DeviceMemory::allocate(stream, size)?;
+            state = self.state();
+            let evicted = self.relieve_pool_pressure(&mut state)?;
+            (memory, evicted)
         };
-        state.active += size;
+        state.active += memory.len();
         state.peak = state.peak.max(state.active);
-        if state.cache.bytes() > state.max_pool_size {
-            let excess = state.cache.bytes() - state.max_pool_size;
-            self.release_cached(&mut state, excess)?;
-        }
+        let excess = state.cached_bytes().saturating_sub(state.cache_limit);
+        evicted.extend(state.evict(excess));
         drop(state);
-        let allocation = Allocation::new(size, cached);
-        match cached.kind {
-            Kind::Device { device: held, .. } if held != device => {
-                self.migrate(&allocation, (stream != 0).then_some(stream))?;
-            }
-            _ => {}
-        }
-        Ok(allocation)
+        drop(evicted);
+        Ok(Allocation::new(memory))
     }
 
-    /// Cache miss: relieve memory pressure, then take a small-pool block or
-    /// fresh CUDA memory. The lock is released around the CUDA call.
-    fn allocate_uncached<'a>(
-        &'a self,
-        mut state: MutexGuard<'a, State>,
-        size: usize,
-        device: i32,
-        stream: Stream,
-    ) -> Result<(MutexGuard<'a, State>, Cached), AllocError> {
-        let pressure =
-            (state.active + state.cache.bytes() + size) as i64 - state.memory_limit as i64;
-        if pressure > 0 {
-            self.release_cached(&mut state, pressure as usize)?;
+    /// Evict the free limit's worth of cached memory when a device's pool
+    /// holds more than the memory the allocator leaves free.
+    fn relieve_pool_pressure(&self, state: &mut State) -> Result<Vec<DeviceMemory>, CudaError> {
+        if state.cached_bytes() == 0 {
+            return Ok(Vec::new());
         }
-        let block = (size <= SMALL_BLOCK_SIZE).then(|| state.small.take()).flatten();
-        let cached = match block {
-            Some(index) => {
-                Cached { kind: Kind::Block { index }, address: self.block_address(index) }
+        for device in &self.devices {
+            if !device.memory_pools_supported() {
+                continue;
             }
-            None => {
-                drop(state);
-                let cached = self.allocate_fresh(size, device, stream)?;
-                state = self.state();
-                cached
+            if device.pool_reserved()? > self.total_memory - state.free_limit {
+                let free_limit = state.free_limit;
+                return Ok(state.evict(free_limit));
             }
-        };
-        if state.cache.bytes() > 0 {
-            self.release_for_pool_pressure(&mut state)?;
         }
-        Ok((state, cached))
+        Ok(Vec::new())
     }
 
-    fn allocate_fresh(
-        &self,
-        size: usize,
-        device: i32,
-        stream: Stream,
-    ) -> Result<Cached, AllocError> {
-        if device == -1 {
-            let address = driver::with_device(0, || unified_malloc(self.managed, size))?;
-            return Ok(Cached { kind: Kind::Unified, address });
-        }
-        let info = self.device_info(device)?;
-        let address = driver::with_device(device, || match info.pool {
-            Some(_) => driver::malloc_async(size, stream),
-            None => driver::malloc(size),
-        })?;
-        if address == 0 {
-            return Err(AllocError::OutOfMemory { bytes: size });
-        }
-        Ok(Cached { kind: Kind::Device { device, stream }, address })
-    }
-
-    /// Return an allocation. Storage is cached while the cache is below its
-    /// limit and retired otherwise.
-    pub fn release(&self, allocation: Allocation) -> Result<(), CudaError> {
-        let cached = Cached {
-            kind: allocation.kind.into_inner().unwrap_or_else(|e| e.into_inner()),
-            address: allocation.address.into_inner(),
-        };
-        if cached.kind == Kind::Empty {
-            return Ok(());
+    /// Return an allocation. Its memory is cached while the cache is below
+    /// its limit and freed otherwise, after its last use.
+    pub fn release(&self, allocation: Allocation) {
+        let memory = allocation.into_memory();
+        if memory.is_empty() {
+            return;
         }
         let mut state = self.state();
-        state.active -= allocation.size;
-        if state.cache.bytes() < state.max_pool_size {
-            state.cache.recycle(allocation.size, cached);
-            return Ok(());
+        state.active -= memory.len();
+        if state.cached_bytes() < state.cache_limit {
+            state.caches[slot(memory.device())].recycle(memory.len(), memory);
         }
-        let State { small, .. } = &mut *state;
-        self.retire(small, cached)
-    }
-
-    fn retire(&self, small: &mut FreeList, cached: Cached) -> Result<(), CudaError> {
-        match cached.kind {
-            Kind::Empty => Ok(()),
-            Kind::Block { index } => {
-                small.give(index);
-                Ok(())
-            }
-            Kind::Unified => driver::with_device(0, || unified_free(self.managed, cached.address)),
-            Kind::Device { device, stream } => {
-                let info = &self.devices[device as usize];
-                driver::with_device(device, || match info.pool {
-                    Some(_) => {
-                        completion().order_after_latest(stream, info.stream)?;
-                        driver::free_async(cached.address, info.stream)
-                    }
-                    None => driver::free(cached.address),
-                })
-            }
-        }
-    }
-
-    fn release_cached(&self, state: &mut State, min_bytes: usize) -> Result<usize, CudaError> {
-        let State { cache, small, .. } = &mut *state;
-        let mut first_error = None;
-        let count = cache.release(min_bytes, &mut |cached| {
-            if let Err(e) = self.retire(small, cached) {
-                first_error.get_or_insert(e);
-            }
-        });
-        first_error.map_or(Ok(count), Err)
-    }
-
-    fn release_for_pool_pressure(&self, state: &mut State) -> Result<(), CudaError> {
-        for info in &self.devices {
-            let Some(pool) = info.pool else { continue };
-            if driver::mem_pool_reserved(pool)? > self.total_memory - state.free_limit {
-                let free_limit = state.free_limit;
-                self.release_cached(state, free_limit)?;
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    /// Move device storage to unified memory. The copy and the release of the
-    /// device source are enqueued on one stream, so the source outlives the
-    /// copy. Without a caller stream the call returns after the copy completes.
-    pub(crate) fn migrate(
-        &self,
-        allocation: &Allocation,
-        stream: Option<Stream>,
-    ) -> Result<(), CudaError> {
-        let mut kind = allocation.kind();
-        let Kind::Device { device, stream: source } = *kind else {
-            return Ok(());
-        };
-        let address = allocation.data_ptr();
-        let info = &self.devices[device as usize];
-        let blocking = stream.is_none() || info.pool.is_none();
-        let stream = stream.unwrap_or(info.stream);
-        driver::with_device(device, || {
-            completion().order_after_latest(source, stream)?;
-            let dst = unified_malloc(self.managed, allocation.size)?;
-            let copied = driver::memcpy_async(dst, address, allocation.size, stream)
-                .and_then(|()| if blocking { driver::stream_synchronize(stream) } else { Ok(()) });
-            if let Err(e) = copied {
-                unified_free(self.managed, dst)?;
-                return Err(e);
-            }
-            match info.pool {
-                Some(_) => driver::free_async(address, stream)?,
-                None => driver::free(address)?,
-            }
-            allocation.address.store(dst, Ordering::Release);
-            *kind = Kind::Unified;
-            Ok(())
-        })
     }
 
     pub fn active_memory(&self) -> usize {
@@ -337,79 +181,19 @@ impl Allocator {
     }
 
     pub fn cache_memory(&self) -> usize {
-        self.state().cache.bytes()
+        self.state().cached_bytes()
     }
 
     pub fn set_cache_limit(&self, limit: usize) -> usize {
-        std::mem::replace(&mut self.state().max_pool_size, limit)
+        std::mem::replace(&mut self.state().cache_limit, limit)
     }
 
-    pub fn clear_cache(&self) -> Result<(), CudaError> {
-        let mut state = self.state();
-        let bytes = state.cache.bytes();
-        self.release_cached(&mut state, bytes).map(|_| ())
+    /// Free every cached allocation after its last use.
+    pub fn clear_cache(&self) {
+        let evicted: Vec<_> =
+            self.state().caches.iter_mut().flat_map(SizeClassCache::clear).collect();
+        drop(evicted);
     }
-}
-
-/// Create one runtime stream per device, destroying the earlier ones if a later device fails.
-fn open_devices() -> Result<Vec<DeviceInfo>, CudaError> {
-    let mut devices = Vec::new();
-    for device in 0..driver::device_count()? {
-        let opened = (|| {
-            let concurrent_managed_access = driver::concurrent_managed_access(device)?;
-            let pool = if driver::memory_pools_supported(device)? {
-                Some(driver::default_mem_pool(device)?)
-            } else {
-                None
-            };
-            let stream = driver::with_device(device, driver::create_stream)?;
-            Ok(DeviceInfo { pool, concurrent_managed_access, stream })
-        })();
-        match opened {
-            Ok(info) => devices.push(info),
-            Err(error) => {
-                close_devices(devices)?;
-                return Err(error);
-            }
-        }
-    }
-    Ok(devices)
-}
-
-fn close_devices(devices: Vec<DeviceInfo>) -> Result<(), CudaError> {
-    for (device, info) in devices.into_iter().enumerate() {
-        driver::with_device(device as i32, || driver::destroy_stream(info.stream))?;
-    }
-    Ok(())
-}
-
-/// The unified slab behind the small pool, readable by every device that can map it.
-fn open_small_pool(managed: bool, devices: &[DeviceInfo]) -> Result<Address, CudaError> {
-    driver::with_device(0, || {
-        let base = unified_malloc(managed, SMALL_POOL_SIZE)?;
-        let advised = devices
-            .iter()
-            .enumerate()
-            .filter(|(_, info)| managed && info.concurrent_managed_access)
-            .try_for_each(|(device, _)| {
-                driver::advise_accessed_by(base, SMALL_POOL_SIZE, device as i32)
-            });
-        if let Err(error) = advised {
-            unified_free(managed, base)?;
-            return Err(error);
-        }
-        Ok(base)
-    })
-}
-
-/// Managed memory when every device can access it concurrently, pinned host memory otherwise.
-/// Call with a context current.
-fn unified_malloc(managed: bool, size: usize) -> Result<Address, CudaError> {
-    if managed { driver::malloc_managed(size) } else { driver::malloc_host(size) }
-}
-
-fn unified_free(managed: bool, address: Address) -> Result<(), CudaError> {
-    if managed { driver::free(address) } else { driver::free_host(address) }
 }
 
 #[cfg(test)]
