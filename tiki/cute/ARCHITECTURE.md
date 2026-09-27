@@ -75,21 +75,25 @@ Arithmetic takes the `i64` path when both operands are static. Almost every
 integer in a kernel's tile layouts is static, so the polynomial path runs only
 for the few layouts that carry launch parameters.
 
-### Integers and arithmetic tuples as one codomain
+### Three codomains
 
 A memory layout maps coordinates into Z. A coordinate layout maps them into
 Z^n, and each stride is a scaled basis element such as `2@1`, twice the second
 unit vector. A kernel names positions with coordinate layouts: an identity
 tensor for boundary masks, a TMA copy's coordinates, or a tensor-memory address
-of a lane and a column.
+of a lane and a column. A swizzled layout maps them into F2, where offsets add
+by XOR. [`Xor`](src/xor.rs) defines that codomain, and the section on XOR
+strides below explains how the algebra treats it.
 
-[`Offset`](src/offset.rs) is one type for both. An integer is the rank-0 case
-of an arithmetic tuple. The value is canonical, with trailing zero components
-trimmed and an all-zero tuple equal to the integer 0. Zero therefore belongs to
-every codomain, and equal offsets are structurally equal.
+[`Offset`](src/offset.rs) is one type for all three. An integer is the rank-0
+case of an arithmetic tuple, and an XOR value is its own variant. The value is
+canonical, with trailing zero components trimmed, and an all-zero tuple and the
+XOR value `^0` equal to the integer 0. Zero therefore belongs to every
+codomain, and equal offsets are structurally equal.
 
-A nonzero integer and an arithmetic tuple have no sum. `Stride::try_from`
-refuses a stride that mixes them, so every sum the algebra forms is defined.
+A nonzero integer, an arithmetic tuple and an XOR value have no sum with one
+another. `Stride::try_from` refuses a stride that mixes them, so every sum the
+algebra forms is defined.
 
 ## Static and dynamic extents
 
@@ -225,6 +229,83 @@ that cut across a hierarchical mode in a way that carries. The random
 postcondition tests found both failures. Every case in PyCuTe's own test suite
 still matches.
 
+XOR strides add a second kind of carry, a carry inside one mode. `16:^1`
+composed with `4:3` walks the indices 0, 3, 6 and 9 of `16:^1`, whose offsets
+are `^0`, `^3`, `^6` and `^9`. PyCuTe multiplies the XOR stride by the walk's
+stride and returns `4:^3`, which maps 3 to `3 * ^3 = ^5`, since `3 * 3` carries
+where the carry-less product does not. PyCuTe's sums of walks, layout sums and
+inverses break the same way, and tiki-cute's checks at every index refuse each
+of them. `tests/xor.rs` proves every case: for each it takes PyCuTe's
+result, finds the index where it breaks the operation's contract, and requires
+tiki-cute's refusal or smaller result:
+
+| PyCuTe returns | Broken at | tiki-cute |
+| --- | --- | --- |
+| `16:^1 ∘ 4:3 = 4:^3` | index 3: `^5`, not `^9` | refuses composition |
+| `16:^1 ∘ (3, 2):(1, 3) = (3, 2):(^1, ^3)` | index 4: `^2`, not `^4` | refuses composition |
+| `12:^1 + (3, 4):(^16, ^32) = (3, 4):(^17, ^35)` | index 5: `^1`, not `^5` | refuses addition |
+| `right_inverse((3, 8):(^1, ^5)) = 3:^1` | index 2: `A(^2) = ^4` | returns `1:0` |
+| `left_inverse((3, 2):(^1, 0)) = 3:1` | index 2: `A(L(^2)) = ^1` | refuses |
+| `logical_product(4:1, 2:^4) = (4, 2):(1, ^16)` | strides 1 and `^16` have no sum | refuses |
+
+PyCuTe also keeps the XOR zero `F0` apart from the integer 0 and raises for
+`16:F0 + 16:1`. tiki-cute reads `^0` as 0, which adds to every codomain, and
+returns `16:1`. None of these calls is in PyCuTe's test suite, and every
+recorded `F2` case matches.
+
+## XOR strides
+
+PyCuTe calls XOR strides `F2`, and tiki-cute follows its `F2` paths operation
+by operation:
+
+| Operation | With XOR strides |
+| --- | --- |
+| evaluation | each coordinate multiplies its stride carry-lessly, and the products add by XOR |
+| `Shape::idx2crd_xor`, `Shape::crd2idx_xor` | an XOR index splits by carry-less division, and a shape whose extents carry into their prefix products is refused |
+| coalesce | an XOR mode merges only across a power-of-two extent |
+| composition | an integer walk multiplies A's XOR steps carry-lessly, and an XOR walk divides carry-lessly and must end in one mode of A |
+| complement | refused, since a gap would be an XOR quotient |
+| right inverse | PyCuTe's chain with its residue correction |
+| left inverse | only a single mode of stride `^1` inverts |
+| layout addition | the steps add by XOR |
+| recast | only the stride `^1` recasts |
+| products and divides | through complement and composition |
+
+### Static extents
+
+A carry-less product needs every bit of the integer it multiplies, and a launch
+parameter has no bits the compiler knows. A layout with XOR strides therefore
+has static extents. `Layout::new` refuses XOR strides beside a dynamic extent,
+`Layout::call` refuses a negative or dynamic coordinate, and an operation that
+would place a dynamic extent opposite an XOR stride refuses with
+`LayoutError::XorOperand`. The swizzles CUTLASS applies to shared memory are
+static too.
+
+### Results checked at every index
+
+The algebra computes with integers. Composition assumes `A(k * d) = k * A(d)`
+for each walk and `A(x + y) = A(x) + A(y)` for each sum of walks. With XOR
+strides the integer product or sum on the left must equal its carry-less
+counterpart on the right, which holds exactly where no bit carries. The
+condition depends on every coordinate a walk reaches. Coalescing has an exact
+structural rule, a power-of-two extent, and uses it. For the other operations,
+tiki-cute evaluates the result at every index, which is exact because an XOR
+layout is static, and refuses with `Condition::CarryFree` at the first index
+that differs:
+
+- A composition is compared with `A(B(i))` at every index `i` whose `B(i)` is a
+  coordinate of `A`, where the contract of composition holds.
+- A layout sum is compared with the pointwise sum.
+- A left inverse is checked for `A(L(A(i))) = A(i)`.
+- A right inverse is cut instead of refused. Every prefix of its chain of modes
+  is a smaller right inverse, so the longest prefix whose modes hold at every
+  index is kept. Its indices are XOR indices, which `A` splits carry-lessly.
+  That split agrees with the integer split on power-of-two extents, where
+  PyCuTe's whole chain survives.
+
+The check costs one evaluation per index of the result. For a swizzled
+shared-memory tile that is a few thousand evaluations.
+
 ## Tensors and bounds
 
 A [`Tensor`](src/tensor.rs) is a static layout placed at an element offset in
@@ -254,8 +335,9 @@ same in Python, in Rust and in a compiler error:
   the index formula.
 
 [parse.rs](src/parse.rs) reads CuTe notation, including basis strides such as
-`1@0 + 2@1` and parameter names. The reference cases and the tests are written
-in it.
+`1@0 + 2@1`, XOR strides such as `^9`, and parameter names. The reference cases
+and the tests are written in it. PyCuTe prints an XOR stride as `F9`, which
+would read as a parameter name, so tiki-cute prints and parses `^9`.
 
 ## Verification
 
@@ -263,23 +345,31 @@ Each claim above has a test that exercises it:
 
 | Test | Establishes |
 | --- | --- |
-| `tests/reference.rs` | every integer call in PyCuTe's own test suite at `111253d` returns PyCuTe's layout or refuses where PyCuTe raises |
+| `tests/reference.rs` | every integer and `F2` call in PyCuTe's own test suite at `111253d`, 2991 of them, 427 with `F2` strides, returns PyCuTe's layout or refuses where PyCuTe raises |
 | `tests/postconditions.rs` | each operation's contract on random layouts, checked at every index |
 | `tests/symbolic.rs` | PyCuTe's symbolic cases, facts that prove a tile fits, and every symbolic result satisfying the concrete contracts after substitution |
 | `tests/tensor.rs` | a tensor accepts exactly the placements whose bytes lie in bounds, and derived tensors stay in their storage |
+| `tests/xor.rs` | each operation's contract on random XOR layouts, a `Swizzle` and its XOR layout agreeing at every index, the carry-free split of an XOR index, and each difference from PyCuTe's `F2` paths |
 
 [record.py](tests/reference/record.py) records the reference cases by running
 PyCuTe's test suite with the public operations wrapped. It keeps the calls
-whose arguments are integer layouts and tilers. A caller that tiles nothing
+whose arguments are integer or `F2` layouts and tilers, and writes `F2`
+strides in tiki-cute's notation. A caller that tiles nothing
 calls no operation, so the replay skips PyCuTe's whole-layout `None` tiler by
 name.
 
 ## Scope and open decisions
 
-- **F2 strides.** PyCuTe also allows strides in F2, where addition is XOR, and
-  expresses swizzles as layouts that way. tiki-cute keeps a swizzle as a
-  separate [`Swizzle`](src/swizzle.rs) transform. F2 strides would make
-  `Offset` generic over its scalar.
+- **XOR components.** PyCuTe allows an `F2` value as one component of an
+  arithmetic tuple, so one axis of a coordinate layout can be swizzled.
+  tiki-cute's arithmetic tuples have integer components, and a tiler with XOR
+  strides cannot move onto an axis.
+- **XOR complements.** A complement of an XOR layout exists in F2, but its gaps
+  are XOR quotients, which PyCuTe refuses and tiki-cute refuses too. Products
+  of XOR layouts wait on it.
+- **Maximal XOR right inverses.** A right inverse is cut to whole modes. A
+  mode could be cut to a prefix of its extent instead, so `(3, 8):(^1, ^5)`
+  has the right inverse `2:^1`, where tiki-cute returns `1:0`.
 - **Composed layouts.** The `tiki.layout` API composes a swizzle, an offset and a
   layout into one `ComposedLayout`. Its Rust counterpart belongs here, beside
   `Swizzle`.

@@ -10,9 +10,10 @@ use std::fmt;
 
 /// A hierarchical tuple of codomain offsets, all in one codomain.
 ///
-/// The codomain is Z when every stride is an integer, and Z^n when every stride is an
-/// arithmetic tuple. Zero belongs to both. [`Stride::try_from`] refuses a mix, so a sum of any
-/// strides of one layout is always defined.
+/// The codomain is Z when every stride is an integer, Z^n when every stride is an arithmetic
+/// tuple, and the XOR codomain of [`crate::Xor`] when every stride is an XOR value. Zero belongs
+/// to all three. [`Stride::try_from`] refuses a mix, so a sum of any strides of one layout is
+/// always defined.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Stride(Tuple<Offset>);
 
@@ -22,34 +23,52 @@ impl Stride {
         Stride(steps)
     }
 
+    /// Returns the strides as a tuple of offsets.
     pub fn as_tuple(&self) -> &Tuple<Offset> {
         &self.0
     }
 
+    /// Returns the stride of every leaf, in leaf order.
     pub fn steps(&self) -> Vec<&Offset> {
         self.0.leaves()
     }
 
+    /// Returns the strides of the top-level modes.
     pub fn modes(&self) -> impl Iterator<Item = Stride> + '_ {
         self.0.modes().iter().cloned().map(Stride)
     }
 
+    /// Returns whether these are XOR strides: some stride is a nonzero XOR value, so every sum
+    /// of strides is an XOR.
+    pub fn is_xor(&self) -> bool {
+        self.steps().into_iter().any(|step| step.as_xor().is_some())
+    }
+
     /// Returns the offset of a natural coordinate: each coordinate leaf times its stride, summed
     /// (Equation 6).
+    ///
+    /// # Panics
+    ///
+    /// Panics when these are XOR strides and a coordinate leaf is negative or dynamic, as
+    /// [`Offset::scale`] does. [`crate::Layout::call`] checks the coordinate first.
     pub fn inner_product(&self, coord: &Coord) -> Offset {
         let (coords, steps) = (coord.leaves(), self.steps());
         debug_assert_eq!(coords.len(), steps.len(), "{coord} is a natural coordinate of {self}");
         coords.into_iter().zip(steps).fold(Offset::zero(), |sum, (c, d)| sum.add(&d.scale(c)))
     }
 
-    /// Returns the profile of the codomain: a leaf for Z, one leaf per axis of Z^n.
+    /// Returns the profile of the codomain: a leaf for Z and for the XOR codomain, one leaf per
+    /// axis of Z^n.
     ///
     /// The profile is the union of the nonzero strides' own profiles. A sum of the strides would
     /// lose an axis whose strides cancel, such as `2@0` and `-2@0`, although each still steps
     /// along that axis.
     pub fn coprofile(&self) -> Profile {
         let nonzero = self.steps().into_iter().filter(|step| !step.is_zero());
-        nonzero.fold(Tuple::Leaf(()), |profile, step| union(&profile, &step.as_tuple().profile()))
+        nonzero.fold(Tuple::Leaf(()), |profile, step| {
+            let own = step.as_tuple().map_or(Tuple::Leaf(()), Tuple::profile);
+            union(&profile, &own)
+        })
     }
 }
 
@@ -72,8 +91,8 @@ fn union(left: &Profile, right: &Profile) -> Profile {
 }
 
 /// Checks that the strides share one codomain: every pair of strides has a sum. That rules out
-/// a nonzero integer beside an arithmetic tuple, and `1@0` beside `1@0@0`, whose first axis is
-/// an integer in one and a tuple in the other.
+/// a nonzero integer beside an arithmetic tuple or an XOR value, and `1@0` beside `1@0@0`, whose
+/// first axis is an integer in one and a tuple in the other.
 impl TryFrom<Tuple<Offset>> for Stride {
     type Error = LayoutError;
 

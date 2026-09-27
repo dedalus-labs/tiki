@@ -55,7 +55,9 @@ impl Tiler {
 }
 
 /// Moves `layout`'s integer strides onto the codomain axis `E(path)`. The empty path is the
-/// integer 1, so a whole-layout tiler keeps its strides, arithmetic tuples included.
+/// integer 1, so a whole-layout tiler keeps its strides, arithmetic tuples and XOR strides
+/// included. An arithmetic tuple has integer components, so an XOR stride cannot move onto an
+/// axis.
 fn scale_into_axis(layout: &Layout, path: &[usize]) -> Result<Layout, LayoutError> {
     if path.is_empty() {
         return Ok(layout.clone());
@@ -63,6 +65,9 @@ fn scale_into_axis(layout: &Layout, path: &[usize]) -> Result<Layout, LayoutErro
     let axis = Offset::basis(path);
     let mut stride = Vec::new();
     for d in layout.stride().steps() {
+        if d.as_xor().is_some() {
+            return Err(LayoutError::XorStride { operation: "tiler", stride: d.to_string() });
+        }
         let Some(d) = d.as_int() else {
             return Err(LayoutError::Mismatch {
                 operation: "tiler",

@@ -10,6 +10,7 @@ use crate::offset::Offset;
 use crate::shape::Shape;
 use crate::stride::Stride;
 use crate::tuple::Tuple;
+use crate::xor::Xor;
 
 const OPERATION: &str = "recast";
 
@@ -23,7 +24,8 @@ impl Layout {
     /// # Errors
     ///
     /// Returns [`Condition::RecastDivisibility`] when neither the stride nor the factor divides
-    /// the other.
+    /// the other. An XOR stride recasts only when it is `^1`, which packs like a unit stride as
+    /// in PyCuTe, and any other returns [`LayoutError::XorStride`].
     pub fn recast(&self, scale: &Tuple<Int>) -> Result<Layout, LayoutError> {
         let mut extents = Vec::new();
         let mut steps = Vec::new();
@@ -49,9 +51,19 @@ fn recast_mode(
     if step.is_zero() {
         return Ok((extent.clone(), step.clone()));
     }
-    let (d, path) = step
-        .as_basis()
-        .ok_or_else(|| LayoutError::NotBasis { operation: OPERATION, stride: step.to_string() })?;
+    // PyCuTe divides an XOR stride other than 1 by the factor carry-lessly and has no rule for the
+    // quotient, so only `^1` recasts.
+    let xor = step.as_xor();
+    if xor.is_some_and(|bits| bits != Xor::ONE) {
+        return Err(LayoutError::XorStride { operation: OPERATION, stride: step.to_string() });
+    }
+    let (d, path) = match xor {
+        Some(_) => (Int::Static(1), Vec::new()),
+        None => step.as_basis().ok_or_else(|| LayoutError::NotBasis {
+            operation: OPERATION,
+            stride: step.to_string(),
+        })?,
+    };
     let Some(Tuple::Leaf(factor)) = scale.get(&path) else {
         return Err(LayoutError::Mismatch {
             operation: OPERATION,
@@ -63,6 +75,10 @@ fn recast_mode(
             operation: OPERATION,
             detail: format!("scale factor {factor} for codomain axis {path:?} must be positive"),
         });
+    }
+    // A dynamic factor would leave a dynamic extent opposite the XOR stride.
+    if xor.is_some() && !factor.is_static() {
+        return Err(LayoutError::XorOperand { operand: factor.to_string() });
     }
 
     // Recasting keeps a mode's direction, so the arithmetic below runs on the stride's

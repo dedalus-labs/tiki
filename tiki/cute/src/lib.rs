@@ -21,6 +21,7 @@ mod tensor;
 mod tiler;
 mod truth;
 mod tuple;
+mod xor;
 
 pub use error::{Condition, LayoutError, Verdict};
 pub use int::Int;
@@ -35,3 +36,4 @@ pub use tensor::{Bounds, Tensor};
 pub use tiler::Tiler;
 pub use truth::Truth;
 pub use tuple::{Profile, Tuple};
+pub use xor::Xor;

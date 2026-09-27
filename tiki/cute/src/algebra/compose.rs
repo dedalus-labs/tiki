@@ -11,7 +11,10 @@
 //! 4. A leaf `B = s:d` walks `A`'s chain once per basis term of `d`: it steps over the whole
 //!    modes of `A` that the term's coefficient covers, then takes `s` elements from where it
 //!    lands. The admissibility conditions (Equations 20 and 21) are checked on the way. The
-//!    walks' results add pointwise.
+//!    walks' results add pointwise. An XOR step walks by carry-less division instead, as in
+//!    PyCuTe.
+//! 5. With XOR strides on either side, the walks' integer sums and products must carry no bit,
+//!    which [`carry_free`] checks at every index.
 
 use crate::LayoutError;
 use crate::error::Condition;
@@ -21,7 +24,9 @@ use crate::offset::Offset;
 use crate::shape::Shape;
 use crate::stride::Stride;
 use crate::tiler::Tiler;
+use crate::truth::Truth;
 use crate::tuple::Tuple;
+use crate::xor::Xor;
 
 const OPERATION: &str = "composition";
 
@@ -70,7 +75,13 @@ impl Layout {
         // Composing B's modes one at a time sums their walks. Check up front that the sum never
         // carries across a mode of A, and note the axes where more than one walk is summed.
         let summed = summed_axes(&a, b)?;
-        a.compose_modes_of(b, &summed)
+        let composed = a.compose_modes_of(b, &summed)?;
+
+        // XOR strides make the walks' integer arithmetic exact only where it carries no bit.
+        if self.stride().is_xor() || b.stride().is_xor() {
+            carry_free(self, b, &composed)?;
+        }
+        Ok(composed)
     }
 
     /// Composes `self`, already coalesced, with each leaf of `b`, keeping `b`'s hierarchy.
@@ -90,6 +101,9 @@ impl Layout {
         if extent.is_one() {
             return Ok(leaf_layout(extent, self.call_offset(&step)?));
         }
+        if let Some(bits) = step.as_xor() {
+            return self.walk_xor(bits, extent);
+        }
 
         // Walk A's chain along each basis term of the step, then add the walks. An integer step
         // is the single term on the empty path, the whole of A.
@@ -107,6 +121,29 @@ impl Layout {
             });
         }
         Ok(sum.expect("a nonzero step has a term").coalesce())
+    }
+
+    /// Walks `extent` elements of `self`, already coalesced, along the XOR stride `bits`, as
+    /// PyCuTe does. Leading modes whose extent divides the stride carry-lessly are skipped, and
+    /// the walk must then lie in a single mode, whose step it multiplies carry-lessly.
+    fn walk_xor(&self, bits: Xor, extent: Int) -> Result<Layout, LayoutError> {
+        let mut chain = Chain::from(self);
+        let mut stride = bits;
+        while chain.extents.len() > 1 {
+            let (quotient, remainder) = stride.div_rem(Xor::try_from(&chain.extents[0])?);
+            if !remainder.is_zero() {
+                break;
+            }
+            stride = quotient;
+            chain.extents.remove(0);
+            chain.steps.remove(0);
+        }
+        // PyCuTe has no rule for a walk that spans several modes, which would divide an extent
+        // by an XOR value.
+        if chain.extents.len() > 1 {
+            return Err(LayoutError::XorStride { operation: OPERATION, stride: bits.to_string() });
+        }
+        Ok(leaf_layout(extent, chain.steps[0].scale_xor(stride, OPERATION)?))
     }
 }
 
@@ -155,7 +192,10 @@ impl Chain {
     /// extent shrinks to the `extent[0] / stride` elements the walk visits before it spills into
     /// the next mode (stride divisibility, Equation 20).
     fn enter(&mut self, stride: &Int, extent: &Int, walk: Walk) -> Result<(), LayoutError> {
-        self.steps[0] = self.steps[0].scale(stride);
+        // An XOR step has a carry-less product only with a static nonnegative stride.
+        self.steps[0] = self.steps[0]
+            .checked_scale(stride)
+            .ok_or_else(|| LayoutError::XorOperand { operand: stride.to_string() })?;
         if self.extents.len() == 1 {
             return Ok(());
         }
@@ -253,6 +293,63 @@ fn summed_axes(a: &Layout, b: &Layout) -> Result<Vec<Vec<usize>>, LayoutError> {
         }
     }
     Ok(summed)
+}
+
+/// Checks `composed(i) = a(b(i))` at every index `i` whose `b(i)` may be a coordinate of `a`,
+/// for operands with XOR strides.
+///
+/// Each walk assumes `a(k * d) = k * a(d)` and each sum of walks `a(x + y) = a(x) + a(y)`. With
+/// XOR strides these hold only where the integer product or sum carries no bit: for `16:^1`
+/// composed with `4:3`, `a(3 * 3)` is `^9` but `3 * ^3` is `^5`. PyCuTe skips the check and
+/// returns `4:^3`. A layout with XOR strides has static extents, so evaluating every index
+/// decides the condition exactly. Past the end of `a` the contract of composition stops, as in
+/// the integer case.
+fn carry_free(a: &Layout, b: &Layout, composed: &Layout) -> Result<(), LayoutError> {
+    let Some(size) = composed.size().as_static() else {
+        // A dynamic extent is harmless beside zero strides and refused beside XOR strides.
+        if !composed.stride().is_xor() {
+            return Ok(());
+        }
+        return Err(LayoutError::XorOperand { operand: composed.size().to_string() });
+    };
+    for i in 0..size {
+        let through = b.at(i);
+        if !through.is_static() {
+            return Err(LayoutError::XorOperand { operand: through.to_string() });
+        }
+        if inside(a, &through) == Truth::Refuted {
+            continue;
+        }
+        let expected = a.call_offset(&through)?;
+        Truth::from(composed.at(i) == expected).require(OPERATION, Condition::CarryFree)?;
+    }
+    Ok(())
+}
+
+/// Returns whether `offset`, read as a coordinate as [`Layout::call_offset`] reads it, lies in
+/// the domain of `layout`.
+fn inside(layout: &Layout, offset: &Offset) -> Truth {
+    match (offset.as_xor(), offset.as_tuple()) {
+        (Some(bits), _) => inside_modes(layout, &Tuple::Leaf(Int::Static(bits.value()))),
+        (None, Some(coord)) => inside_modes(layout, coord),
+        (None, None) => unreachable!("an offset that is not XOR is a tuple"),
+    }
+}
+
+/// Returns whether an index lies below the size of `layout`, or each component of a tuple in
+/// the mode opposite it.
+fn inside_modes(layout: &Layout, coord: &Tuple<Int>) -> Truth {
+    match coord {
+        Tuple::Leaf(c) => {
+            c.is_at_least(&Int::Static(0)).and(layout.size().is_at_least(&(c + &Int::Static(1))))
+        }
+        Tuple::Node(components) => {
+            components.iter().enumerate().fold(Truth::Proven, |truth, (i, component)| {
+                let mode = layout.get(&[i]);
+                truth.and(mode.map_or(Truth::Refuted, |mode| inside_modes(&mode, component)))
+            })
+        }
+    }
 }
 
 fn leaf_layout(extent: Int, step: Offset) -> Layout {

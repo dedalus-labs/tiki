@@ -6,6 +6,10 @@
 //! the contiguous part of the image: `A(R(k)) = k` for every `k` in `0..size(R)`. The left
 //! inverse `L` recovers a coordinate from anywhere in the image: `A(L(A(i))) = A(i)`. Both walk
 //! the coalesced modes of `A` in stride order, one codomain axis at a time.
+//!
+//! For XOR strides both follow PyCuTe's `F2` paths. Their inverses hold XOR indices, which `A`
+//! splits carry-lessly, so each contract holds only where that split agrees with the integer
+//! one. XOR layouts are static, and each inverse is checked at every index.
 
 use crate::LayoutError;
 use crate::algebra::coalesce::{flat_modes, from_flat};
@@ -15,7 +19,9 @@ use crate::layout::Layout;
 use crate::offset::{Offset, static_first};
 use crate::shape::Shape;
 use crate::stride::Stride;
+use crate::truth::Truth;
 use crate::tuple::Tuple;
+use crate::xor::Xor;
 use std::cmp::Ordering;
 
 const LEFT: &str = "left inverse";
@@ -34,9 +40,15 @@ struct Mode {
 impl Layout {
     /// Returns the layout `R` with `self(R(k)) = k` for every `k` in `0..size(R)`: the longest
     /// chain of modes of `self` that covers the start of each codomain axis without gaps.
+    ///
+    /// For XOR strides `R` maps into XOR indices and `k` is the XOR value `^k`. The chain is
+    /// PyCuTe's, cut to the longest prefix that satisfies the contract at every index.
     #[must_use]
     pub fn right_inverse(&self) -> Layout {
         let modes = Mode::sorted(self);
+        if self.stride().is_xor() {
+            return self.right_inverse_xor(&modes);
+        }
         let profile = self.coprofile();
         let per_axis = profile.leaf_paths().into_iter().map(|path| {
             // From offset `E(axis)`, repeatedly take the mode whose step is exactly where the
@@ -61,7 +73,9 @@ impl Layout {
     /// # Errors
     ///
     /// Returns [`Condition::OrderedChain`] when a stride is not a multiple of the extents below
-    /// it, and [`Condition::Injective`] when two modes overlap.
+    /// it, and [`Condition::Injective`] when two modes overlap. For XOR strides it also returns
+    /// [`LayoutError::XorStride`] where PyCuTe's chain would hold an XOR extent, and
+    /// [`Condition::CarryFree`] when the contract fails at an index.
     pub fn left_inverse(&self) -> Result<Layout, LayoutError> {
         let profile = self.coprofile();
         let paths = profile.leaf_paths();
@@ -75,6 +89,9 @@ impl Layout {
                 .then_with(|| a.extent.compare(&b.extent).unwrap_or(Ordering::Equal))
                 .then_with(|| a.index.compare(&b.index).unwrap_or(Ordering::Equal))
         });
+        if self.stride().is_xor() {
+            return self.left_inverse_xor(modes);
+        }
         for mode in modes {
             let (d, path) = mode.step.as_basis().ok_or_else(|| LayoutError::NotBasis {
                 operation: LEFT,
@@ -100,6 +117,104 @@ impl Layout {
             self.shape().extents().into_iter().zip(self.stride().steps()).zip(index.steps());
         let zeros = leaves.filter(|((_, step), _)| step.is_zero());
         from_flat(zeros.map(|((extent, _), index)| (extent.clone(), index.clone())).collect())
+    }
+
+    /// Returns the right inverse of a layout with XOR strides, from its modes sorted by step.
+    fn right_inverse_xor(&self, modes: &[Mode]) -> Layout {
+        // Phase 1: PyCuTe's chain. A mode extends it when its step differs from the covered
+        // extent by a residue whose multiples stay below that extent, so each step still starts
+        // the next block. Its inverse stride is its domain index, corrected by the inverse of the
+        // residue.
+        let mut covered = Xor::ONE;
+        let mut chain: Vec<(Int, Xor)> = Vec::new();
+        for mode in modes {
+            let Some(step) = mode.step.as_xor() else { continue };
+            if mode.extent.is_one() {
+                continue;
+            }
+            let static_value = "XOR layouts have static extents";
+            let extent = Xor::try_from(&mode.extent).expect(static_value);
+            let last = Xor::try_from(extent.value() - 1).expect(static_value);
+            let residue = covered + step;
+            if last * residue >= covered {
+                continue;
+            }
+            let mut stride = Xor::try_from(&mode.index).expect(static_value);
+            if !residue.is_zero() {
+                // PyCuTe refuses a residue whose split carries. The chain ends there instead.
+                let taken =
+                    Tuple::node(chain.iter().map(|(extent, _)| Tuple::Leaf(extent.clone())));
+                let Ok(coord) = Shape::from_derived(taken).idx2crd_xor(residue) else { break };
+                for (c, (_, d)) in coord.leaves().into_iter().zip(&chain) {
+                    stride = stride + *c * *d;
+                }
+            }
+            chain.push((mode.extent.clone(), stride));
+            covered = extent * covered;
+        }
+
+        // Phase 2: the chain assumes an XOR index splits over `self` like the integer index,
+        // which holds on power-of-two extents. Keep the longest prefix that satisfies the
+        // contract, which is every prefix no larger than the first index that fails.
+        let modes: Vec<(Int, Offset)> =
+            chain.into_iter().map(|(extent, d)| (extent, Offset::from(d))).collect();
+        let full = from_flat(modes.clone());
+        let size = full.size().as_static().expect("XOR layouts have static extents");
+        let holds = |k: i64| {
+            let index = Offset::from(Xor::try_from(k).expect("an index is nonnegative"));
+            self.call_offset(&full.at(k)).ok() == Some(index)
+        };
+        let reach = (0..size).find(|&k| !holds(k)).unwrap_or(size);
+        let mut kept = Vec::new();
+        let mut span = 1;
+        for (extent, d) in modes {
+            span *= extent.as_static().expect("XOR layouts have static extents");
+            if span > reach {
+                break;
+            }
+            kept.push((extent, d));
+        }
+        from_flat(kept).coalesce()
+    }
+
+    /// Returns the left inverse of a layout with XOR strides, from its modes sorted by step,
+    /// extent and index.
+    ///
+    /// PyCuTe's gap between consecutive strides is their carry-less quotient, and each gap
+    /// becomes an extent of the inverse. Only a gap of 1 is an integer extent, so only a layout
+    /// with a single mode of stride `^1`, besides modes that add nothing, has a left inverse.
+    fn left_inverse_xor(&self, modes: Vec<Mode>) -> Result<Layout, LayoutError> {
+        // Phase 1: PyCuTe's checks, in its order. The first gap is the first stride itself, and
+        // the second gap is the second stride over the first gap of 1.
+        let mut informative = modes.into_iter().filter(|m| !m.step.is_zero() && !m.extent.is_one());
+        let mut chain = Chain::new();
+        if let Some(first) = informative.next() {
+            let refuse = |mode: &Mode| LayoutError::XorStride {
+                operation: LEFT,
+                stride: mode.step.to_string(),
+            };
+            if first.step != Offset::from(Xor::ONE) {
+                return Err(refuse(&first));
+            }
+            if let Some(second) = informative.next() {
+                let gap = second.step.as_xor().expect("a nonzero step of an XOR layout");
+                let gap = Int::Static(gap.value());
+                gap.is_at_least(&first.extent).require(LEFT, Condition::Injective)?;
+                return Err(refuse(&second));
+            }
+            chain.extend(&Int::Static(1), first)?;
+        }
+        let inverse = chain.into_layout();
+
+        // Phase 2: the inverse reads XOR offsets as XOR indices, which `self` splits carry-lessly.
+        // Check `self(L(self(i))) = self(i)` at every index.
+        let size = self.size().as_static().expect("XOR layouts have static extents");
+        for i in 0..size {
+            let offset = self.at(i);
+            let back = self.call_offset(&inverse.call_offset(&offset)?)?;
+            Truth::from(back == offset).require(LEFT, Condition::CarryFree)?;
+        }
+        Ok(inverse)
     }
 }
 
