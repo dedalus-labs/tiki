@@ -14,7 +14,7 @@ last push are not required, matching BSMR.
 Required checks use Tiki's existing lint, ASAN, UBSAN, and Fedora builds in place
 of BSMR's generated-workflow and Rust checks. Dependency review uses BSMR's high
 severity threshold. Each required check runs for pull requests and merge groups.
-The upstream-only Tiki build jobs are not required because they skip on Tiki.
+The upstream-only MLX build jobs are not required because they skip on Tiki.
 These checks do not certify Tiki's Rust CUDA runtime or distributed training.
 
 Hollywood generates the workflows from `ci/`. `Check Lint` validates the complete
