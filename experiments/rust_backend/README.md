@@ -2,8 +2,8 @@
 
 Tiki's execution is memory safe from its Python API to the GPU. Rust owns all
 host code, and GPU kernels are written in Tiki's kernel language, which follows
-CuTe's semantics and has every memory access proven by the compiler. Inherited
-C++ kernels call Rust accessors for each load and store until they are ported.
+CuTe's semantics and has every memory access proven by the compiler. The Rust
+stack is built beside the C++ backend and replaces it in one cutover.
 [ADR-0001](DECISION-2026-09-05.md) records the decision and its evidence.
 
 Rust makes allocation ownership, permitted access, and resource retirement part
@@ -22,19 +22,10 @@ eviction.
 
 ## Implementation status
 
-The port is tracked in [#65](https://github.com/dedalus-labs/tiki/issues/65).
-The Rust runtime owns CUDA storage: the crate in
-[`tiki/backend/cuda/runtime`](../../tiki/backend/cuda/runtime) implements
-allocation, size classes, the small pool, the cache, memory limits, and
-migration of device storage to unified memory. Migration enqueues the copy and
-the release of the device source on one stream, so the source outlives the
-copy by construction. Building the CUDA backend requires `cargo` 1.92 or later
-on the path; CMake invokes it and links the resulting static library.
-
-This guarantee covers the migration copy and its source release. It does not
-establish completion of producers on other streams or extend buffer ownership
-through arbitrary asynchronous work. Callers retain those responsibilities.
-
-Kernel execution still uses the Tiki CUDA command encoder. Submission
-retention, completion tracking, and graph replay ownership move to Rust next,
-each once it passes the qualification gates in ADR-0001.
+The replacement is tracked in [#65](https://github.com/dedalus-labs/tiki/issues/65).
+[`tiki/runtime/cuda`](../../tiki/runtime/cuda) is the Rust CUDA runtime:
+allocation, size classes, the small pool, the cache, memory limits, migration
+of device storage to unified memory, and batch completion. It forbids
+`unsafe`; [`tiki/runtime/cuda-sys`](../../tiki/runtime/cuda-sys) is its only
+call site into `libcuda`. The C++ backend keeps its own allocator until the
+cutover.

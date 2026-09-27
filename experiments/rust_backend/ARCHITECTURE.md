@@ -17,12 +17,12 @@ implementation obligations, not claims of completed verification.
 | Rust core | Tensor semantics, graphs, differentiation |
 | Rust compiler | Kernel IR, proofs, LLVM IR |
 | Rust CUDA runtime | Memory, ordering, launches, retirement |
-| Rust device accessors | Addresses in inherited C++ kernels |
+| `tiki-cuda-sys` | The only call site into the CUDA driver |
 | Tiki kernels | CuTe-style layouts, atoms, pipelines |
 | CUDA driver and device | Module loading, execution, completion |
 
-During the migration, a CXX bridge lets remaining C++ host code call the Rust
-runtime. The bridge is removed once the host is Rust.
+The Rust stack runs beside the C++ backend with no bridge between them, and
+replaces it in one cutover.
 
 ```mermaid
 flowchart LR
@@ -64,7 +64,7 @@ and ADR-0001 records where each kernel family runs.
 The backend uses ordinary Rust resource owners and explicit state transitions.
 It does not expose CUDA pointers as general-purpose mutable host references.
 
-- **Stable host toolchain.** Runtime and bridge code target stable Rust. GPU
+- **Stable host toolchain.** Runtime code targets stable Rust. GPU
   compiler internals and experimental Rust device-language extensions are not
   requirements of the host interface.
 - **Concrete runtime types.** Allocation, kernel, submission, and executable
@@ -166,23 +166,15 @@ resulting commands under the same ownership rules as forward computation.
 Forward-mode derivatives, batching, and differentiation of backward kernels
 require their own declared support.
 
-## C++ interoperability and dependency policy
+## Dependency policy
 
-The finished system has one boundary between Rust and C++, on the GPU. C++
-kernels receive opaque tensor handles and call Rust device functions for every
-load and store. nvJitLink links those functions into the kernel as LTO-IR and
-inlines them. Architectures without that path use a C++ accessor header whose
-address formula is property-tested against the Rust definition.
+The Rust stack contains no C++. Kernels come from Tiki's compiler; the C++
+backend, its inherited kernels, and its allocator stay separate until the
+cutover deletes them.
 
-During the migration, a CXX bridge exposes opaque runtime owners to remaining
-C++ host code. Bridge definitions belong with the Rust types they expose, and
-C++ does not depend on their field layout. A supported operation has one
-authority for its resources. Ownership is never divided between a C++ and a
-Rust allocator.
-
-cuTile Rust and cuda-oxide crates are pinned to an exact version or commit.
-Their public types do not define Tiki's interfaces. An upgrade reruns the
-qualification suite and the F-01 program in ADR-0001 before it lands.
+Oracles and tools (CuTe DSL, cuTile, `libNVVM`, cuda-oxide's PTX tooling) are
+pinned to an exact version or commit. Their public types do not define Tiki's
+interfaces. An upgrade reruns the qualification suite before it lands.
 
 ## Qualification requirements
 
@@ -197,6 +189,6 @@ device execution, allocation, and transfers. Comparisons must identify the
 kernel artifact, schedule, workload, and synchronization method. A language
 choice or a correct kernel result does not establish equivalent performance.
 
-The resulting safety guarantee depends on the validated safe API and its
-reviewed unsafe implementation. It does not extend automatically to unrelated
-C++ code, unchecked kernels, foreign aliases, or unqualified dependencies.
+The resulting safety guarantee depends on the validated safe API and the
+reviewed `-sys` adapters beneath it. It does not extend to unchecked kernels,
+foreign aliases, or unqualified dependencies.

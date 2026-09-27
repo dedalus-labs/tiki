@@ -13,7 +13,7 @@ allocator slice.
 
 Independent builds of the initial port (`9191de8d`) and atomic address lookup
 change (`1e68053f`) each pass all three
-[GPU allocator tests](../../tiki/backend/cuda/runtime/tests/forced_reuse.rs)
+[GPU allocator tests](https://github.com/dedalus-labs/tiki/blob/be9f732e8fb2bb7a9cc1015b84ac9d2f8082163d/mlx/backend/cuda/runtime/tests/forced_reuse.rs)
 under Compute Sanitizer memcheck, with zero reported errors. The tests check
 forced address reuse after blocking export, stream-ordered export, and cache
 accounting. They run serially because they share the global allocator.
@@ -41,7 +41,7 @@ export LD_LIBRARY_PATH="$CUDA_TOOLKIT_PATH/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_
 export CARGO_TARGET_DIR=$(mktemp -d)
 export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER="$CUDA_TOOLKIT_PATH/bin/compute-sanitizer --tool memcheck --error-exitcode 99"
 cargo test --locked --release \
-  --manifest-path tiki/backend/cuda/runtime/Cargo.toml \
+  --manifest-path mlx/backend/cuda/runtime/Cargo.toml \
   --target aarch64-unknown-linux-gnu --test forced_reuse \
   -- --ignored --test-threads=1
 ```
