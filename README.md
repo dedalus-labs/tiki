@@ -54,8 +54,9 @@ identical kernel code or schedules across Metal and CUDA.
   every integer case PyCuTe's own test suite records.
 - **Layouts on arrays.** `tiki.layout` gives every evaluated array a first-class
   layout and exposes its strides and offset.
-- **Rust CUDA storage.** The [Rust runtime](experiments/rust_backend/README.md)
-  owns CUDA allocation, caching, memory limits and migration.
+- **Rust CUDA runtime.** The [runtime](docs/src/dev/runtime.rst) owns CUDA
+  devices, streams, and device memory as Rust values, with cached allocation,
+  memory limits, and batch completion.
 
 The [framework design](docs/src/dev/design.rst) defines the nouns, and
 [kernels](docs/src/dev/kernels.rst) writes each kernel family in `tk`. The
@@ -73,10 +74,9 @@ the traffic accounting and precision stated.
 
 ## Start here
 
-- [ADR-0001](experiments/rust_backend/DECISION-2026-09-05.md) records the
-  decision and the evidence behind it, and the
-  [architecture](experiments/rust_backend/ARCHITECTURE.md) specifies ownership,
-  asynchronous execution and the kernel artifact contract.
+- The [runtime](docs/src/dev/runtime.rst) covers compiling versus running,
+  memory lifetime, stream order, and how the Rust stack replaces the C++
+  backend.
 - The [CuTe MLIR experiments](https://github.com/dedalus-labs/tiki/tree/5555d20225b0befb21d7c56782384a20a1027b42/experiments)
   are the reference design for the lowering, with their GH200 measurements.
 - Source build instructions are in

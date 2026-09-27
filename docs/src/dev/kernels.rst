@@ -420,11 +420,30 @@ An unproven ``nsw`` shows why the flags matter. An offset
 LLVM 21 and 23. At ``row = 32768`` the product wraps to -2\ :sup:`31`, passes
 ``offset < len``, and becomes +2\ :sup:`31` after ``zext nneg``: the store
 lands 8 GiB past a 16-element buffer. The same IR without ``nsw`` keeps both
-checks. The reproduction is in ``experiments/rust_backend/repros/unproven_nsw``.
+checks. The compiler's lowering tests keep this case.
 
 Property tests compare the lowered index arithmetic with ``tiki-cute`` at
 negative coordinates and at offsets near 2\ :sup:`31` and 2\ :sup:`32`, and
 ``libNVVM`` compiles the same LLVM IR as a differential check.
+
+The compiler runs a pinned LLVM in a separate process, so a compiler failure
+ends one compilation with a typed error and never touches runtime memory.
+Tiki pins and vendors LLVM when a fix must ship before it lands upstream.
+
+Alternatives
+------------
+
+- **NVIDIA's CuTe DSL** is a revocable EULA that forbids reverse engineering
+  its compiler, so Tiki could not fix or ship it. The layout algebra and atoms
+  are BSD-3 in CUTLASS, and Tiki implements them from there. CuTe DSL stays
+  as a correctness and performance oracle.
+- **CUDA Tile IR** has no thread index, warp, or shared memory operations, so
+  it cannot express the thread-level control Tiki's kernels need.
+- **cuda-oxide** compiles Rust kernels, but its shared memory, warp
+  operations, and TMA require ``unsafe``.
+- **libNVVM** runs the same device optimizer as ``nvcc`` but is closed. LLVM's
+  NVPTX backend accepts the same IR, and Tiki's atoms are inline PTX, so new
+  instructions do not wait for NVPTX intrinsics.
 
 From tk to PTX
 --------------

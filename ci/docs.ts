@@ -7,7 +7,7 @@ import {
 } from "./actions.ts";
 import { trustedCiRun } from "./guards.ts";
 
-const docsPaths = ["docs/**", "python/**", "experiments/**/*.md", "README.md", "ci/docs.ts"] as const;
+const docsPaths = ["docs/**", "python/**", "README.md", "ci/docs.ts"] as const;
 
 export const docs = workflow({
 	name: "Docs",

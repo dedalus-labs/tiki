@@ -13,7 +13,8 @@ references.
 
 ## Where the algebra runs
 
-ADR-0001 fixes Tiki's kernel pipeline. A kernel written with `@tk.kernel`, or
+The [kernels guide](../../docs/src/dev/kernels.rst) fixes Tiki's kernel
+pipeline. A kernel written with `@tk.kernel`, or
 chosen by the compiler for a fused Tiki region, is traced into kernel IR. The
 kernel IR lowers to a thread IR, then to LLVM IR, which LLVM's NVPTX backend
 compiles to PTX in a separate compiler process.
@@ -135,7 +136,7 @@ assert!(!rows.admits(200));
 ```
 
 The facts are a contract with the launcher. The compiler may rely on them.
-ADR-0001 has the runtime check each launch against the kernel's contract, and
+The generated launcher checks each launch against the kernel's contract, and
 `Param::admits` is that check for one argument, so a launch that breaks a fact
 is refused before any address exists. CuTe DSL's
 `cute.assume(value, divby=…)` attaches the same kind of fact to a dynamic

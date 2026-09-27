@@ -7,6 +7,12 @@ The runtime runs compiled kernels on a GPU. It owns every device address,
 every stream, and the lifetime of every buffer while the device uses it. It
 is Rust, and only one crate in it calls the driver.
 
+Everything on the execution path is Tiki's own code or open source, except
+the vendor's user-space driver where no open one exists: ``libcuda`` on
+NVIDIA. NVIDIA's closed libraries (the CUDA runtime, cuBLAS, NVRTC,
+``libNVVM``, CuTe DSL, and cuTile) serve only as oracles in differential
+tests.
+
 .. list-table::
    :header-rows: 1
 
@@ -175,3 +181,24 @@ worker then runs the batch's handlers and drops what it leased. Each compute
 stream has its own signal stream, so a slow stream never delays another
 stream's batches. A batch whose callback cannot be scheduled stays leased for
 the life of the process, since the device may still use what it holds.
+
+Replacing the C++ backend
+-------------------------
+
+The Rust stack is built beside the C++ CUDA backend, with its own entry
+points and no bridge between the two. Each Python test runs on both, and
+their results must match. The C++ backend is deleted in one change once the
+Python suite passes on the Rust stack with matching results, Compute
+Sanitizer's ``memcheck`` and ``racecheck`` report no errors, and device time
+is within 5% of the C++ backend.
+
+Checks
+------
+
+- Every crate except ``tiki-cuda-sys`` declares ``#![forbid(unsafe_code)]``.
+- GPU tests run on a GH200 under ``memcheck``, and each ordering test is
+  checked to fail with its wait removed.
+- The host harness runs the production modules against a simulated driver
+  that injects a failure into any call.
+- Differential tests compare the Rust stack with the C++ backend, and with
+  NVIDIA's closed libraries for individual kernels.
