@@ -1,123 +1,199 @@
 # Copyright © 2026 Dedalus Labs, Inc.
 
-"""Layouts: hierarchical ``Shape:Stride`` coordinate maps from the vendored PyCuTe.
+"""Layouts: hierarchical ``Shape:Stride`` coordinate maps and their algebra.
 
-Integer-stride operations use the pinned PyCuTe algebra. ``compose`` also
-retains nonlinear transforms and their internal offsets. ``basis`` is ``E``,
-and ``cosize`` is the size of ``coshape``, not a storage-bounds proof.
+tiki-cute, Tiki's Rust implementation of the CuTe layout algebra, computes
+every operation here. ``compose`` also retains nonlinear transforms and their
+internal offsets. ``basis`` is ``E``, and ``cosize`` is the size of
+``coshape``, not a storage-bounds proof.
 """
 
-from collections.abc import Callable
-from functools import wraps
-from typing import ParamSpec, TypeVar, cast
+from collections.abc import Callable, Iterable
+from itertools import zip_longest
+from typing import TypeAlias, cast
 
-from tiki.layout._layout import LayoutError
-from tiki.layout._pycute import (
-    F2,
-    Accessor,
+from tiki.layout import _cute
+from tiki.layout._cute import F2, LayoutError
+from tiki.layout.affine import Layout
+from tiki.layout.composed import ComposedLayout, LayoutBase
+from tiki.layout.engine import (
     Array,
-    E,
+    Engine,
     ImplicitAccessor,
-)
-from tiki.layout._pycute import Layout as ReferenceLayout
-from tiki.layout._pycute import (
-    LayoutBase,
-    MutableAccessor,
+    MutableEngine,
     Ptr,
-    Shape,
-    Tensor,
     TransformAccessor,
 )
-from tiki.layout._pycute import blocked_product as _blocked_product
-from tiki.layout._pycute import coalesce as _coalesce
-from tiki.layout._pycute import (
+from tiki.layout.swizzle import Swizzle
+from tiki.layout.tensor import Tensor, identity_tensor, make_tensor
+from tiki.layout.tuples import (
+    E,
+    Mode,
+    Shape,
     compatible,
-)
-from tiki.layout._pycute import complement as _complement
-from tiki.layout._pycute import composition as _composition
-from tiki.layout._pycute import (
     congruent,
     crd2idx,
     depth,
     flatten,
-    identity_tensor,
     idx2crd,
-    is_layout,
-)
-from tiki.layout._pycute import left_inverse as _left_inverse
-from tiki.layout._pycute import logical_divide as _logical_divide
-from tiki.layout._pycute import logical_product as _logical_product
-from tiki.layout._pycute import make_layout as _make_layout
-from tiki.layout._pycute import (
-    make_tensor,
-)
-from tiki.layout._pycute import nullspace as _nullspace
-from tiki.layout._pycute import raked_product as _raked_product
-from tiki.layout._pycute import (
+    modes,
     rank,
-)
-from tiki.layout._pycute import recast as _recast
-from tiki.layout._pycute import right_inverse as _right_inverse
-from tiki.layout._pycute import (
     size,
     unflatten,
 )
-from tiki.layout._pycute import zipped_divide as _zipped_divide
-from tiki.layout._pycute.layout import Tiler
-from tiki.layout.affine import Layout
-from tiki.layout.composed import ComposedLayout
-from tiki.layout.swizzle import Swizzle
 
-Engine = Accessor
-MutableEngine = MutableAccessor
+__all__ = [
+    "Array",
+    "E",
+    "Engine",
+    "F2",
+    "ImplicitAccessor",
+    "Layout",
+    "LayoutError",
+    "MutableEngine",
+    "Ptr",
+    "Swizzle",
+    "Tensor",
+    "TransformAccessor",
+    "basis",
+    "blocked_product",
+    "coalesce",
+    "compatible",
+    "complement",
+    "compose",
+    "congruent",
+    "coshape",
+    "cosize",
+    "crd2idx",
+    "depth",
+    "flatten",
+    "identity_tensor",
+    "idx2crd",
+    "is_layout",
+    "left_inverse",
+    "logical_divide",
+    "logical_product",
+    "make_layout",
+    "make_tensor",
+    "nullspace",
+    "raked_product",
+    "rank",
+    "recast",
+    "right_inverse",
+    "size",
+    "unflatten",
+    "zipped_divide",
+]
+
 basis = E
 
+Tiler: TypeAlias = int | Layout | None | tuple["Tiler", ...] | list["Tiler"]
+NativeTiler: TypeAlias = int | _cute.Layout | None | tuple["NativeTiler", ...]
+Operand: TypeAlias = Layout | Tensor | Shape
 
-Parameters = ParamSpec("Parameters")
-Return = TypeVar("Return")
+
+def is_layout(value: object) -> bool:
+    """Whether ``value`` is a stride layout or a composed layout."""
+    return isinstance(value, LayoutBase)
 
 
-def _typed(operation: Callable[Parameters, Return]) -> Callable[Parameters, Return]:
-    """Re-raise PyCuTe's precondition failures as ``LayoutError``."""
+def _stride_layout(value: object, operation: str) -> Layout:
+    """The stride layout an operation acts on. An extent or tuple tiles as ``Tiler`` does."""
+    if isinstance(value, Layout):
+        return value
+    if isinstance(value, ComposedLayout) or (
+        isinstance(value, Tensor) and isinstance(value.layout, ComposedLayout)
+    ):
+        raise LayoutError(
+            f"{operation} requires a stride layout. Transform the domain before composing"
+        )
+    if isinstance(value, (int, tuple, list)) and not isinstance(value, bool):
+        return Layout._of(_cute.Layout.from_tiler(_tiler(value)))
+    raise LayoutError(f"{operation} requires a layout, got {type(value).__name__}")
 
-    @wraps(operation)
-    def guarded(*args: Parameters.args, **kwargs: Parameters.kwargs) -> Return:
-        if any(
-            isinstance(value, ComposedLayout)
-            or isinstance(value, Tensor)
-            and isinstance(value.layout, ComposedLayout)
-            for value in args
-        ):
+
+def _tiler(tiler: object) -> NativeTiler:
+    """A tiler in the binding's terms: each layout becomes its tiki-cute handle."""
+    if isinstance(tiler, Layout):
+        return tiler._native
+    if isinstance(tiler, (tuple, list)):
+        return tuple(_tiler(item) for item in tiler)
+    if isinstance(tiler, LayoutBase):
+        raise LayoutError("a tiler requires stride layouts. Transform the domain first")
+    if tiler is None or (isinstance(tiler, int) and not isinstance(tiler, bool)):
+        return tiler
+    raise LayoutError(
+        f"a tiler is a layout, an extent, or a tuple of them, got {tiler!r}"
+    )
+
+
+def _at_mode(
+    layout: Layout, mode: Mode, operation: Callable[[Layout], Layout]
+) -> Layout:
+    """Apply ``operation`` to the mode at path ``mode`` and keep every other mode."""
+    path = modes(mode)
+    if not path:
+        return operation(layout)
+    head, rest = path[0], path[1:]
+    if not 0 <= head < rank(layout):
+        raise LayoutError(f"{layout} has no mode {head}")
+    if not isinstance(layout.shape, tuple):
+        return _at_mode(layout, rest, operation)
+    parts = [layout[i] for i in range(rank(layout))]
+    parts[head] = _at_mode(parts[head], rest, operation)
+    return make_layout(parts)
+
+
+def _apply(
+    value: Operand,
+    operation: str,
+    native: Callable[[_cute.Layout], _cute.Layout],
+    mode: Mode = (),
+) -> Layout | Tensor:
+    """Apply a tiki-cute operation to a layout, or to a tensor's layout over the same Engine."""
+    if isinstance(value, Tensor) and isinstance(value.layout, Layout):
+        return Tensor(
+            value.accessor, cast(Layout, _apply(value.layout, operation, native, mode))
+        )
+    layout = _stride_layout(value, operation)
+    return _at_mode(layout, mode, lambda part: Layout._of(native(part._native)))
+
+
+def make_layout(layouts: Iterable[Layout]) -> Layout:
+    """Concatenate layouts: each becomes one top-level mode of the result."""
+    parts = list(layouts)
+    if not all(isinstance(part, Layout) for part in parts):
+        raise LayoutError("make_layout requires stride layouts")
+    return Layout._of(_cute.Layout.from_modes([part._native for part in parts]))
+
+
+def _coalesce(layout: Layout, profile: object) -> Layout:
+    if profile is None:
+        return layout
+    if isinstance(profile, (tuple, list)):
+        if rank(layout) < len(profile):
             raise LayoutError(
-                f"{operation.__name__} requires a stride layout. Transform the domain before composing"
+                f"coalesce profile {profile} has more modes than {layout}"
             )
-        try:
-            result = operation(*args, **kwargs)
-        except (ValueError, TypeError) as error:
-            raise LayoutError(str(error)) from error
-        if type(result) is ReferenceLayout:
-            return cast(Return, Layout._set(result.shape, result.stride))
-        if type(result) is Tensor and type(result.layout) is ReferenceLayout:
-            layout = Layout._set(result.layout.shape, result.layout.stride)
-            return cast(Return, Tensor(result.accessor, layout))
-        return result
-
-    return guarded
+        parts = zip_longest(range(rank(layout)), profile)
+        return make_layout([_coalesce(layout[i], part) for i, part in parts])
+    return Layout._of(layout._native.coalesce())
 
 
-coalesce = _typed(_coalesce)
-_affine_compose = _typed(_composition)
-make_layout = _typed(_make_layout)
-blocked_product = _typed(_blocked_product)
-raked_product = _typed(_raked_product)
-complement = _typed(_complement)
-logical_divide = _typed(_logical_divide)
-zipped_divide = _typed(_zipped_divide)
-logical_product = _typed(_logical_product)
-right_inverse = _typed(_right_inverse)
-left_inverse = _typed(_left_inverse)
-nullspace = _typed(_nullspace)
-recast = _typed(_recast)
+def coalesce(
+    value: Operand, profile: object = 1, *, mode: Mode = ()
+) -> Layout | Tensor:
+    """The flat layout with the same function on every index of the domain.
+
+    A tuple ``profile`` coalesces each mode it names, and ``None`` leaves a
+    mode as it is.
+    """
+    if isinstance(value, Tensor) and isinstance(value.layout, Layout):
+        return Tensor(
+            value.accessor, cast(Layout, coalesce(value.layout, profile, mode=mode))
+        )
+    layout = _stride_layout(value, "coalesce")
+    return _at_mode(layout, mode, lambda part: _coalesce(part, profile))
 
 
 def compose(
@@ -125,12 +201,12 @@ def compose(
     inner: LayoutBase | Tiler,
     *,
     offset: int = 0,
-    mode: int | tuple[int, ...] = (),
+    mode: Mode = (),
 ) -> LayoutBase | Tensor:
     """Compose coordinate maps, retaining offsets inside nonlinear transforms.
 
-    Integer-affine composition uses PyCuTe's algebra. A nonlinear operand or
-    an explicit offset stays an inspectable expression over the inner domain.
+    Integer-affine composition runs in tiki-cute. A nonlinear operand or an
+    explicit offset stays an inspectable expression over the inner domain.
     """
     if type(offset) is not int:
         raise LayoutError("composition offset must be an integer")
@@ -143,21 +219,103 @@ def compose(
             raise LayoutError(
                 "compose the selected domain before applying a nonlinear transform"
             )
-        if not isinstance(outer, (Swizzle, ReferenceLayout, ComposedLayout)):
+        if not isinstance(outer, (Swizzle, LayoutBase)):
             raise LayoutError("composition outer must be a Swizzle or a layout")
-        if not isinstance(inner, (ReferenceLayout, ComposedLayout)):
+        if not isinstance(inner, LayoutBase):
             raise LayoutError("composition inner must supply a layout domain")
-        return ComposedLayout(outer=outer, offset=offset, inner=inner)
-    return _affine_compose(outer, inner, mode=mode)
+        # LayoutBase has exactly two subclasses, Layout and ComposedLayout.
+        return ComposedLayout(
+            outer=cast(Swizzle | Layout | ComposedLayout, outer),
+            offset=offset,
+            inner=cast(Layout | ComposedLayout, inner),
+        )
+    if inner is None:
+        return cast(Layout | Tensor, outer)
+    tiler = _tiler(inner)
+    return _apply(cast(Operand, outer), "compose", lambda a: a.compose(tiler), mode)
+
+
+def logical_divide(value: Operand, tiler: Tiler, *, mode: Mode = ()) -> Layout | Tensor:
+    """Split ``value`` by the tile ``tiler``: mode 0 is the tile, mode 1 indexes the tiles."""
+    if tiler is None:
+        return cast(Layout | Tensor, value)
+    native = _tiler(tiler)
+    return _apply(value, "logical_divide", lambda a: a.logical_divide(native), mode)
+
+
+def zipped_divide(value: Operand, tiler: Tiler, *, mode: Mode = ()) -> Layout | Tensor:
+    """Divide as ``logical_divide`` does, with every tile mode gathered into mode 0."""
+    if tiler is None:
+        return cast(Layout | Tensor, value)
+    native = _tiler(tiler)
+    return _apply(value, "zipped_divide", lambda a: a.zipped_divide(native), mode)
+
+
+def logical_product(value: Operand, tiler: Tiler, *, mode: Mode = ()) -> Layout:
+    """One copy of ``value`` per coordinate of ``tiler``, placed where ``value`` leaves room."""
+    layout = _stride_layout(value, "logical_product")
+    if tiler is None:
+        return layout
+    native = _tiler(tiler)
+    return cast(
+        Layout,
+        _apply(layout, "logical_product", lambda a: a.logical_product(native), mode),
+    )
+
+
+def _tile(tile: object, operation: str) -> _cute.Layout:
+    return _stride_layout(tile, operation)._native
+
+
+def blocked_product(value: Operand, tile: Layout | int) -> Layout:
+    """The product that keeps each copy of ``value`` contiguous in every mode."""
+    native = _tile(tile, "blocked_product")
+    return cast(
+        Layout, _apply(value, "blocked_product", lambda a: a.blocked_product(native))
+    )
+
+
+def raked_product(value: Operand, tile: Layout | int) -> Layout:
+    """The product that interleaves the copies of ``value`` in every mode."""
+    native = _tile(tile, "raked_product")
+    return cast(
+        Layout, _apply(value, "raked_product", lambda a: a.raked_product(native))
+    )
+
+
+def complement(value: Operand, extend: Shape | None = None) -> Layout:
+    """The ordered layout that fills the offsets ``value`` leaves free, grown to ``extend``."""
+    cotarget = extend if extend else None
+    return cast(Layout, _apply(value, "complement", lambda a: a.complement(cotarget)))
+
+
+def right_inverse(value: Operand) -> Layout:
+    """The largest layout ``R`` with ``value(R(i)) == i`` on its domain."""
+    return cast(Layout, _apply(value, "right_inverse", lambda a: a.right_inverse()))
+
+
+def left_inverse(value: Operand) -> Layout:
+    """A layout ``L`` with ``value(L(value(i))) == value(i)``."""
+    return cast(Layout, _apply(value, "left_inverse", lambda a: a.left_inverse()))
+
+
+def nullspace(value: Operand) -> Layout:
+    """The layout of the coordinates that ``value`` maps to 0."""
+    return cast(Layout, _apply(value, "nullspace", lambda a: a.nullspace()))
+
+
+def recast(layout: Operand, scale: Shape) -> Layout:
+    """The layout over elements ``scale`` times as wide, one integer factor per codomain axis."""
+    return cast(Layout, _apply(layout, "recast", lambda a: a.recast(scale)))
 
 
 def coshape(layout: Layout) -> Shape:
     """Shape of the codomain: one past the largest offset in each codomain mode."""
-    if not isinstance(layout, ReferenceLayout):
+    if not isinstance(layout, Layout):
         raise LayoutError("coshape requires a stride layout")
-    return layout._coshape()
+    return layout._native.coshape()
 
 
 def cosize(layout: Layout) -> int:
-    """Size of the codomain. This bounds offsets; it is not a storage-bounds proof."""
+    """Size of the codomain. This bounds offsets. It is not a storage-bounds proof."""
     return size(coshape(layout))

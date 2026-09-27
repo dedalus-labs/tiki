@@ -4,8 +4,6 @@
 #![deny(unsafe_code)]
 
 mod algebra;
-#[cfg(feature = "cxx-bridge")]
-mod bridge;
 mod error;
 mod int;
 mod layout;

@@ -4,10 +4,19 @@
 
 A Tiki array follows the zop tensor model: an Engine paired with a first-class
 CuTe ``Layout``, so ``tensor[coordinate] == engine[layout(coordinate)]``. The
-stride algebra is NVIDIA's PyCuTe, vendored under ``_pycute``. Rust owns the
-validated Swizzle index transform. Generic composition preserves the exact
-``outer o {offset} o inner`` map and its slicing invariant.
+layout algebra and the validated Swizzle index transform are tiki-cute, Tiki's
+Rust implementation of CuTe, reached through the ``tiki.layout._cute`` extension.
+Generic composition preserves the exact ``outer o {offset} o inner`` map and
+its slicing invariant.
 """
+
+try:
+    from tiki.layout import _cute  # noqa: F401
+except ImportError as error:
+    raise ImportError(
+        "tiki.layout needs its Rust extension tiki.layout._cute, which a source build "
+        "of Tiki compiles from tiki/cute. No Python fallback exists"
+    ) from error
 
 from tiki.layout.composed import ComposedLayout, check_swizzle, slice_and_offset
 from tiki.layout.engine import ArrayEngine
