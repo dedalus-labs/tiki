@@ -5,7 +5,7 @@
 #include <nanobind/nanobind.h>
 
 #include "rust/cxx.h"
-#include "tiki-layout/src/bridge.rs.h"
+#include "tiki-cute/src/bridge.rs.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;

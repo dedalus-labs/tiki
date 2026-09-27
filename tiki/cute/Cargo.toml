@@ -1,0 +1,34 @@
+[package]
+name = "tiki-cute"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "CuTe layout algebra with static and dynamic extents, checked tensors and swizzles"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[features]
+default = []
+cxx-bridge = ["dep:cxx", "dep:cxx-build"]
+
+[dependencies]
+thiserror = "2"
+cxx = { version = "=1.0.200", optional = true }
+
+[build-dependencies]
+cxx-build = { version = "=1.0.200", optional = true }
+
+[dev-dependencies]
+proptest = "1"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"

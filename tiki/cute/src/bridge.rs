@@ -2,7 +2,7 @@
 
 //! CXX transports owned, validated swizzles without exposing storage pointers.
 
-use crate::{LayoutError, Swizzle};
+use crate::{LayoutError, Swizzle, SwizzleParams};
 
 #[allow(unsafe_code)] // Only CXX-generated ABI functions use unsafe operations.
 #[cxx::bridge(namespace = "tiki::core::layout_rt")]
@@ -18,5 +18,5 @@ mod ffi {
 }
 
 fn new_swizzle(bits: i64, base: i64, shift: i64) -> Result<Box<Swizzle>, LayoutError> {
-    Swizzle::new(bits, base, shift).map(Box::new)
+    Swizzle::try_from(SwizzleParams { bits, base, shift }).map(Box::new)
 }

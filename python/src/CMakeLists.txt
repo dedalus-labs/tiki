@@ -87,8 +87,7 @@ set_target_properties(
 
 target_link_libraries(core PRIVATE tiki)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/tiki/layout
-                 ${CMAKE_BINARY_DIR}/tiki/layout)
+add_subdirectory(${PROJECT_SOURCE_DIR}/tiki/cute ${CMAKE_BINARY_DIR}/tiki/cute)
 
 if(BUILD_SHARED_LIBS)
   if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

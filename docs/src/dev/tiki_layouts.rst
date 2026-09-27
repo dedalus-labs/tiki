@@ -256,7 +256,7 @@ The layout extension builds with the framework. The build requires:
 - A C++ compiler with C++20 support, such as Clang 15.0 or later. On macOS,
   Xcode 15.0 or later with the macOS 14.0 SDK or later. On Linux,
   ``libblas-dev``, ``liblapack-dev``, and ``liblapacke-dev``.
-- Rust 1.92 or later with Cargo. The ``tiki-layout`` crate declares this
+- Rust 1.92 or later with Cargo. The ``tiki-cute`` crate declares this
   minimum in its ``rust-version`` field, and Cargo rejects older toolchains.
 - Doxygen and the packages in ``docs/requirements.txt``, for the
   documentation build.
@@ -271,8 +271,8 @@ Build the framework
 
       python -m pip install .
 
-   The build compiles the ``tiki-layout`` crate and links it into the
-   ``tiki_layout_python`` extension through CXX.
+   The build compiles the ``tiki-cute`` crate and links it into the
+   ``tiki_cute_python`` extension through CXX.
 
 Expected result: the extension is importable and computes offsets.
 
@@ -302,7 +302,7 @@ Use this procedure to change the extension without rebuilding ``tiki``.
 
 2. Build the extension target::
 
-      cmake --build build/indexing --target tiki_layout_python
+      cmake --build build/indexing --target tiki_cute_python
 
 3. Put the checkout ahead of the installed package::
 
@@ -316,9 +316,9 @@ Run the checks
 
 Run the Rust and Python checks from the repository root::
 
-   cargo test --manifest-path tiki/layout/Cargo.toml --all-features
-   cargo fmt --manifest-path tiki/layout/Cargo.toml --check
-   cargo clippy --manifest-path tiki/layout/Cargo.toml --all-targets --all-features -- -D warnings
+   cargo test --manifest-path tiki/cute/Cargo.toml --all-features
+   cargo fmt --manifest-path tiki/cute/Cargo.toml --check
+   cargo clippy --manifest-path tiki/cute/Cargo.toml --all-targets --all-features -- -D warnings
    PYTHONPATH=python:python/tests python -m unittest discover -s python/tests -p 'test_tiki_*.py'
 
 ``test_tiki_docs`` parses :doc:`../usage/layouts` and
