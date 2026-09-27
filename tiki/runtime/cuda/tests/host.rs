@@ -168,10 +168,12 @@ fn invariant_copies_check_lengths_and_devices() {
     assert_eq!(read.to_vec(), values);
 }
 
-// Invariant: memory reused on another stream waits for its last write and
-// for its reads since, and dropping it frees it after the same uses.
-// Witness: memory filled and then copied from on stream A is reused on
-// stream B; B's fill waits on both events, and the drop waits on B's fill.
+// Invariant: memory reused on another stream follows the streams of its last
+// write and its reads, work that stays on one stream waits for nothing, and
+// dropping memory frees it after every stream that used it.
+// Witness: memory filled and copied from on stream A is reused on stream B;
+// B's first fill waits once for A, its second fill waits for nothing, and the
+// drop on A waits once for B.
 #[test]
 fn invariant_reused_memory_waits_for_earlier_uses() {
     let _session = SESSION.lock().unwrap();
@@ -186,11 +188,14 @@ fn invariant_reused_memory_waits_for_earlier_uses() {
     assert_eq!(allocator.cache_memory(), 0, "the released memory was not reused");
     let before = cuda::waits();
     second.fill(reused.memory_mut(), 9).unwrap();
-    assert_eq!(cuda::waits() - before, 2, "the fill must wait for the write and the read");
+    assert_eq!(cuda::waits() - before, 1, "the fill must follow the first stream");
+    let before = cuda::waits();
+    second.fill(reused.memory_mut(), 5).unwrap();
+    assert_eq!(cuda::waits(), before, "work on one stream must not wait");
     let (allocations, ..) = cuda::live();
     let before = cuda::waits();
     drop(reused.into_memory());
-    assert_eq!(cuda::waits() - before, 1, "the free must wait for the fill");
+    assert_eq!(cuda::waits() - before, 1, "the free must follow the second stream");
     assert_eq!(cuda::live().0, allocations - 1);
     allocator.release(target);
     allocator.clear_cache();

@@ -5,9 +5,9 @@
 //!
 //! Protocol:
 //!
-//!  1. `commit(stream, batch)` records an event on `stream`. The stream's own
-//!     signal stream waits on that event and launches a host function
-//!     carrying the batch id. The compute stream never stalls on the
+//!  1. `commit(stream, batch)` makes the stream's own signal stream wait for
+//!     everything enqueued on `stream` so far, then launches a host function
+//!     on it carrying the batch id. The compute stream never stalls on the
 //!     callback, and compute streams never wait on each other's callbacks,
 //!     because cuLaunchHostFunc runs in stream order on the signal stream.
 //!  2. The host function runs on a CUDA driver thread. It only marks the id
@@ -29,7 +29,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
 use crate::batch::Batch;
-use crate::driver::{CudaError, Device, Event, Stream, StreamId};
+use crate::driver::{CudaError, Device, Stream, StreamId};
 
 pub struct Completion {
     state: Mutex<State>,
@@ -103,10 +103,8 @@ impl Completion {
         state.pending.insert(id, Pending { stream: stream.id(), batch });
         drop(state);
         let scheduled = (|| {
-            let committed = Event::new(stream.device())?;
-            committed.record(stream)?;
             let signal = self.signal_for(stream)?;
-            signal.wait(&committed)?;
+            signal.wait_for(stream)?;
             let payload = usize::try_from(id).expect("batch ids fit in usize");
             signal.launch_host_func(signaled, payload)
         })();

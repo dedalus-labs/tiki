@@ -20,22 +20,25 @@ cutover.
 
 ## Memory ordering
 
-Device memory records the event of its last write and the events of its
-reads since. A fill or copy into memory waits on all of them, and a read
-waits on the last write. Streams therefore share memory without any
-ordering from the caller, and memory the cache hands to another stream waits
-for its earlier uses before it is written.
+Device memory remembers the stream of its last write and the streams that
+read it since. An operation on another stream first waits for them: a fill
+or copy into memory waits for the writer and the readers, and a read waits
+for the writer. Each wait goes through an event recorded on the earlier
+stream at that moment, so work that stays on one stream records nothing.
+Streams therefore share memory without any ordering from the caller, and
+memory the cache hands to another stream waits for its earlier uses before
+it is written.
 
-Dropping memory frees it after every recorded use, in stream order. Copies to
-and from host memory finish before they return, so the driver never uses a
-host slice after its borrow ends. If that wait fails, the process stops
-rather than return while a copy may still run.
+Dropping memory frees it on its allocation stream after every stream that
+used it. Copies to and from host memory finish before they return, so the
+driver never uses a host slice after its borrow ends. If that wait fails, the
+process stops rather than return while a copy may still run.
 
 ## Submission and retirement
 
 A nonempty batch enters the pending map before the first fallible driver
-call. The runtime records an event on the compute stream, waits on that event
-from the compute stream's own signal stream, and schedules a host callback.
+call. The compute stream's own signal stream waits for everything enqueued
+on the compute stream so far and then schedules a host callback.
 That callback marks one batch ready and wakes the worker. It never calls the
 driver or runs a handler.
 

@@ -3,11 +3,13 @@
 //! Device memory: owned bytes on one device, and the copies between it and
 //! host memory.
 //!
-//! A fill, copy, or read waits on the memory's last write, and a fill or copy
-//! into it also waits on every read since. Each operation enqueued on device
-//! memory records an event that later operations wait on, so streams share
-//! memory without other ordering. Dropping memory frees it after every
-//! recorded use, in stream order.
+//! Device memory remembers the stream of its last write and the streams that
+//! read it since. A fill, copy, or read on another stream first waits for the
+//! last writer, and a fill or copy into the memory also waits for its
+//! readers. The wait goes through an event recorded at that moment on the
+//! earlier stream, so work that stays on one stream records nothing, and
+//! streams share memory without other ordering. Dropping memory frees it on
+//! its allocation stream after every stream that used it.
 //!
 //! Copies to and from host memory wait for the device before they return, so
 //! the driver never uses a borrowed host slice after its borrow ends.
@@ -17,7 +19,6 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use super::context::with_device;
 use super::element::Element;
 use super::error::{CopyError, CudaError, check};
-use super::event::Event;
 use super::stream::Stream;
 use super::sys;
 
@@ -47,24 +48,30 @@ pub struct DeviceMemory {
     uses: Mutex<Uses>,
 }
 
-/// Events of the enqueued operations that later operations wait on.
+/// The streams whose enqueued operations later operations must follow.
 #[derive(Debug, Default)]
 struct Uses {
-    /// The last operation that wrote the memory.
-    write: Option<Arc<Event>>,
-    /// Operations that read the memory since that write.
-    reads: Vec<Arc<Event>>,
+    /// Stream of the last write, the allocation included.
+    writer: Option<Arc<Stream>>,
+    /// Other streams that read the memory since that write, each once.
+    readers: Vec<Arc<Stream>>,
 }
 
 impl Uses {
-    fn all(&self) -> impl Iterator<Item = &Arc<Event>> {
-        self.write.iter().chain(&self.reads)
+    fn streams(&self) -> impl Iterator<Item = &Arc<Stream>> {
+        self.writer.iter().chain(&self.readers)
     }
 
-    /// Add a read, dropping reads that have completed so the list stays short.
-    fn add_read(&mut self, event: Arc<Event>) {
-        self.reads.retain(|read| !matches!(read.is_complete(), Ok(true)));
-        self.reads.push(event);
+    fn written_by(stream: &Arc<Stream>) -> Uses {
+        Uses { writer: Some(stream.clone()), readers: Vec::new() }
+    }
+
+    /// Add a reader, unless following another listed stream already covers
+    /// it: a hand-off captures everything enqueued on its stream.
+    fn add_reader(&mut self, stream: &Arc<Stream>) {
+        if self.streams().all(|user| user.id() != stream.id()) {
+            self.readers.push(stream.clone());
+        }
     }
 }
 
@@ -98,10 +105,8 @@ impl DeviceMemory {
         })?;
         let mut memory = DeviceMemory::owning(address, len, stream);
         if pooled {
-            // A stream-ordered allocation is a write other streams must wait for.
-            let allocated = Event::new(device)?;
-            allocated.record(stream)?;
-            memory.uses_mut().write = Some(Arc::new(allocated));
+            // A stream-ordered allocation is a write other streams must follow.
+            *memory.uses_mut() = Uses::written_by(stream);
         }
         Ok(memory)
     }
@@ -142,17 +147,17 @@ impl Drop for DeviceMemory {
         // A failed free leaks the memory and releases nothing early.
         let _ = with_device(device, || {
             if device.memory_pools_supported() {
-                for event in uses.all() {
-                    stream.wait(event)?;
+                for user in uses.streams() {
+                    stream.wait_for(user)?;
                 }
                 // SAFETY: `self` owns the memory, and the free follows every
-                // recorded use in stream order.
+                // stream that used it.
                 check("cuMemFreeAsync", unsafe { sys::cuMemFreeAsync(address, stream.raw()) })
             } else {
-                for event in uses.all() {
-                    event.synchronize()?;
+                for user in uses.streams() {
+                    user.synchronize()?;
                 }
-                // SAFETY: `self` owns the memory, and every recorded use has completed.
+                // SAFETY: `self` owns the memory, and every use has completed.
                 check("cuMemFree", unsafe { sys::cuMemFree_v2(address) })
             }
         });
@@ -161,25 +166,31 @@ impl Drop for DeviceMemory {
 
 impl Stream {
     /// Set every byte of `memory` to `value`, in stream order.
-    pub fn fill(&self, memory: &mut DeviceMemory, value: u8) -> Result<(), CopyError> {
+    pub fn fill(self: &Arc<Self>, memory: &mut DeviceMemory, value: u8) -> Result<(), CopyError> {
         self.check_device(memory)?;
         let (address, len) = (memory.address, memory.len);
         if len == 0 {
             return Ok(());
         }
         let uses = memory.uses_mut();
-        self.wait_for(uses, Access::Write)?;
-        let filled = self.enqueue(|stream| {
+        self.follow(uses, Access::Write)?;
+        with_device(self.device(), || {
             // SAFETY: the memory holds `len` bytes at `address` and outlives the
-            // fill, whose event its drop waits on.
-            check("cuMemsetD8Async", unsafe { sys::cuMemsetD8Async(address, value, len, stream) })
+            // fill, since its drop follows this stream.
+            check("cuMemsetD8Async", unsafe {
+                sys::cuMemsetD8Async(address, value, len, self.raw())
+            })
         })?;
-        *uses = Uses { write: Some(filled), reads: Vec::new() };
+        *uses = Uses::written_by(self);
         Ok(())
     }
 
     /// Copy all of `source` into the start of `target`, in stream order.
-    pub fn copy(&self, source: &DeviceMemory, target: &mut DeviceMemory) -> Result<(), CopyError> {
+    pub fn copy(
+        self: &Arc<Self>,
+        source: &DeviceMemory,
+        target: &mut DeviceMemory,
+    ) -> Result<(), CopyError> {
         self.check_device(source)?;
         self.check_device(target)?;
         let (from, to, len) = (source.address, target.address, source.len);
@@ -189,16 +200,18 @@ impl Stream {
         }
         let mut source_uses = source.uses();
         let target_uses = target.uses_mut();
-        self.wait_for(&source_uses, Access::Read)?;
-        self.wait_for(target_uses, Access::Write)?;
-        let copied = self.enqueue(|stream| {
+        self.follow(&source_uses, Access::Read)?;
+        self.follow(target_uses, Access::Write)?;
+        with_device(self.device(), || {
             // SAFETY: both memories hold at least `len` bytes, are distinct because
-            // one is borrowed mutably, and outlive the copy, whose event their
-            // drops wait on.
-            check("cuMemcpyDtoDAsync", unsafe { sys::cuMemcpyDtoDAsync_v2(to, from, len, stream) })
+            // one is borrowed mutably, and outlive the copy, since their drops
+            // follow this stream.
+            check("cuMemcpyDtoDAsync", unsafe {
+                sys::cuMemcpyDtoDAsync_v2(to, from, len, self.raw())
+            })
         })?;
-        source_uses.add_read(copied.clone());
-        *target_uses = Uses { write: Some(copied), reads: Vec::new() };
+        source_uses.add_reader(self);
+        *target_uses = Uses::written_by(self);
         Ok(())
     }
 
@@ -216,7 +229,7 @@ impl Stream {
             return Ok(());
         }
         let uses = target.uses_mut();
-        self.wait_for(uses, Access::Write)?;
+        self.follow(uses, Access::Write)?;
         with_device(self.device(), || {
             // SAFETY: `source` is `len` readable bytes, borrowed until the call
             // returns, and the copy finishes first; the target holds `len` bytes.
@@ -225,7 +238,7 @@ impl Stream {
             })
         })?;
         self.finish_host_copy();
-        // The stream finished every use it waited on.
+        // The stream finished, and with it every use it followed.
         *uses = Uses::default();
         Ok(())
     }
@@ -273,7 +286,7 @@ impl Stream {
             return Ok(());
         }
         let uses = source.uses();
-        self.wait_for(&uses, Access::Read)?;
+        self.follow(&uses, Access::Read)?;
         with_device(self.device(), || {
             // SAFETY: `target` is `len` writable bytes of a type with no invalid
             // bit patterns, borrowed until the call returns, and the copy
@@ -294,34 +307,18 @@ impl Stream {
         Ok(())
     }
 
-    /// Make this stream wait for the memory's last write, and before a write
-    /// also for its reads.
-    fn wait_for(&self, uses: &Uses, access: Access) -> Result<(), CudaError> {
-        if let Some(write) = &uses.write {
-            self.wait(write)?;
+    /// Make this stream follow the memory's last writer, and before a write
+    /// also its readers.
+    fn follow(&self, uses: &Uses, access: Access) -> Result<(), CudaError> {
+        if let Some(writer) = &uses.writer {
+            self.wait_for(writer)?;
         }
         if access == Access::Write {
-            for read in &uses.reads {
-                self.wait(read)?;
+            for reader in &uses.readers {
+                self.wait_for(reader)?;
             }
         }
         Ok(())
-    }
-
-    /// Enqueue `operation` and return an event recorded after it. If the
-    /// record fails, wait for the stream instead, so the operation has
-    /// finished and needs no event.
-    fn enqueue(
-        &self,
-        operation: impl FnOnce(sys::CUstream) -> Result<(), CudaError>,
-    ) -> Result<Arc<Event>, CudaError> {
-        let event = Event::new(self.device())?;
-        with_device(self.device(), || operation(self.raw()))?;
-        if let Err(error) = event.record(self) {
-            self.synchronize()?;
-            return Err(error);
-        }
-        Ok(Arc::new(event))
     }
 
     /// Wait for a copy that uses borrowed host memory. The borrow ends when

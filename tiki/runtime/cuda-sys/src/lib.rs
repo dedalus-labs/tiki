@@ -10,9 +10,10 @@
 //! memory reaches the driver only as a borrowed slice, for the length of a
 //! copy that finishes before the call returns.
 //!
-//! Device memory records the events of its last write and of its reads since.
-//! Every operation on it waits on them first, and dropping it frees it after
-//! its last use, in stream order.
+//! Device memory remembers the stream of its last write and the streams that
+//! read it since. An operation on another stream first waits for them, through
+//! an event recorded at that moment, and dropping memory frees it after every
+//! stream that used it, in stream order.
 //!
 //! Each driver call runs with its device's primary context pushed, and the
 //! caller's context is restored afterwards, also when the call fails or

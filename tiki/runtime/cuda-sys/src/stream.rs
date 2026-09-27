@@ -21,10 +21,15 @@ pub struct Stream {
     /// between threads with its owner.
     handle: usize,
     device: Device,
+    /// Recorded whenever another stream must wait for this one. Each record
+    /// captures everything enqueued so far, so a wait that sees a later
+    /// record than its own still follows the work it needs.
+    handoff: Event,
 }
 
 impl Stream {
     pub fn new(device: Device) -> Result<Stream, CudaError> {
+        let handoff = Event::new(device)?;
         let handle = with_device(device, || {
             let mut stream = std::ptr::null_mut();
             let flags = sys::CUstream_flags::CU_STREAM_NON_BLOCKING.0;
@@ -32,7 +37,7 @@ impl Stream {
             check("cuStreamCreate", unsafe { sys::cuStreamCreate(&raw mut stream, flags) })?;
             Ok(stream as usize)
         })?;
-        Ok(Stream { handle, device })
+        Ok(Stream { handle, device, handoff })
     }
 
     pub fn device(&self) -> Device {
@@ -62,6 +67,16 @@ impl Stream {
                 sys::cuStreamWaitEvent(self.raw(), event.raw(), 0)
             })
         })
+    }
+
+    /// Make later work on this stream wait for everything enqueued on `other`
+    /// so far. Waiting for itself is a no-op, since a stream runs in order.
+    pub fn wait_for(&self, other: &Stream) -> Result<(), CudaError> {
+        if other.id() == self.id() {
+            return Ok(());
+        }
+        other.handoff.record(other)?;
+        self.wait(&other.handoff)
     }
 
     /// Run `callback(payload)` on a driver thread once the stream reaches
