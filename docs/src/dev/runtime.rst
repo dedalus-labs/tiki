@@ -34,8 +34,9 @@ touches the driver.
 
 - **Compiling** is ordinary Rust. The compiler traces a ``tk`` kernel, proves
   it with ``tiki-cute``, and lowers it to LLVM IR. LLVM's NVPTX backend writes
-  PTX. No driver call and no ``unsafe`` take part.
-  :ref:`tiki-kernels` follows one kernel through each stage.
+  PTX. No driver call and no ``unsafe`` take part. :ref:`tiki-compiler`
+  describes each stage, and :ref:`tiki-kernels` follows one kernel through
+  them.
 - **Running** goes through ``libcuda``, the user-space interface to NVIDIA's
   kernel driver. Loading PTX, allocating memory, copying, launching, and
   waiting are driver calls, and every call into C is ``unsafe`` in Rust.

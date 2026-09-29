@@ -36,6 +36,13 @@ Kernels written in `tk` from seven primitives, from elementwise maps to
 attention, and lowered through LLVM's NVPTX backend.
 :::
 
+:::{grid-item-card} Compiler
+:link: dev/compiler
+:link-type: doc
+`tk` kernels to PTX through LLVM and clang, with every LLVM promise backed by
+a proof.
+:::
+
 :::{grid-item-card} Runtime
 :link: dev/runtime
 :link-type: doc

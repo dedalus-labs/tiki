@@ -395,55 +395,7 @@ such index before the access. A failed check skips the access and sets the
 launch's error word, which the runtime returns as a typed error, so the
 process and its CUDA context stay usable.
 
-Lowering keeps the proofs
--------------------------
-
-The proofs hold for the kernel IR. Lowering keeps them true in LLVM IR:
-
-- **Index width.** The proofs compute offsets as exact integers. Lowering uses
-  32-bit arithmetic only where a proof bounds every offset below 2\ :sup:`31`,
-  and 64-bit arithmetic elsewhere.
-- **Flags from facts.** LLVM's ``nsw``, ``nuw``, ``inbounds``, ``noalias``,
-  and alignment let it delete code that a false assumption makes dead, bounds
-  checks included. Lowering emits each one only from a proven fact, or for
-  ``noalias`` from the launcher's ``&`` and ``&mut`` borrows.
-- **Floor division.** The layout algebra divides with floor division. LLVM's
-  ``sdiv`` and ``srem`` round toward zero, so lowering emits floor division
-  for any operand that can be negative.
-- **Launch facts.** A kernel runs only on arguments that satisfy the facts its
-  proofs assumed, including a kernel that shapeless compilation reuses across
-  shapes. The generated launcher checks each fact.
-
-An unproven ``nsw`` shows why the flags matter. An offset
-``row * 65536 + col`` lowered as 32-bit arithmetic with ``nsw`` and guarded by
-``0 <= offset < len`` loses its ``offset >= 0`` check under ``opt -O2``, in
-LLVM 21 and 23. At ``row = 32768`` the product wraps to -2\ :sup:`31`, passes
-``offset < len``, and becomes +2\ :sup:`31` after ``zext nneg``: the store
-lands 8 GiB past a 16-element buffer. The same IR without ``nsw`` keeps both
-checks. The compiler's lowering tests keep this case.
-
-Property tests compare the lowered index arithmetic with ``tiki-cute`` at
-negative coordinates and at offsets near 2\ :sup:`31` and 2\ :sup:`32`, and
-``libNVVM`` compiles the same LLVM IR as a differential check.
-
-The compiler runs a pinned LLVM in a separate process, so a compiler failure
-ends one compilation with a typed error and never touches runtime memory.
-Tiki pins and vendors LLVM when a fix must ship before it lands upstream.
-
-Alternatives
-------------
-
-- **NVIDIA's CuTe DSL** is a revocable EULA that forbids reverse engineering
-  its compiler, so Tiki could not fix or ship it. The layout algebra and atoms
-  are BSD-3 in CUTLASS, and Tiki implements them from there. CuTe DSL stays
-  as a correctness and performance oracle.
-- **CUDA Tile IR** has no thread index, warp, or shared memory operations, so
-  it cannot express the thread-level control Tiki's kernels need.
-- **cuda-oxide** compiles Rust kernels, but its shared memory, warp
-  operations, and TMA require ``unsafe``.
-- **libNVVM** runs the same device optimizer as ``nvcc`` but is closed. LLVM's
-  NVPTX backend accepts the same IR, and Tiki's atoms are inline PTX, so new
-  instructions do not wait for NVPTX intrinsics.
+:ref:`tiki-compiler` covers how lowering keeps these proofs true in LLVM IR.
 
 From tk to PTX
 --------------
