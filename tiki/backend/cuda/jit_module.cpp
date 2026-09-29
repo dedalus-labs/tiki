@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <mutex>
 #include <shared_mutex>
 
 #include <fmt/format.h>

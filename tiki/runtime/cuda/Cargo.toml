@@ -1,0 +1,11 @@
+[package]
+name = "tiki-cuda-runtime"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+description = "Tiki's Rust CUDA runtime: storage, streams, events, and completion"
+license = "Apache-2.0"
+
+[dependencies]
+tiki-cuda-sys = { path = "../cuda-sys" }

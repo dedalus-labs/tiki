@@ -4,22 +4,18 @@
 
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
 import tiki as tk
 
 # -- Repository documents ----------------------------------------------------
-# The compiler, scan, and runtime pages are the experiment directories' own
-# Markdown, copied here before Sphinx reads the tree so their relative links
-# resolve as pages. The copies are build products, ignored by git.
+# The vision page is the repository README, copied here before Sphinx reads
+# the tree so its relative links resolve. The copy is a build product, ignored
+# by git.
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-SECTIONS = {
-    "runtime": "experiments/rust_backend",
-}
 
 
 GITHUB = "https://github.com/dedalus-labs/tiki/blob/main"
@@ -47,12 +43,6 @@ def repository_page(
     target.write_text(re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", link, text))
 
 
-for section, directory in SECTIONS.items():
-    target = Path(__file__).resolve().parent / "tiki" / section
-    shutil.rmtree(target, ignore_errors=True)
-    repository_page(
-        REPOSITORY / directory / "README.md", target / "README.md", REPOSITORY
-    )
 repository_page(
     REPOSITORY / "README.md",
     Path(__file__).resolve().parent / "tiki" / "vision.md",

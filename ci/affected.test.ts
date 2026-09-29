@@ -26,7 +26,7 @@ test("policy and prose changes do not select native builds", () => {
 test("native sources, build inputs, and unknown paths select native builds", () => {
   for (const file of [
     "tiki/array.cpp",
-    "tiki/backend/cuda/runtime/src/allocation.rs",
+    "tiki/runtime/cuda/src/allocation.rs",
     "tests/test.cpp",
     "CMakeLists.txt",
     "cmake/FindNCCL.cmake",
@@ -45,7 +45,7 @@ test("dependency and formatting checks select their actual inputs", () => {
   for (const file of [
     "package-lock.json",
     "Cargo.lock",
-    "tiki/backend/cuda/runtime/Cargo.toml",
+    "tiki/runtime/cuda/Cargo.toml",
     "docs/requirements.txt",
     "pyproject.toml",
     "setup.py",

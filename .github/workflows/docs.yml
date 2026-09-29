@@ -8,14 +8,12 @@ on:
     paths:
       - docs/**
       - python/**
-      - experiments/**/*.md
       - README.md
       - ci/docs.ts
   pull_request:
     paths:
       - docs/**
       - python/**
-      - experiments/**/*.md
       - README.md
       - ci/docs.ts
   workflow_dispatch: {}

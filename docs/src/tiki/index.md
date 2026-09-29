@@ -44,10 +44,11 @@ The nouns the framework is built from and the processors it targets.
 The algebra kernels compute in, and every kernel built from the primitives.
 :::
 
-:::{grid-item-card} Rust runtime
-:link: runtime/README
+:::{grid-item-card} Runtime
+:link: ../dev/runtime
 :link-type: doc
-CUDA storage and completion owned by a checked Rust runtime.
+Owned driver values, memory leased to in-flight work, and streams ordered
+from the graph.
 :::
 
 ::::
@@ -58,5 +59,5 @@ CUDA storage and completion owned by a checked Rust runtime.
 Vision <vision>
 Layouts <../usage/layouts>
 Layout recipes <../examples/layouts>
-Rust runtime <runtime/README>
+Runtime <../dev/runtime>
 ```
