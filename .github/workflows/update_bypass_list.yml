@@ -15,7 +15,7 @@ jobs:
     name: Update bypass list
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - env:
           GITHUB_TOKEN: ${{ secrets.ZCBENZ_TOKEN_UPDATE_BYPASS_LIST }}
         run: node .github/scripts/update-bypass-list.js ml-explore mlx

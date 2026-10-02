@@ -189,7 +189,7 @@ jobs:
                     'ubuntu-22.04'))
       }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/setup
         id: setup
         with:
@@ -223,7 +223,7 @@ jobs:
     runs-on: macos-26-xlarge
     needs: lint
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/setup
         id: setup
         with:
@@ -262,7 +262,7 @@ jobs:
           - metal
           - jit
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/setup
         with:
           toolkit: ${{ matrix.toolkit }}
@@ -282,7 +282,7 @@ jobs:
     runs-on: ubuntu-22.04
     needs: lint
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - uses: ./.github/actions/build-docs
   check_lint:
     name: Check Lint
