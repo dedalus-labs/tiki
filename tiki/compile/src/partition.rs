@@ -2,13 +2,12 @@
 
 //! How an elementwise kernel splits its domain across blocks and threads.
 //!
-//! Proof:
+//! [`Partition::new`] proves, before a partition exists:
 //!
 //!  1. The thread-value layout has a thread mode and a value mode, each of
-//!     static size.
-//!  2. It reaches each element of the tile exactly once: its size equals the
-//!     tile, and every (thread, value) index lands on a distinct element
-//!     inside the tile.
+//!     static size. Their product is the tile, the elements one block owns.
+//!  2. It reaches each element of the tile exactly once: every (thread, value)
+//!     index lands on a distinct element inside the tile.
 //!  3. The tile divides the domain for every launch the facts admit, so the
 //!     tiles cover the domain with none left partial.
 //!
@@ -20,86 +19,113 @@ use std::collections::HashMap;
 
 use tiki_cute::{Int, Layout, Truth};
 
-use crate::proof::{Proof, ProofError};
+use crate::PartitionError;
 
-/// An elementwise kernel's split of its domain.
+/// An elementwise kernel's split of its domain across blocks and threads.
 ///
-/// Every tensor of the kernel shares the `domain` layout. Block `b` owns tile
-/// `b`, and `threads` maps a (thread, value) coordinate to an element of that
-/// tile.
+/// Every tensor of the kernel shares the domain layout. Block `b` owns tile
+/// `b`, and the thread-value layout maps a (thread, value) coordinate to an
+/// element of that tile. Only [`Partition::new`] makes one, so holding a
+/// `Partition` means its grid reaches every element of the domain exactly
+/// once, for every launch the domain's facts admit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Partition {
-    /// The layout every tensor of the kernel shares. Its size is the domain.
-    pub domain: Layout,
-    /// Elements each block owns.
-    pub tile: i64,
-    /// A rank-2 layout: mode 0 is the thread in the block, mode 1 the value
-    /// within the thread.
-    pub threads: Layout,
+    domain: Layout,
+    thread_values: Layout,
+    /// The domain's size over the tile, exact for every admitted launch
+    /// because the tile divides the domain.
+    blocks: Int,
+    threads: i64,
+    values: i64,
 }
 
 impl Partition {
-    /// Prove that the grid reaches every element of the domain exactly once.
-    pub fn prove(&self) -> Result<Proof, ProofError> {
-        let (threads, values) = self.thread_and_value_sizes()?;
-        self.check_tile_owners()?;
+    /// Split `domain` into tiles that `thread_values` spreads across one
+    /// block's threads, or name the step of the proof that fails.
+    ///
+    /// `thread_values` is a rank-2 layout: mode 0 is the thread in the block,
+    /// mode 1 the value within the thread.
+    pub fn new(domain: Layout, thread_values: Layout) -> Result<Partition, PartitionError> {
+        let (threads, values) = thread_and_value_sizes(&thread_values)?;
+        let tile = threads * values;
+        check_tile_owners(&thread_values, tile)?;
 
-        // Each tile is owned exactly once; the tiles must now cover the domain
+        // Each tile element has one owner; the tiles must now cover the domain
         // with none left partial, for every launch and not only the ones tested.
-        let extent = self.domain.size();
-        let tile = Int::from(self.tile);
-        match extent.is_multiple_of(&tile) {
-            Truth::Proven => Ok(Proof::new(extent.div_floor(&tile), threads, values)),
-            truth => Err(ProofError::Undivided { tile: self.tile, extent, truth }),
+        let extent = domain.size();
+        let divisor = Int::from(tile);
+        match extent.is_multiple_of(&divisor) {
+            Truth::Proven => {
+                let blocks = extent.div_floor(&divisor);
+                Ok(Partition { domain, thread_values, blocks, threads, values })
+            }
+            truth => Err(PartitionError::Undivided { tile, extent, truth }),
         }
     }
 
-    fn thread_and_value_sizes(&self) -> Result<(i64, i64), ProofError> {
-        let sizes: Vec<Option<i64>> =
-            self.threads.modes().map(|mode| mode.size().as_static()).collect();
-        match sizes[..] {
-            [Some(threads), Some(values)] => Ok((threads, values)),
-            _ => Err(ProofError::ThreadShape { threads: self.threads.clone() }),
-        }
+    /// The layout every tensor of the kernel shares. Its size is the domain.
+    pub fn domain(&self) -> &Layout {
+        &self.domain
     }
 
-    /// Every tile element has exactly one (thread, value) index.
-    fn check_tile_owners(&self) -> Result<(), ProofError> {
-        // With as many indices as elements, "no two indices share an element"
-        // is the same statement as "every element has one index".
-        let size = self.threads.size();
-        if size.as_static() != Some(self.tile) {
-            return Err(ProofError::TileSize {
-                threads: self.threads.clone(),
-                size,
-                tile: self.tile,
+    /// The layout from a (thread, value) coordinate to an element of the
+    /// block's tile.
+    pub fn thread_values(&self) -> &Layout {
+        &self.thread_values
+    }
+
+    /// Blocks to launch, as a function of the launch parameters.
+    pub fn blocks(&self) -> &Int {
+        &self.blocks
+    }
+
+    /// Threads to launch in each block.
+    pub fn threads(&self) -> i64 {
+        self.threads
+    }
+
+    /// Elements each thread computes.
+    pub fn values(&self) -> i64 {
+        self.values
+    }
+}
+
+fn thread_and_value_sizes(thread_values: &Layout) -> Result<(i64, i64), PartitionError> {
+    let sizes: Vec<Option<i64>> =
+        thread_values.modes().map(|mode| mode.size().as_static()).collect();
+    match sizes[..] {
+        [Some(threads), Some(values)] => Ok((threads, values)),
+        _ => Err(PartitionError::ThreadShape { thread_values: thread_values.clone() }),
+    }
+}
+
+/// Every tile element has exactly one (thread, value) index.
+fn check_tile_owners(thread_values: &Layout, tile: i64) -> Result<(), PartitionError> {
+    // The layout has as many indices as the tile has elements, so "no two
+    // indices share an element" is the same statement as "every element has
+    // one index". A tile is small and static, so checking every index is exact.
+    let mut owners: HashMap<i64, i64> = HashMap::new();
+    for index in 0..tile {
+        let offset = thread_values.at(index);
+        let inside = |element: &i64| (0..tile).contains(element);
+        let element = offset.as_int().and_then(Int::as_static).filter(inside);
+        let Some(element) = element else {
+            return Err(PartitionError::OutsideTile {
+                thread_values: thread_values.clone(),
+                index,
+                offset,
+            });
+        };
+        if let Some(first) = owners.insert(element, index) {
+            return Err(PartitionError::Overlap {
+                thread_values: thread_values.clone(),
+                first,
+                second: index,
+                element,
             });
         }
-
-        // A tile is small and static, so checking every index is exact.
-        let mut owners: HashMap<i64, i64> = HashMap::new();
-        for index in 0..self.tile {
-            let offset = self.threads.at(index);
-            let inside = |element: &i64| (0..self.tile).contains(element);
-            let element = offset.as_int().and_then(Int::as_static).filter(inside);
-            let Some(element) = element else {
-                return Err(ProofError::OutsideTile {
-                    threads: self.threads.clone(),
-                    index,
-                    offset,
-                });
-            };
-            if let Some(first) = owners.insert(element, index) {
-                return Err(ProofError::Overlap {
-                    threads: self.threads.clone(),
-                    first,
-                    second: index,
-                    element,
-                });
-            }
-        }
-        Ok(())
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -107,19 +133,19 @@ mod tests {
     use tiki_cute::{Int, Layout, Param, Shape, Truth, Tuple};
 
     use super::Partition;
-    use crate::ProofError;
+    use crate::PartitionError;
 
     /// Elements each block owns in `axpy` from the kernels guide.
     const TILE: i64 = 512;
     /// `axpy`'s split: 128 threads, each owning 4 consecutive elements.
-    const THREADS: &str = "(128, 4):(4, 1)";
+    const THREAD_VALUES: &str = "(128, 4):(4, 1)";
 
     fn vector(extent: Int) -> Layout {
         Layout::from(Shape::try_from(Tuple::Leaf(extent)).unwrap())
     }
 
-    fn partition(domain: Layout, threads: &str) -> Partition {
-        Partition { domain, tile: TILE, threads: threads.parse().unwrap() }
+    fn split(domain: Layout, thread_values: &str) -> Result<Partition, PartitionError> {
+        Partition::new(domain, thread_values.parse().unwrap())
     }
 
     // --- Proven partitions ---
@@ -130,9 +156,9 @@ mod tests {
     #[test]
     fn invariant_axpy_partition_is_proven() {
         let n = Int::from(Param::multiple_of("N", TILE).unwrap());
-        let proof = partition(vector(n.clone()), THREADS).prove().unwrap();
-        assert_eq!(proof.blocks(), &n.div_floor(&Int::from(TILE)));
-        assert_eq!((proof.threads(), proof.values()), (128, 4));
+        let partition = split(vector(n.clone()), THREAD_VALUES).unwrap();
+        assert_eq!(partition.blocks(), &n.div_floor(&Int::from(TILE)));
+        assert_eq!((partition.threads(), partition.values()), (128, 4));
     }
 
     /// Invariant: a proven partition reaches every element of the domain once.
@@ -142,12 +168,12 @@ mod tests {
     #[test]
     fn invariant_every_element_has_one_owner() {
         const EXTENT: i64 = 3 * TILE;
-        let partition = partition(vector(Int::from(EXTENT)), THREADS);
-        let proof = partition.prove().unwrap();
+        let partition = split(vector(Int::from(EXTENT)), THREAD_VALUES).unwrap();
         let mut owners = vec![0u32; usize::try_from(EXTENT).unwrap()];
-        for block in 0..proof.blocks().as_static().unwrap() {
+        for block in 0..partition.blocks().as_static().unwrap() {
             for index in 0..TILE {
-                let within = partition.threads.at(index).as_int().unwrap().as_static().unwrap();
+                let offset = partition.thread_values().at(index);
+                let within = offset.as_int().unwrap().as_static().unwrap();
                 let element = usize::try_from(block * TILE + within).unwrap();
                 owners[element] += 1;
             }
@@ -162,10 +188,10 @@ mod tests {
     /// refuted outright.
     #[test]
     fn invariant_tile_must_divide_every_launch() {
-        let open = partition(vector(Int::from(Param::positive("N"))), THREADS).prove();
-        assert!(matches!(open, Err(ProofError::Undivided { truth: Truth::Open, .. })));
-        let refuted = partition(vector(Int::from(1000)), THREADS).prove();
-        assert!(matches!(refuted, Err(ProofError::Undivided { truth: Truth::Refuted, .. })));
+        let open = split(vector(Int::from(Param::positive("N"))), THREAD_VALUES);
+        assert!(matches!(open, Err(PartitionError::Undivided { truth: Truth::Open, .. })));
+        let refuted = split(vector(Int::from(1000)), THREAD_VALUES);
+        assert!(matches!(refuted, Err(PartitionError::Undivided { truth: Truth::Refuted, .. })));
     }
 
     /// Invariant: no two threads own one tile element.
@@ -173,11 +199,11 @@ mod tests {
     /// and index 256 (thread 0, value 2) to element 2.
     #[test]
     fn invariant_overlapping_threads_are_refused() {
-        let result = partition(vector(Int::from(TILE)), "(128, 4):(2, 1)").prove();
+        let result = split(vector(Int::from(TILE)), "(128, 4):(2, 1)");
         let expected = (1, 256, 2);
         assert!(matches!(
             result,
-            Err(ProofError::Overlap { first, second, element, .. })
+            Err(PartitionError::Overlap { first, second, element, .. })
                 if (first, second, element) == expected
         ));
     }
@@ -186,23 +212,15 @@ mod tests {
     /// Witness: offsets `8 * thread + value` send index 64 (thread 64) to 512.
     #[test]
     fn invariant_threads_stay_inside_the_tile() {
-        let result = partition(vector(Int::from(TILE)), "(128, 4):(8, 1)").prove();
-        assert!(matches!(result, Err(ProofError::OutsideTile { index: 64, .. })));
-    }
-
-    /// Invariant: the threads cover the whole tile.
-    /// Witness: 64 threads of 4 values cover 256 of 512 elements.
-    #[test]
-    fn invariant_threads_fill_the_tile() {
-        let result = partition(vector(Int::from(TILE)), "(64, 4):(4, 1)").prove();
-        assert!(matches!(result, Err(ProofError::TileSize { tile: TILE, .. })));
+        let result = split(vector(Int::from(TILE)), "(128, 4):(8, 1)");
+        assert!(matches!(result, Err(PartitionError::OutsideTile { index: 64, .. })));
     }
 
     /// Invariant: a thread-value layout names a thread mode and a value mode.
     /// Witness: the rank-1 layout `512:1` has no value mode.
     #[test]
     fn invariant_threads_need_two_modes() {
-        let result = partition(vector(Int::from(TILE)), "512:1").prove();
-        assert!(matches!(result, Err(ProofError::ThreadShape { .. })));
+        let result = split(vector(Int::from(TILE)), "512:1");
+        assert!(matches!(result, Err(PartitionError::ThreadShape { .. })));
     }
 }
